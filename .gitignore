@@ -1,0 +1,19 @@
+# مجلد حزم Node.js (حجمه كبير جداً ولا يجب رفعه)
+node_modules/
+
+# الملف الذي يحتوي على الرموز السرية (Tokens)
+.env
+.env.local
+.env.*
+
+# ملفات السجلات (Logs) التي ينشئها النظام
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ملفات نظام التشغيل المخفية
+.DS_Store
+Thumbs.db
+
+# مجلدات التغطية والاختبار
+coverage/
