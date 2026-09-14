@@ -12,7 +12,8 @@
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.20.0",
-    "dotenv": "^17.4.2"
-  },
-  "devDependencies": {}
+    "cloudinary": "^2.11.0",
+    "dotenv": "^17.4.2",
+    "node-cron": "^4.6.0"
+  }
 }
