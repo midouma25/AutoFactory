@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
-const { createCanvas, registerFont } = require('canvas');
+const { createCanvas, registerFont, loadImage } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 
@@ -12,16 +12,20 @@ app.use(express.json());
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// 1. الحل الجذري لمشكلة الخطوط (تسجيل العائلة والوزن بشكل صحيح)
+// ==========================================
+// 🚀 الخدعة النهائية: تسجيل الخطوط بأسماء مركبة بدون أوزان
+// ==========================================
 try {
-    registerFont('./Cairo-Bold.ttf', { family: 'Cairo', weight: 'bold' });
-    registerFont('./Tajawal-Regular.ttf', { family: 'Tajawal', weight: 'normal' });
-    console.log('✅ تم تحميل خطوط Cairo و Tajawal بنجاح تام.');
-} catch (e) {
-    console.warn("⚠️ تنبيه: تأكد من وجود ملفات الخطوط (Cairo-Bold.ttf و Tajawal-Regular.ttf).");
+    // نعتمد تماماً على الملفات الموجودة في صورتك
+    registerFont(path.join(__dirname, 'Cairo-Bold.ttf'), { family: 'CairoBoldHack' });
+    registerFont(path.join(__dirname, 'Cairo-Regular.ttf'), { family: 'CairoRegularHack' });
+    registerFont(path.join(__dirname, 'Marhey-Bold.ttf'), { family: 'MarheyBoldHack' }); 
+    console.log('✅ تم اختراق نظام الخطوط وتحميلها بنجاح قاطع!');
+} catch (error) {
+    console.log('⚠️ تحذير: فشل تحميل الخطوط. تأكد من أسماء الملفات.');
 }
 
-// دالة التفاف النص المحسنة
+// دالة التفاف النص
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
@@ -39,7 +43,13 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     return y;
 }
 
-function drawRoundedRect(ctx, x, y, width, height, radius) {
+// رسم المربعات بحواف دائرية (مع ظلال)
+function drawRoundedRect(ctx, x, y, width, height, radius, withShadow = false) {
+    if (withShadow) {
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 35;
+        ctx.shadowOffsetY = 15;
+    }
     ctx.beginPath();
     ctx.moveTo(x + radius, y);
     ctx.lineTo(x + width - radius, y);
@@ -51,147 +61,147 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
     ctx.lineTo(x, y + radius);
     ctx.quadraticCurveTo(x, y, x + radius, y);
     ctx.closePath();
-}
-
-// ---------------------------------------------------------
-// رسم الأيقونات الحصرية (قلب، تعليق، مشاركة، حفظ)
-// ---------------------------------------------------------
-function drawHeart(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + size / 4);
-    ctx.quadraticCurveTo(x, y, x + size / 4, y);
-    ctx.quadraticCurveTo(x + size / 2, y, x + size / 2, y + size / 4);
-    ctx.quadraticCurveTo(x + size / 2, y, x + (size * 3) / 4, y);
-    ctx.quadraticCurveTo(x + size, y, x + size, y + size / 4);
-    ctx.quadraticCurveTo(x + size, y + size / 2, x + (size * 3) / 4, y + (size * 3) / 4);
-    ctx.lineTo(x + size / 2, y + size);
-    ctx.lineTo(x + size / 4, y + (size * 3) / 4);
-    ctx.quadraticCurveTo(x, y + size / 2, x, y + size / 4);
     ctx.fill();
-}
-
-function drawComment(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size / 2 - 2, size / 2.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x + 4, y + size - 2);
-    ctx.lineTo(x + size / 2, y + size / 2);
-    ctx.lineTo(x + size / 3, y + size);
-    ctx.fill();
-}
-
-function drawPaperPlane(ctx, x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + size / 4);
-    ctx.lineTo(x + size, y);
-    ctx.lineTo(x + size * 0.75, y + size);
-    ctx.lineTo(x + size * 0.5, y + size * 0.6);
-    ctx.lineTo(x + size, y);
-    ctx.lineTo(x + size * 0.25, y + size * 0.5);
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawBookmark(ctx, x, y, width, height) {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + width, y);
-    ctx.lineTo(x + width, y + height);
-    ctx.lineTo(x + width / 2, y + height - 8);
-    ctx.lineTo(x, y + height);
-    ctx.closePath();
-    ctx.fill();
+    if (withShadow) ctx.shadowColor = 'transparent';
 }
 
 // 🎨 المحرك البصري
-async function generateAutoFactorySlide(slide, totalSlides, batchId) {
+async function generateAutoFactorySlide(slide, totalSlides, batchId, categoryBadge ) {
     const width = 1080;
     const height = 1350;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // الخلفية
+    // الخلفية والشبكة (Blueprint Grid)
     ctx.fillStyle = '#0F172A';
     ctx.fillRect(0, 0, width, height);
-    const glow = ctx.createRadialGradient(width, 0, 100, width, 0, 800);
-    glow.addColorStop(0, 'rgba(59, 130, 246, 0.15)');
+    
+    const glow = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, 900);
+    glow.addColorStop(0, 'rgba(59, 130, 246, 0.12)');
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-    for (let x = 30; x < width; x += 40) {
-        for (let y = 30; y < height; y += 40) {
-            ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
-        }
-    }
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 1;
+    for(let i = 0; i < width; i += 60) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke(); }
+    for(let i = 0; i < height; i += 60) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(width, i); ctx.stroke(); }
 
     // ==========================================
-    // الشريحة 1: الخطاف (Hook)
+    // الشريحة 1: الخطاف
     // ==========================================
-    if (slide.type === 'hook') {
+if (slide.type === 'hook') {
         ctx.textAlign = 'center';
         ctx.direction = 'rtl';
-        ctx.font = 'bold 95px "Cairo"'; // خط حصري عريض
-        ctx.fillStyle = '#F8FAFC';
-        wrapText(ctx, slide.title, width / 2, height / 2 - 80, 900, 130);
+        
+        // 1. صورة المصمم (البراند الشخصي) مصغرة في الأعلى
+        ctx.save(); 
+        ctx.beginPath();
+        ctx.arc(width / 2, 260, 60, 0, Math.PI * 2); 
+        ctx.clip(); 
+        try {
+            const avatar = await loadImage(path.join(__dirname, 'profile.png'));
+            const size = Math.min(avatar.width, avatar.height); 
+            const sx = (avatar.width - size) / 2; 
+            const sy = (avatar.height - size) / 2; 
+            ctx.drawImage(avatar, sx, sy, size, size, width / 2 - 60, 260 - 60, 120, 120);
+        } catch (err) {}
+        ctx.restore(); 
 
-        ctx.font = '40px "Tajawal"'; // خط حصري ناعم
+        // إطار أزرق ناعم حول الصورة المصغرة
+        ctx.beginPath();
+        ctx.arc(width / 2, 260, 60, 0, Math.PI * 2); 
+        ctx.strokeStyle = '#3B82F6';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 2. اسمك تحت الصورة المصغرة
+        ctx.font = '26px "CairoBoldHack"'; 
+        ctx.fillStyle = '#94A3B8';
+        ctx.fillText("غربي محمد الشريف", width / 2, 365);
+
+        // 3. شارة التصنيف المضيئة (Badge)
+        const pillWidth = 200;
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+        drawRoundedRect(ctx, (width - pillWidth) / 2, 410, pillWidth, 45, 22);
+        
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        ctx.font = '20px "CairoBoldHack"'; 
+        ctx.fillStyle = '#60A5FA';
+        ctx.fillText(categoryBadge, width / 2, 440);
+
+        // 4. العنوان الرئيسي الجذاب (قمنا بتنزيله للأسفل ليناسب الإضافات)
+        ctx.font = '95px "CairoBoldHack"'; 
+        ctx.fillStyle = '#F8FAFC';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 20;
+        wrapText(ctx, slide.title, width / 2, 620, 900, 130);
+        ctx.shadowColor = 'transparent';
+
+        // 5. دعوة السحب 
+        ctx.font = '40px "CairoRegularHack"'; 
         ctx.fillStyle = '#3B82F6';
-        ctx.fillText("اسحب لتعرف السر 👈", width / 2, height - 160);
-    } 
+        ctx.fillText("اسحب لتعرف السر 👈", width / 2, height - 130);
+    }
     
     // ==========================================
     // الشرائح 2,3,4: المحتوى
     // ==========================================
     else if (slide.type === 'content') {
-        // الرقم العملاق في الخلفية (لمسة احترافية)
         ctx.save();
-        ctx.font = 'bold 250px "Cairo"';
+        ctx.font = '280px "CairoBoldHack"';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
         ctx.textAlign = 'left';
         ctx.direction = 'ltr';
-        ctx.fillText(`0${slide.slideNumber}`, 40, 250);
+        ctx.fillText(`0${slide.slideNumber}`, 30, 260);
         ctx.restore();
 
-        // 💡 حل مشكلة الأرقام المعكوسة (02 / 05)
         ctx.save();
         ctx.direction = 'ltr'; 
         ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-        drawRoundedRect(ctx, 80, 70, 120, 50, 25);
-        ctx.fill();
-        ctx.font = 'bold 22px "Cairo"';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        drawRoundedRect(ctx, 80, 70, 130, 50, 25);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        ctx.font = '22px "CairoBoldHack"';
         ctx.fillStyle = '#94A3B8';
-        ctx.fillText(`0${slide.slideNumber} / 0${totalSlides}`, 103, 103);
+        ctx.fillText(`0${slide.slideNumber} / 0${totalSlides}`, 108, 103);
         ctx.restore();
 
-        ctx.font = 'bold 28px "Cairo"';
+        ctx.font = '28px "CairoBoldHack"';
         ctx.fillStyle = '#3B82F6';
         ctx.textAlign = 'right';
         ctx.fillText('AutoFactory ⚡', width - 80, 105);
 
-        // النصوص
         ctx.direction = 'rtl';
         ctx.textAlign = 'right';
-        ctx.font = 'bold 72px "Cairo"';
+        ctx.font = '72px "CairoBoldHack"';
         ctx.fillStyle = '#F8FAFC';
-        const titleY = wrapText(ctx, slide.title, width - 80, 240, 850, 90);
+        const titleY = wrapText(ctx, slide.title, width - 80, 230, 850, 90);
 
-        ctx.font = '40px "Tajawal"';
+        ctx.font = '40px "CairoRegularHack"';
         ctx.fillStyle = '#CBD5E1';
         const bodyY = wrapText(ctx, slide.content, width - 80, titleY + 70, 850, 60);
 
         // نافذة الكود
         const cardY = bodyY + 70;
-        const cardHeight = height - cardY - 90;
-        ctx.fillStyle = '#1E1E1E';
-        drawRoundedRect(ctx, 80, cardY, width - 160, cardHeight, 20);
-        ctx.fill();
+        const cardHeight = height - cardY - 110;
+        
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        drawRoundedRect(ctx, 80, cardY, width - 160, cardHeight, 24, true);
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
         const dotColors = ['#FF5F56', '#FFBD2E', '#27C93F'];
         dotColors.forEach((color, i) => {
-            ctx.beginPath(); ctx.arc(115 + (i * 32), cardY + 28, 7, 0, Math.PI * 2);
+            ctx.beginPath(); ctx.arc(120 + (i * 32), cardY + 30, 8, 0, Math.PI * 2);
             ctx.fillStyle = color; ctx.fill();
         });
 
@@ -199,9 +209,9 @@ async function generateAutoFactorySlide(slide, totalSlides, batchId) {
             ctx.save();
             ctx.direction = 'ltr';
             ctx.textAlign = 'left';
-            ctx.font = '30px "Consolas", monospace';
+            ctx.font = '32px "Consolas", monospace';
             const lines = slide.codeSnippet.split('\n');
-            let codeY = cardY + 100;
+            let codeY = cardY + 110;
 
             lines.forEach(line => {
                 if (line.trim().startsWith('#')) {
@@ -209,50 +219,109 @@ async function generateAutoFactorySlide(slide, totalSlides, batchId) {
                 } else if (/\b(print|def|for|in|return|if|else|elif|import)\b/.test(line)) {
                     ctx.fillStyle = '#569CD6';
                 } else {
-                    ctx.fillStyle = '#D4D4D4';
+                    ctx.fillStyle = '#E2E8F0';
                 }
-                ctx.fillText(line, 120, codeY);
-                codeY += 45;
+                ctx.fillText(line, 130, codeY);
+                codeY += 50;
             });
+            ctx.restore();
+        }
+
+        // ✍️ الملاحظة الجانبية بخط اليد 
+        if (slide.handwrittenNote) {
+            ctx.save();
+            ctx.translate(width - 150, cardY + cardHeight - 60);
+            ctx.rotate(-15 * Math.PI / 180); 
+            ctx.direction = 'rtl';
+            ctx.textAlign = 'right';
+            
+            ctx.font = '45px "MarheyBoldHack"'; 
+            ctx.fillStyle = '#FBBF24'; 
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 10;
+            ctx.fillText(slide.handwrittenNote, 0, 0);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, -30);
+            ctx.quadraticCurveTo(-30, -50, -60, -10);
+            ctx.strokeStyle = '#FBBF24';
+            ctx.lineWidth = 4;
+            ctx.stroke();
             ctx.restore();
         }
     }
 
     // ==========================================
-    // الشريحة 5: الختام (التصميم الاحترافي المحدث)
+    // الشريحة 5: الختام
     // ==========================================
     else if (slide.type === 'cta') {
         ctx.textAlign = 'center';
         ctx.direction = 'rtl';
 
-        // صورتك واسمك
+// 1. رسم الظل الخلفي
+        ctx.shadowColor = 'rgba(59, 130, 246, 0.4)';
+        ctx.shadowBlur = 50;
         ctx.beginPath();
         ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
         ctx.fillStyle = '#1E293B';
         ctx.fill();
+        ctx.shadowColor = 'transparent';
+
+        // 2. تفعيل ميزة القص (Clipping) لجعل الصورة دائرية
+        ctx.save(); 
+        ctx.beginPath();
+        ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
+        ctx.clip(); // أي شيء يُرسم بعد هذا السطر سيكون محصوراً داخل الدائرة
+
+// 3. تحميل الصورة ورسمها باحترافية (بدون تشويه الأبعاد)
+        try {
+            const avatar = await loadImage(path.join(__dirname, 'profile.png'));
+            
+            // خوارزمية الاقتطاع المربع (Crop) للحفاظ على التناسب
+            const size = Math.min(avatar.width, avatar.height); // أخذ أصغر بُعد لصنع مربع
+            const sx = (avatar.width - size) / 2; // نقطة البداية الأفقية للتوسيط
+            const sy = (avatar.height - size) / 2; // نقطة البداية العمودية للتوسيط
+
+            // استخدام الدالة الموسعة: (الصورة, نقطة القص س, ص, عرض القص, طول القص, نقطة الرسم س, ص, عرض الرسم, طول الرسم)
+            ctx.drawImage(avatar, sx, sy, size, size, width / 2 - 110, 280 - 110, 220, 220);
+            
+        } catch (err) {
+            console.log('⚠️ لم يتم العثور على صورة profile.png، سيتم ترك الدائرة فارغة.');
+        }
+        ctx.restore(); // إنهاء القص للعودة للرسم الطبيعي
+
+        // 4. رسم الإطار الأزرق فوق الصورة لتبدو احترافية
+        ctx.beginPath();
+        ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
         ctx.strokeStyle = '#3B82F6';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 6;
         ctx.stroke();
 
-        ctx.font = 'bold 50px "Cairo"';
+        ctx.font = '50px "CairoBoldHack"';
         ctx.fillStyle = '#F8FAFC';
         ctx.fillText("غربي محمد الشريف", width / 2, 460);
 
-        ctx.font = '35px "Tajawal"';
+        ctx.font = '35px "CairoRegularHack"';
         ctx.fillStyle = '#94A3B8';
         ctx.fillText("مهندس برمجيات ومطور أتمتة", width / 2, 520);
 
-        // العنوان والسؤال المحفز (تصغير الخط لتجنب القص)
-        ctx.font = 'bold 75px "Cairo"';
+        ctx.font = '75px "CairoBoldHack"';
         ctx.fillStyle = '#F8FAFC';
         ctx.fillText(slide.title, width / 2, 700);
 
-        ctx.font = '40px "Tajawal"';
+        ctx.font = '40px "CairoRegularHack"';
         ctx.fillStyle = '#60A5FA';
-        // مساحة آمنة 900px لمنع خروج النص من الشاشة
         wrapText(ctx, slide.content, width / 2, 780, 900, 55); 
 
-        // 💡 أزرار التفاعل الجديدة (أيقونة فوق، نص تحت)
+        // 💡 رسالة الختام بخط اليد
+        ctx.save();
+        ctx.translate(width / 2 + 350, 630);
+        ctx.rotate(10 * Math.PI / 180);
+        ctx.font = '45px "MarheyBoldHack"'; 
+        ctx.fillStyle = '#F472B6'; 
+        ctx.fillText("لا تنسَ الحفظ! 📍", 0, 0);
+        ctx.restore();
+
         const btnY = 950;
         const btnWidth = 180;
         const btnHeight = 150;
@@ -260,43 +329,33 @@ async function generateAutoFactorySlide(slide, totalSlides, batchId) {
         const startX = (width - (4 * btnWidth + 3 * gap)) / 2;
 
         const actions = [
-            { label: 'إعجاب', icon: 'heart', isPrimary: false },
-            { label: 'رأيك', icon: 'comment', isPrimary: false },
-            { label: 'شارك', icon: 'share', isPrimary: false },
-            { label: 'احفظ', icon: 'save', isPrimary: true }
+            { label: 'إعجاب', isPrimary: false },
+            { label: 'رأيك', isPrimary: false },
+            { label: 'شارك', isPrimary: false },
+            { label: 'احفظ', isPrimary: true }
         ];
 
         actions.forEach((act, idx) => {
             const bx = startX + idx * (btnWidth + gap);
-            
-            // خلفية الزر
-            ctx.fillStyle = act.isPrimary ? '#2563EB' : 'rgba(30, 41, 59, 0.8)';
-            drawRoundedRect(ctx, bx, btnY, btnWidth, btnHeight, 20);
-            ctx.fill();
+            ctx.fillStyle = act.isPrimary ? 'rgba(37, 99, 235, 0.9)' : 'rgba(30, 41, 59, 0.6)';
+            drawRoundedRect(ctx, bx, btnY, btnWidth, btnHeight, 20, true);
+            ctx.strokeStyle = act.isPrimary ? '#60A5FA' : 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
 
-            if (!act.isPrimary) {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-
-            const iconColor = act.isPrimary ? '#FFFFFF' : '#94A3B8';
-            const iconX = bx + btnWidth / 2;
-            
-            // رسم الأيقونات المتجهة بدقة أعلى النص
-            ctx.fillStyle = iconColor;
-            if (act.icon === 'heart') drawHeart(ctx, iconX - 18, btnY + 30, 36);
-            if (act.icon === 'comment') drawComment(ctx, iconX - 18, btnY + 30, 36);
-            if (act.icon === 'share') drawPaperPlane(ctx, iconX - 16, btnY + 30, 36);
-            if (act.icon === 'save') drawBookmark(ctx, iconX - 14, btnY + 28, 28, 38);
-
-            // النص أسفل الأيقونة
-            ctx.font = 'bold 28px "Cairo"';
+            ctx.font = '32px "CairoBoldHack"';
             ctx.fillStyle = act.isPrimary ? '#FFFFFF' : '#CBD5E1';
-            ctx.fillText(act.label, iconX, btnY + 115);
+            ctx.fillText(act.label, bx + btnWidth / 2, btnY + 85);
         });
     }
-
+// ==========================================
+    // 🌟 بصمة العلامة التجارية (تظهر في أسفل كل الشرائح)
+    // ==========================================
+    ctx.textAlign = 'center';
+    ctx.direction = 'rtl';
+    ctx.font = '22px "CairoBoldHack"';
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.4)'; // لون رمادي خافت جداً وشفاف كي لا يزعج القارئ
+    ctx.fillText("غربي محمد الشريف © مهندس برمجيات", width / 2, height - 40);
     const fileName = `post_${batchId}_slide_${slide.slideNumber}.png`;
     const buffer = canvas.toBuffer('image/png');
     fs.writeFileSync(path.join(__dirname, fileName), buffer);
@@ -310,24 +369,31 @@ app.post('/api/generate-lesson', async (req, res) => {
     try {
         console.log(`\n⏳ جاري التأليف والأتمتة بالذكاء الاصطناعي...`);
 
-        const systemPrompt = `
-        أنت صانع محتوى برمجي مشهور على إنستغرام، أسلوبك يشبه تماماً أسلوب تبسيط رياضيات التعليم المتوسط: تستخدم قصصاً مرحة، شخصيات خيالية، وقياسات من الحياة اليومية لشرح البرمجة.
+    const systemPrompt = `
+        أنت خبير واستراتيجي في صناعة المحتوى الرقمي، تمتلك موسوعة معرفية شاملة.
+        مهمتك هي إنشاء محتوى تعليمي وتثقيفي عالي القيمة، بأسلوب احترافي، جذاب، ومبسط.
         
-        مهم جداً: كن مختصراً جداً جداً في الشرح لتوفير الكلمات.
-        قسم الدرس إلى 5 شرائح بالضبط:
-        - الشريحة 1 (type: "hook"): عنوان جذاب ومثير للفضول فقط. لا يوجد كود.
-        - الشرائح 2, 3, 4 (type: "content"): عنوان + مثال هزلي من سطر واحد فقط + كود بايثون قصير.
-        - الشريحة 5 (type: "cta"): شريحة الختام. عنوانها "احفظ المنشور لتعود إليه"، والمحتوى يحفز على التعليق بسؤال لا يتجاوز 8 كلمات.
+        التعليمات الصارمة:
+        1. اللغة: استخدم اللغة العربية الفصحى المعاصرة فقط. يُمنع استخدام الدارجة أو العبارات الركيكة.
+        2. الإيجاز: المساحة البصرية محدودة، كن دقيقاً ومختصراً.
+        3. تنوع المجالات: المحتوى قد يكون في (البرمجة، التداول، المونتاج، المعالجة الصوتية، الذكاء الاصطناعي، الأتمتة، تطوير الويب، أو حكم وتحفيز). تكيف بمرونة مع الموضوع.
+        4. المرونة في الحجم: حدد عدد الشرائح المناسب لتغطية الموضوع بقوة (من 3 إلى 8 شرائح). لا تتقيد بـ 5 شرائح إلا إذا كان الموضوع يتطلب ذلك.
 
-        ⚠️ تنبيه أمني (لحماية JSON):
-        داخل حقل "codeSnippet"، يُمنع استخدام علامات التنصيص المزدوجة ("). استخدم الفردية (') فقط.
+        هيكلة الشرائح:
+        - الشريحة الأولى دائماً (type: "hook"): عنوان جذاب جداً يثير الفضول.
+        - الشرائح الوسطى (type: "content"): عنوان فرعي + شرح + حقل "codeSnippet" (يحتوي كود، أو خطوات مرقمة، أو معادلة حسب المجال) + "handwrittenNote" (ملاحظة بخط اليد من 3 كلمات).
+        - الشريحة الأخيرة دائماً (type: "cta"): عنوان يحفز على الحفظ، وسؤال للنقاش.
 
-        رد بصيغة JSON حصراً بهذا الشكل:
+        ⚠️ داخل "codeSnippet"، استخدم علامات التنصيص الفردية (') فقط.
+
+        رد بصيغة JSON حصراً بهذا الشكل (أضف شرائح المحتوى حسب الحاجة):
         {
-          "caption": "...",
+          "caption": "نص المنشور (Caption) لإنستغرام مع الهاشتاجات...",
+          "categoryBadge": "إيموجي وكلمتين لتصنيف الموضوع، مثال: 📈 أسرار التداول، 🎬 خدعة مونتاج، 💻 أتمتة الويب",
           "slides": [
             { "slideNumber": 1, "type": "hook", "title": "...", "content": "" },
-            { "slideNumber": 2, "type": "content", "title": "...", "content": "قصة...", "codeSnippet": "..." }
+            { "slideNumber": 2, "type": "content", "title": "...", "content": "...", "codeSnippet": "...", "handwrittenNote": "..." },
+            { "slideNumber": N, "type": "cta", "title": "...", "content": "..." }
           ]
         }
         `;
@@ -336,7 +402,7 @@ app.post('/api/generate-lesson', async (req, res) => {
             messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
             model: 'qwen/qwen3.8-27b', 
             temperature: 0.8,
-            max_tokens: 900,
+            max_tokens: 950,
             response_format: { type: 'json_object' }
         });
 
@@ -345,10 +411,14 @@ app.post('/api/generate-lesson', async (req, res) => {
         const generatedImages = [];
 
         for (const slide of lessonData.slides) {
-            const fileName = await generateAutoFactorySlide(slide, lessonData.slides.length, batchId);
+            const fileName = await generateAutoFactorySlide(
+                slide, 
+                lessonData.slides.length, 
+                lessonData.categoryBadge, // 👈 تمرير الشارة هنا
+                batchId
+            );
             generatedImages.push(fileName);
         }
-
         res.json({ success: true, caption: lessonData.caption, slides: lessonData.slides, images: generatedImages });
 
     } catch (error) {
