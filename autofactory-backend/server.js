@@ -5,12 +5,26 @@ const Groq = require('groq-sdk');
 const { createCanvas, registerFont, loadImage } = require('canvas');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios'); // إضافة
+const cloudinary = require('cloudinary').v2; // إضافة
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// إعداد Cloudinary
+cloudinary.config({ 
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+    api_key: process.env.CLOUDINARY_API_KEY, 
+    api_secret: process.env.CLOUDINARY_API_SECRET 
+});
+
+// متغيرات Meta API
+const TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const IG_ID = '17841404465286460'; // معرّف إنستغرام الخاص بك
+const VERSION = 'v20.0';
 
 // ==========================================
 // 🚀 الخدعة النهائية: تسجيل الخطوط بأسماء مركبة بدون أوزان
@@ -424,6 +438,83 @@ app.post('/api/generate-lesson', async (req, res) => {
     } catch (error) {
         console.error('❌ خطأ:', error);
         res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
+    }
+});
+
+// مسار النشر الجديد الذي سيستدعيه زر الواجهة
+app.post('/api/publish-lesson', async (req, res) => {
+    const { images, caption } = req.body;
+    
+    if (!images || images.length === 0) {
+        return res.status(400).json({ error: 'لم يتم العثور على صور للنشر.' });
+    }
+
+    try {
+        console.log('\n======================================');
+        console.log('🚀 بدء دورة النشر من لوحة التحكم');
+        console.log('======================================');
+        
+        // 1. الرفع إلى Cloudinary
+        console.log('\n☁️ 1. جاري الرفع للسحابة...');
+        let imageUrls = [];
+        for (let i = 0; i < images.length; i++) {
+            const imagePath = path.join(__dirname, images[i]);
+            const uploadRes = await cloudinary.uploader.upload(imagePath, { 
+                folder: 'AutoFactory_Carousel',
+                format: 'jpg' 
+            });
+            imageUrls.push(uploadRes.secure_url);
+            console.log(`   ✅ تم رفع الصورة ${i + 1}`);
+        }
+
+        console.log('⏳ استراحة 8 ثوانٍ لانتشار الروابط...');
+        await new Promise(resolve => setTimeout(resolve, 8000));
+
+        // 2. إنشاء حاويات Meta (بنظام الإنقاذ الهادئ)
+        console.log('\n📦 2. إنشاء حاويات Meta...');
+        let creationIds = [];
+        for (let i = 0; i < imageUrls.length; i++) {
+            let success = false;
+            let attempts = 0; 
+            
+            while (!success && attempts < 4) {
+                attempts++;
+                try {
+                    const itemRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media`, null, {
+                        params: { image_url: imageUrls[i], is_carousel_item: true, access_token: TOKEN }
+                    });
+                    creationIds.push(itemRes.data.id);
+                    success = true; 
+                    console.log(`   ✅ حاوية الصورة ${i + 1} جاهزة`);
+                } catch (err) {
+                    if (attempts === 4) throw err; 
+                    console.log(`   ⏳ فشل ${attempts}/4، ننتظر 15 ثانية...`);
+                    await new Promise(resolve => setTimeout(resolve, 15000));
+                }
+            }
+            if (i < imageUrls.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 12000));
+            }
+        }
+
+        // 3. دمج الألبوم
+        console.log('\n📚 3. دمج الألبوم...');
+        const carouselRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media`, null, {
+            params: { media_type: 'CAROUSEL', children: creationIds.join(','), caption: caption, access_token: TOKEN }
+        });
+
+        // 4. النشر النهائي
+        console.log('\n📢 4. إرسال أمر النشر...');
+        const publishRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media_publish`, null, {
+            params: { creation_id: carouselRes.data.id, access_token: TOKEN }
+        });
+
+        console.log('\n🎉 تم النشر بنجاح! ID:', publishRes.data.id);
+        res.json({ success: true, postId: publishRes.data.id });
+
+    } catch (error) {
+        console.error('\n❌ خطأ في عملية النشر:', error.response ? error.response.data : error.message);
+        res.status(500).json({ error: 'فشل النشر بسبب قيود API.' });
     }
 });
 

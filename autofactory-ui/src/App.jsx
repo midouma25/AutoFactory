@@ -8,7 +8,7 @@ function App() {
   const [contentType, setContentType] = useState('carousel');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedPreview, setGeneratedPreview] = useState(null); // الآن سيحمل البيانات الحقيقية
-
+  const [isPublishing, setIsPublishing] = useState(false); // 👈 إضافة حالة جديدة للنشر
   const menuItems = [
     { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
     { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
@@ -47,7 +47,37 @@ function App() {
       setIsGenerating(false);
     }
   };
+// 👈 إضافة دالة النشر الجديدة
+  const handlePublish = async () => {
+    if (!generatedPreview || !generatedPreview.images) return;
+    setIsPublishing(true);
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/publish-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            images: generatedPreview.images, 
+            caption: generatedPreview.caption 
+        })
+      });
 
+      const data = await response.json();
+
+      if (data.success) {
+        alert('🎉 تم النشر على حساب إنستغرام بنجاح!\nمعرف المنشور: ' + data.postId);
+        setGeneratedPreview(null); // مسح الشاشة بعد النشر للبدء من جديد
+        setPromptText('');
+      } else {
+        alert('❌ خطأ أثناء النشر: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('❌ فشل الاتصال بالخادم أثناء النشر.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
   const renderPromptStudio = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
       {/* القسم الأيمن: إدخال الأوامر */}
@@ -145,12 +175,24 @@ function App() {
                 ))}
               </div>
               
+{/* 👈 تعديل قائمة الأزرار السفلية لربط دالة النشر */}
               <div className="flex gap-3 mt-auto pt-4 border-t border-gray-700">
-                <button className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition-all">
-                  (قريباً) رفع ونشر!
+                <button 
+                  onClick={handlePublish}
+                  disabled={isPublishing}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white py-3 rounded-lg font-bold transition-all shadow-lg"
+                >
+                  {isPublishing ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} />
+                      جاري الاتصال بـ Meta...
+                    </>
+                  ) : (
+                    "رفع ونشر لإنستغرام 🚀"
+                  )}
                 </button>
                 <button onClick={() => setGeneratedPreview(null)} className="px-6 bg-red-600/20 hover:bg-red-600/30 text-red-400 py-3 rounded-lg font-bold transition-all border border-red-600/30">
-                  إغلاق
+                  إلغاء
                 </button>
               </div>
             </div>
