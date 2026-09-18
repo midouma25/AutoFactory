@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios'); // إضافة
 const cloudinary = require('cloudinary').v2; // إضافة
-
+const cron = require('node-cron');
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -79,6 +79,90 @@ function drawRoundedRect(ctx, x, y, width, height, radius, withShadow = false) {
     if (withShadow) ctx.shadowColor = 'transparent';
 }
 
+// ==========================================
+// 🤖🤖 نظام الطيار الآلي (Multi-Agent Auto-Pilot)
+// ==========================================
+
+async function runAutoPilot() {
+    console.log('\n🌟 [الطيار الآلي] استيقظ النظام للعمل...');
+    
+const niches = [
+        "تطوير الويب وهندسة البرمجيات (Web Dev, Node.js, React, Python)",
+        "الذكاء الاصطناعي، نماذج LLMs، وطرق استغلالها في المشاريع",
+        "التعليق الصوتي المدمج بالذكاء الاصطناعي وهندسة الصوتيات وبرامجها",
+        "أسرار وحيل سريعة في المونتاج (بشكل خفيف وغير معقد)",
+        "التداول الكمي والخوارزمي (Quantitative Trading) باستخدام البرمجة",
+        "تبسيط الخوارزميات المعقدة والرياضيات البرمجية بأسلوب سهل جداً",
+        "عالم الهاردوير، تجميع الحواسيب، والمقارنات التقنية لقطع الـ PC",
+        "ثقافة عامة تقنية، وحلول ذكية لمشاكل برمجية أو يومية شائعة",
+        "منهجيات فعالة لدراسة اللغات البرمجية واللغة الإنجليزية التقنية",
+        "تحفيز، انضباط يومي، وقصص نجاح للوصول إلى الأهداف التقنية",
+        "صحة المبرمج: الموازنة بين البرمجة، الرياضة، الانضباط الجسدي والروتين",
+        "التلعيب (Gamification) وأفكار مشاريع برمجية ممتعة ومبتكرة",
+        "دمج البرمجة بالعالم المادي (IoT، تحليل الكاميرات، وتعديل الأجهزة)"
+    ];
+    const selectedNiche = niches[Math.floor(Math.random() * niches.length)];
+    console.log(`🎯 [الوكيل الاستراتيجي] المجال المختار لليوم: ${selectedNiche}`);
+
+    try {
+        // 2. سؤال Groq عن الموضوع الرائج (Trending)
+        const trendResponse = await groq.chat.completions.create({
+            messages: [
+                { 
+                    role: 'system', 
+                    content: `أنت مدير تسويق تقني خبير. أعطني فكرة واحدة محددة ورائجة (Trending) حالياً في مجال "${selectedNiche}" تصلح لتكون منشور كاروسيل تعليمي جذاب على إنستغرام.
+                    التعليمات الصارمة: 
+                    - لا تكتب أي مقدمات أو شروحات. 
+                    - اكتب الفكرة في جملة واحدة فقط (مثال: "كيف تبني بوت تداول آلي في بايثون في 5 خطوات").` 
+                }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9,
+        });
+
+        const trendingTopic = trendResponse.choices[0].message.content.trim();
+        console.log(`🔥 [الوكيل الاستراتيجي] الموضوع الرائج الذي تم التقاطه: ${trendingTopic}`);
+        console.log(`⚙️ [الوكيل الصانع] جاري الآن تحويل الفكرة إلى صور وتصميمات...`);
+
+        // 3. إرسال الموضوع لـ API التوليد الذي بنيناه سابقاً
+        // نستخدم axios للاتصال بالخادم الخاص بنا محلياً
+        const generateRes = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/generate-lesson`, {
+            prompt: trendingTopic
+        });
+
+        const generatedData = generateRes.data;
+        if (!generatedData.success) throw new Error("فشل توليد الصور");
+
+        console.log(`✅ [الوكيل الصانع] تم تصميم ${generatedData.images.length} صور بنجاح.`);
+        console.log(`🚀 [الطيار الآلي] جاري إرسال الصور إلى إنستغرام...`);
+
+        // 4. إرسال الصور المولدة لـ API النشر
+        const publishRes = await axios.post(`http://localhost:${process.env.PORT || 5000}/api/publish-lesson`, {
+            images: generatedData.images,
+            caption: generatedData.caption
+        });
+
+        if (publishRes.data.success) {
+            console.log(`🎉 [النجاح المطلق] تم نشر الموضوع الرائج بنجاح! ID: ${publishRes.data.postId}`);
+        }
+
+    } catch (error) {
+        console.error('❌ [خطأ في الطيار الآلي]:', error.message);
+    }
+}
+
+// ⏰ جدولة المهام (Cron Job)
+// هذا التعبير '0 20 * * *' يعني: نفذ المهمة كل يوم الساعة 20:00 (8 مساءً) بتوقيت السيرفر
+cron.schedule('0 20 * * *', () => {
+    console.log('⏰ حان الموعد المجدول للنشر اليومي!');
+    runAutoPilot();
+}, {
+    scheduled: true,
+    timezone: "Africa/Algiers" // تم ضبط التوقيت لضمان النشر بدقة في منطقتك
+});
+
+// يمكنك فك التعليق عن السطر بالأسفل إذا أردت تشغيل الطيار الآلي فوراً بمجرد تشغيل السيرفر (للاختبار)
+// setTimeout(runAutoPilot, 3000);
 // 🎨 المحرك البصري
 async function generateAutoFactorySlide(slide, totalSlides, batchId, categoryBadge ) {
     const width = 1080;
@@ -517,6 +601,54 @@ app.post('/api/publish-lesson', async (req, res) => {
         res.status(500).json({ error: 'فشل النشر بسبب قيود API.' });
     }
 });
+// ==========================================
+// 🧠 مسار تحليل التريندات (Trend Analyzer API)
+// ==========================================
+app.post('/api/analyze-trend', async (req, res) => {
+    try {
+        const { niche, isAuto } = req.body;
+        console.log(`\n🔍 [API] طلب تحليل تريند للمجال: ${niche} | النمط التلقائي: ${isAuto}`);
+
+        // صياغة الأمر بناءً على نوع الطلب (يدوي أو تلقائي)
+        const systemPrompt = `أنت خبير استراتيجي في صناعة المحتوى التقني على إنستغرام.
+        المجال المطلوب: "${niche}".
+        السياق: ${isAuto ? 'تم اختيار هذا المجال تلقائياً من الخوارزمية لتنويع المحتوى.' : 'تم اختيار هذا المجال يدوياً من قبل المستخدم.'}
+        
+        مهمتك:
+        1. استخراج فكرة منشور واحدة فقط تكون "تريند" (Trending) حالياً أو ذات قيمة عالية في هذا المجال.
+        2. كتابة مبرر مقنع (Reasoning) يشرح لماذا هذه الفكرة ستنجح اليوم وتحقق تفاعلاً عالياً.
+        
+        الرد يجب أن يكون حصرياً بصيغة JSON صالحة (Valid JSON) فقط، بدون أي نصوص أو مقدمات إضافية، بالشكل التالي:
+        {
+          "trend": "اكتب الفكرة الجذابة هنا في جملة واحدة",
+          "reasoning": "اكتب المبرر التحليلي هنا في جملتين كحد أقصى"
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [{ role: 'system', content: systemPrompt }],
+            model: 'qwen/qwen3.8-27b', // يمكنك تغييره إلى llama3-70b-8192 إذا أردت تحليلاً أعمق
+            temperature: 0.8,
+            response_format: { type: "json_object" } // إجبار المودل على إرجاع JSON
+        });
+
+        const aiResponse = chatCompletion.choices[0].message.content;
+        const parsedData = JSON.parse(aiResponse);
+
+        console.log(`✅ [نجاح] تم استخراج الفكرة: ${parsedData.trend}`);
+
+        res.json({
+            success: true,
+            niche: niche,
+            trend: parsedData.trend,
+            reasoning: parsedData.reasoning
+        });
+
+    } catch (error) {
+        console.error('❌ خطأ في تحليل التريند:', error.message);
+        res.status(500).json({ success: false, error: 'فشل في الاتصال بالذكاء الاصطناعي أو تحليل الرد.' });
+    }
+});
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
