@@ -9,6 +9,9 @@ const axios = require('axios'); // إضافة
 const cloudinary = require('cloudinary').v2; // إضافة
 const cron = require('node-cron');
 const app = express();
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.toLocaleString('ar-EG', { month: 'long' });
 app.use(cors());
 app.use(express.json());
 
@@ -601,6 +604,51 @@ app.post('/api/publish-lesson', async (req, res) => {
         res.status(500).json({ error: 'فشل النشر بسبب قيود API.' });
     }
 });
+
+
+// ==========================================
+// 🧪 مسار مختبر الفيروسية (Viral Idea Engineering)
+// ==========================================
+app.post('/api/engineer-idea', async (req, res) => {
+    try {
+        const { rawIdea } = req.body;
+        console.log(`\n🧪 [API] هندسة فكرة خام: ${rawIdea}`);
+
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+
+        const systemPrompt = `أنت مخرج إبداعي وخبير "Growth Hacking" لمنصات التواصل التقنية في ${currentYear}.
+        مهمتك أخذ فكرة المستخدم العادية (والمملة أحياناً) وتحويلها إلى قنبلة تفاعل (Viral Trend) تناسب عقلية المبرمجين في ${currentYear}.
+        
+        الرد يجب أن يكون حصرياً بصيغة JSON صالحة فقط، بهذا الشكل:
+        {
+          "hook": "الخطاف: الجملة الافتتاحية المستفزة أو الجذابة جداً التي ستوقف التمرير",
+          "presentation": "أسلوب التقديم: كيف نصممها؟ (مثال: شاشة منقسمة، سيناريو كوميدي، تحدي وقت، كود ضد كود)",
+          "viralAngle": "الزاوية النفسية: لماذا سينجح هذا الطرح ويجعل الناس تعلق وتشارك؟"
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `قم بهندسة هذه الفكرة الخام وتحويلها لتريند: "${rawIdea}"` }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9,
+            response_format: { type: "json_object" }
+        });
+
+        const aiResponse = chatCompletion.choices[0].message.content;
+        const parsedData = JSON.parse(aiResponse);
+
+        console.log(`✅ [نجاح] تم هندسة الفكرة بنجاح!`);
+        res.json({ success: true, ...parsedData });
+
+    } catch (error) {
+        console.error('❌ خطأ في هندسة الفكرة:', error.message);
+        res.status(500).json({ success: false, error: 'فشل في الاتصال بالذكاء الاصطناعي.' });
+    }
+});
+
 // ==========================================
 // 🧠 مسار تحليل التريندات (Trend Analyzer API)
 // ==========================================
@@ -609,26 +657,24 @@ app.post('/api/analyze-trend', async (req, res) => {
         const { niche, isAuto } = req.body;
         console.log(`\n🔍 [API] طلب تحليل تريند للمجال: ${niche} | النمط التلقائي: ${isAuto}`);
 
-        // صياغة الأمر بناءً على نوع الطلب (يدوي أو تلقائي)
-        const systemPrompt = `أنت خبير استراتيجي في صناعة المحتوى التقني على إنستغرام.
-        المجال المطلوب: "${niche}".
-        السياق: ${isAuto ? 'تم اختيار هذا المجال تلقائياً من الخوارزمية لتنويع المحتوى.' : 'تم اختيار هذا المجال يدوياً من قبل المستخدم.'}
-        
-        مهمتك:
-        1. استخراج فكرة منشور واحدة فقط تكون "تريند" (Trending) حالياً أو ذات قيمة عالية في هذا المجال.
-        2. كتابة مبرر مقنع (Reasoning) يشرح لماذا هذه الفكرة ستنجح اليوم وتحقق تفاعلاً عالياً.
-        
-        الرد يجب أن يكون حصرياً بصيغة JSON صالحة (Valid JSON) فقط، بدون أي نصوص أو مقدمات إضافية، بالشكل التالي:
-        {
-          "trend": "اكتب الفكرة الجذابة هنا في جملة واحدة",
-          "reasoning": "اكتب المبرر التحليلي هنا في جملتين كحد أقصى"
-        }`;
-
         const chatCompletion = await groq.chat.completions.create({
-            messages: [{ role: 'system', content: systemPrompt }],
-            model: 'qwen/qwen3.8-27b', // يمكنك تغييره إلى llama3-70b-8192 إذا أردت تحليلاً أعمق
-            temperature: 0.8,
-            response_format: { type: "json_object" } // إجبار المودل على إرجاع JSON
+            messages: [
+                { 
+                    role: 'system', 
+                    content: `أنت خبير استراتيجي في صناعة المحتوى التقني على إنستغرام.
+                    معلومة حرجة جداً: نحن الآن في شهر ${currentMonth} من عام ${currentYear}. 
+                    يجب أن تكون التريندات حديثة وتخص تقنيات وتحديثات عام ${currentYear} وما بعده. 
+                    إياك وبشكل قاطع ذكر أو اقتراح أي تقنيات أو تواريخ قديمة مثل 2023 أو 2024.
+                    يجب أن تعيد الرد حصرياً بصيغة JSON صالحة (Valid JSON) فقط، بدون أي نصوص أو مقدمات إضافية.` 
+                },
+                { 
+                    role: 'user', 
+                    content: `المجال المطلوب: "${niche}".\nالسياق: ${isAuto ? 'تم اختيار هذا المجال تلقائياً من الخوارزمية لتنويع المحتوى.' : 'تم اختيار هذا المجال يدوياً من قبل المستخدم.'}\n\nمهمتك:\n1. استخراج فكرة منشور واحدة فقط تكون "تريند" (Trending) وثورية في هذا المجال بناءً على معطيات عام ${currentYear}.\n2. كتابة مبرر مقنع (Reasoning) يشرح لماذا هذه الفكرة ستنجح اليوم وتحقق تفاعلاً عالياً.\n\nالرد يجب أن يكون مطابقاً لهذا القالب:\n{\n  "trend": "اكتب الفكرة الجذابة هنا في جملة واحدة",\n  "reasoning": "اكتب المبرر التحليلي هنا في جملتين كحد أقصى"\n}` 
+                }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9, // رفعنا الحرارة قليلاً لزيادة الإبداع
+            response_format: { type: "json_object" }
         });
 
         const aiResponse = chatCompletion.choices[0].message.content;
