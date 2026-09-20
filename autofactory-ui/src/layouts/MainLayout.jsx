@@ -1,9 +1,11 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings } from 'lucide-react';
+// قمت بإضافة أيقونة FlaskConical (دورق المختبر) لتناسب "مختبر القوالب"
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
-  { id: 'trend-hub', name: 'مركز الترند والذكاء', icon: <TrendingUp size={20} /> }, // 👈 صفحتنا الجديدة!
+  { id: 'trend-hub', name: 'مركز الترند والذكاء', icon: <TrendingUp size={20} /> },
+  { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> }, // 👈 تمت إضافة الصفحة الجديدة هنا بنجاح
   { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
   { id: 'history', name: 'أرشيف النشر', icon: <History size={20} /> },
   { id: 'settings', name: 'الإعدادات', icon: <Settings size={20} /> },

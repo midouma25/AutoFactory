@@ -1,196 +1,263 @@
-import React, { useState } from 'react';
-import { Sparkles, Send, Loader2, ImagePlus, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Zap, Film, Wand2, Loader2, Copy, CheckCircle, Trash2, Image as ImageIcon, FileText, Hash, Sparkles } from 'lucide-react';
+import useIdeaStore from '../store/useIdeaStore';
 import axios from 'axios';
 
 export default function PromptStudio() {
-    const [promptText, setPromptText] = useState('');
+    // 1. جلب البيانات من المخزن السحابي (Zustand)
+    const { viralData, clearViralData } = useIdeaStore();
+
+    // 2. إدارة حالة الواجهة
+    // إذا كان هناك بيانات فيروسية، افتح الوضع السينمائي تلقائياً، وإلا افتح السريع
+    const [activeMode, setActiveMode] = useState(viralData ? 'cinematic' : 'quick');
+    const [postType, setPostType] = useState('carousel'); // reel أو carousel
+    const [quickTopic, setQuickTopic] = useState('');
+    
+    // 3. حالات التوليد والنتائج
     const [isGenerating, setIsGenerating] = useState(false);
-    const [generatedData, setGeneratedData] = useState(null);
-    const [isPublishing, setIsPublishing] = useState(false);
-    const [publishStatus, setPublishStatus] = useState(null);
+    const [result, setResult] = useState(null);
+    const [copied, setCopied] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
+    // مراقب التغييرات: إذا جاءت بيانات جديدة، انقل المستخدم للوضع السينمائي
+    useEffect(() => {
+        if (viralData) setActiveMode('cinematic');
+    }, [viralData]);
 
-    // دالة توليد المحتوى
-    const handleGenerate = async () => {
-        if (!promptText.trim()) return;
-        
+const handleGenerate = async () => {
         setIsGenerating(true);
-        setGeneratedData(null);
-        setPublishStatus(null);
-
+        setResult(null);
+        
         try {
-            // تأكد أن البورت 5000 يطابق بورت الخادم الخاص بك
-            const response = await axios.post('http://localhost:5000/api/generate-lesson', {
-                prompt: promptText
-            });
+            const payload = activeMode === 'cinematic' 
+                ? { mode: 'cinematic', type: postType, viralData } 
+                : { mode: 'quick', topic: quickTopic };
 
-            if (response.data && response.data.success) {
-                setGeneratedData({
-                    images: response.data.images,
-                    caption: response.data.caption
-                });
-            } else {
-                alert('⚠️ حدث خطأ في الخادم أثناء التوليد.');
+            const response = await axios.post('http://localhost:5000/api/generate-content', payload);
+            
+            if (response.data?.success) {
+                setResult(response.data.content);
+                setIsGenerating(false); // 👈 السطر الذي كان مفقوداً لإيقاف التحميل
             }
         } catch (error) {
-            console.error('Error:', error);
-            alert('❌ فشل الاتصال بالخادم. تأكد من تشغيل Node.js.');
-        } finally {
-            setIsGenerating(false);
+            console.error("Error generating content:", error);
+            // بيانات وهمية مؤقتة للحماية في حالة الخطأ
+            setTimeout(() => {
+                setResult({
+                    script: "حدث خطأ في الاتصال، يرجى المحاولة مرة أخرى.",
+                    prompts: "Error...",
+                    caption: "Error..."
+                });
+                setIsGenerating(false); // إيقاف التحميل في حالة الخطأ أيضاً
+            }, 2000);
         }
     };
-
-    // دالة النشر على إنستغرام
-    const handlePublish = async () => {
-        if (!generatedData) return;
-        
-        setIsPublishing(true);
-        try {
-            const response = await axios.post('http://localhost:5000/api/publish-lesson', {
-                images: generatedData.images,
-                caption: generatedData.caption
-            });
-
-            if (response.data && response.data.success) {
-                setPublishStatus('success');
-            } else {
-                setPublishStatus('error');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            setPublishStatus('error');
-        } finally {
-            setIsPublishing(false);
-        }
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
     };
 
     return (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 h-full pb-10">
-            {/* القسم الأيمن: إدخال الأوامر */}
-            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl flex flex-col h-fit">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 bg-blue-900/50 text-blue-400 rounded-lg">
-                        <Sparkles size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white">صياغة الفكرة</h3>
-                        <p className="text-gray-400 text-sm">اكتب موضوع الدرس ليقوم الذكاء الاصطناعي بتصميمه</p>
-                    </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full pb-10">
+            
+            {/* القسم الأيمن: إعدادات التوليد */}
+            <div className="lg:col-span-5 flex flex-col gap-6">
+                
+                {/* مبدل الأوضاع */}
+                <div className="flex bg-gray-900 rounded-xl p-1 border border-gray-700 shadow-inner">
+                    <button 
+                        onClick={() => setActiveMode('quick')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all ${activeMode === 'quick' ? 'bg-amber-500 text-gray-900 shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                    >
+                        <Zap size={20}/> التوليد السريع
+                    </button>
+                    <button 
+                        onClick={() => setActiveMode('cinematic')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all ${activeMode === 'cinematic' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+                    >
+                        <Film size={20}/> الإنتاج السينمائي
+                    </button>
                 </div>
 
-                <textarea
-                    value={promptText}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    placeholder="مثال: اشرح الفرق بين React و Vue بأسلوب بسيط..."
-                    className="w-full h-48 bg-gray-900 text-white border border-gray-600 rounded-xl p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-6"
-                    dir="rtl"
-                />
+                {/* واجهة التوليد السريع */}
+                {activeMode === 'quick' && (
+                    <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 animate-fade-in-up">
+                        <h3 className="text-xl font-bold text-white mb-2">منشور سريع</h3>
+                        <p className="text-gray-400 text-sm mb-6">أدخل عنواناً أو فكرة بسيطة وسنتكفل بالباقي.</p>
+                        
+                        <textarea
+                            value={quickTopic}
+                            onChange={(e) => setQuickTopic(e.target.value)}
+                            placeholder="مثال: تحديثات React 19 الجديدة..."
+                            className="w-full h-32 bg-gray-900 border border-gray-600 rounded-xl p-4 text-white focus:ring-2 focus:ring-amber-500 resize-none mb-6"
+                        ></textarea>
 
-                <button
-                    onClick={handleGenerate}
-                    disabled={isGenerating || !promptText.trim()}
-                    className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
-                        isGenerating || !promptText.trim()
-                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg hover:shadow-blue-600/50'
-                    }`}
-                >
-                    {isGenerating ? (
-                        <>
-                            <Loader2 className="animate-spin" size={24} />
-                            جاري التأليف والتصميم...
-                        </>
-                    ) : (
-                        <>
-                            <Send size={24} />
-                            توليد الدرس التلقائي
-                        </>
-                    )}
-                </button>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={isGenerating || !quickTopic.trim()}
+                            className="w-full py-4 bg-amber-500 text-gray-900 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-amber-400 disabled:opacity-50"
+                        >
+                            {isGenerating ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                            توليد المحتوى
+                        </button>
+                    </div>
+                )}
+
+                {/* واجهة الإنتاج السينمائي */}
+                {activeMode === 'cinematic' && (
+                    <div className="bg-gradient-to-br from-gray-800 to-purple-900/30 rounded-2xl p-6 border border-purple-500/30 shadow-xl animate-fade-in-up">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 className="text-xl font-bold text-white mb-1">المخطط الفيروسي</h3>
+                                <p className="text-purple-300/70 text-sm">توليد نصوص وأوامر صور بناءً على المختبر.</p>
+                            </div>
+                            {viralData && (
+                                <button onClick={clearViralData} className="text-red-400 hover:text-red-300 p-2 bg-red-900/20 rounded-lg tooltip" title="مسح بيانات المختبر">
+                                    <Trash2 size={18} />
+                                </button>
+                            )}
+                        </div>
+
+                        {viralData ? (
+                            <div className="bg-gray-900/80 rounded-xl p-4 mb-6 border border-purple-500/20">
+                                <div className="mb-3">
+                                    <span className="text-xs text-purple-400 font-bold block mb-1">الخطاف المستورد:</span>
+                                    <p className="text-sm text-white line-clamp-2">{viralData.hook}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-blue-400 font-bold block mb-1">أسلوب التقديم:</span>
+                                    <p className="text-sm text-gray-300 line-clamp-2">{viralData.presentation}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-gray-900/80 rounded-xl p-6 mb-6 border border-dashed border-gray-600 text-center">
+                                <Film className="mx-auto text-gray-500 mb-2" size={32} />
+                                <p className="text-gray-400 text-sm">لا توجد بيانات مستوردة. اذهب إلى "مختبر الأفكار" لتجهيز فكرة فيروسية أولاً.</p>
+                            </div>
+                        )}
+
+<div className="mb-6">
+    <label className="text-sm font-bold text-gray-300 block mb-2">نوع المنشور المطلوب:</label>
+    <select 
+        value={postType} 
+        onChange={(e) => setPostType(e.target.value)}
+        className="w-full bg-gray-900 text-white border border-gray-600 rounded-xl p-3"
+    >
+        {/* 👇 تم تعديل النص هنا ليعكس الديناميكية */}
+        <option value="carousel">ألبوم صور (ديناميكي: من 3 إلى 10 شرائح)</option>
+        <option value="reel">فيديو قصير (Reel Script)</option>
+    </select>
+</div>
+
+                        <button
+                            onClick={handleGenerate}
+                            disabled={isGenerating || !viralData}
+                            className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
+                        >
+                            {isGenerating ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                            بدء الإنتاج السينمائي 🎬
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {/* القسم الأيسر: معاينة النتائج والنشر */}
-            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl flex flex-col">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 bg-purple-900/50 text-purple-400 rounded-lg">
-                        <ImagePlus size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white">المعاينة والنشر</h3>
-                        <p className="text-gray-400 text-sm">راجع الصور والنص قبل إرسالها لإنستغرام</p>
-                    </div>
+            {/* القسم الأيسر: شاشة النتائج المتعددة */}
+            <div className="lg:col-span-7 bg-gray-800 rounded-2xl p-6 border border-gray-700 flex flex-col min-h-[600px]">
+                <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-6">
+                    <h3 className="text-xl font-bold text-white">مخرجات الاستوديو</h3>
+                    {result && (
+                        <button onClick={() => copyToClipboard(JSON.stringify(result))} className="text-sm flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-white transition-all">
+                            {copied ? <CheckCircle size={16} className="text-green-400"/> : <Copy size={16}/>} 
+                            {copied ? 'تم النسخ' : 'نسخ الكل'}
+                        </button>
+                    )}
                 </div>
 
-                {!generatedData && !isGenerating && (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 border-2 border-dashed border-gray-700 rounded-xl p-10">
-                        <ImagePlus size={48} className="mb-4 opacity-50" />
-                        <p>النتائج ستظهر هنا بعد التوليد</p>
+                {!result && !isGenerating && (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 opacity-60">
+                        <Wand2 size={64} className="mb-4" />
+                        <p className="text-lg">الاستوديو جاهز لتوليد المحتوى...</p>
                     </div>
                 )}
 
                 {isGenerating && (
-                    <div className="flex-1 flex flex-col items-center justify-center text-blue-400">
-                        <Loader2 className="animate-spin mb-4" size={48} />
-                        <p className="animate-pulse">المصنع يعمل الآن... يرجى الانتظار</p>
+                    <div className="flex-1 flex flex-col items-center justify-center text-purple-400">
+                        <Loader2 className="animate-spin mb-4 text-purple-500" size={64} />
+                        <p className="animate-pulse text-lg font-bold">جاري كتابة السيناريو وتوليد الأوامر البصرية...</p>
                     </div>
                 )}
 
-                {generatedData && (
-                    <div className="flex-1 flex flex-col overflow-y-auto pr-2 custom-scrollbar">
-                        {/* شبكة الصور المولدة */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                            {generatedData.images.map((img, idx) => (
-                                <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-600 aspect-square">
-                                    <img 
-                                        src={img} 
-                                        alt={`Slide ${idx + 1}`} 
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                                        {idx + 1}
-                                    </div>
-                                </div>
-                            ))}
+                {result && (
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-6 custom-scrollbar animate-fade-in-up">
+                        
+{/* 1. قسم محتوى الشرائح (البيانات الجديدة) */}
+<div className="bg-gray-900 rounded-xl p-5 border border-gray-700">
+    <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2 border-b border-gray-800 pb-2">
+        <FileText size={18}/> محتوى الشرائح ({result.categoryBadge})
+    </h4>
+    <div className="space-y-4 mt-4">
+        {result.slides && result.slides.map((slide, index) => (
+            <div key={index} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700/50">
+                <span className="text-xs font-bold text-gray-500 mb-1 block">شريحة {slide.slideNumber} - {slide.type}</span>
+                <h5 className="text-white font-bold text-lg mb-2">{slide.title}</h5>
+                {slide.content && <p className="text-gray-300 text-sm mb-2">{slide.content}</p>}
+                {slide.codeSnippet && (
+                    <div className="bg-gray-950 p-3 rounded-md text-left dir-ltr mt-2">
+                        <code className="text-green-400 text-sm font-mono">{slide.codeSnippet}</code>
+                    </div>
+                )}
+                {slide.handwrittenNote && (
+                    <p className="text-amber-400 text-sm font-bold mt-2 font-mono">✍️ {slide.handwrittenNote}</p>
+                )}
+            </div>
+        ))}
+    </div>
+</div>
+
+{/* 2. زر تشغيل محرك القوالب (Canvas) الفعلي */}
+<div className="bg-gray-900/50 p-6 rounded-xl border border-gray-700 mt-4 flex flex-col items-center justify-center text-center">
+    <div className="w-16 h-16 bg-blue-900/30 rounded-full flex items-center justify-center mb-4 border border-blue-500/30">
+        <ImageIcon size={32} className="text-blue-400" />
+    </div>
+    <h4 className="text-lg font-bold text-gray-200 mb-2">محرك القوالب البصرية جاهز</h4>
+    <p className="text-sm text-gray-400 mb-6 max-w-md">
+        النصوص والأكواد جاهزة للطباعة على قالب "AutoFactory" المخصص الخاص بك.
+    </p>
+    <button 
+        onClick={async () => {
+            if (!result.slides) return;
+            setIsPrinting(true);
+            try {
+                const res = await axios.post('http://localhost:5000/api/print-studio', {
+                    slides: result.slides,
+                    categoryBadge: result.categoryBadge
+                });
+                if (res.data.success) {
+                    alert('✅ تم طباعة الصور بنجاح! راجع مجلد المشروع.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('❌ حدث خطأ أثناء الطباعة.');
+            } finally {
+                setIsPrinting(false);
+            }
+        }}
+        disabled={isPrinting || !result.slides}
+        className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl flex items-center gap-2 hover:shadow-lg hover:shadow-blue-900/50 transition-all disabled:opacity-50"
+    >
+        {isPrinting ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
+        {isPrinting ? 'جاري رسم الصور...' : 'بدء طباعة الصور الآن'}
+    </button>
+</div>
+
+                        {/* 3. قسم الكابشن والهاشتاجات */}
+                        <div className="bg-gray-900 rounded-xl p-5 border border-gray-700">
+                            <h4 className="text-green-400 font-bold mb-3 flex items-center gap-2 border-b border-gray-800 pb-2"><Hash size={18}/> نص المنشور (Caption)</h4>
+                            <pre className="text-gray-300 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                                {result.caption}
+                            </pre>
                         </div>
 
-                        {/* النص المولد (Caption) */}
-                        <div className="bg-gray-900 rounded-xl p-4 border border-gray-700 mb-6 whitespace-pre-wrap text-sm text-gray-300">
-                            {generatedData.caption}
-                        </div>
-
-                        {/* زر النشر */}
-                        <button
-                            onClick={handlePublish}
-                            disabled={isPublishing || publishStatus === 'success'}
-                            className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all mt-auto ${
-                                publishStatus === 'success'
-                                    ? 'bg-green-600 text-white'
-                                    : isPublishing
-                                    ? 'bg-gray-700 text-gray-500'
-                                    : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg hover:shadow-purple-600/50'
-                            }`}
-                        >
-                            {isPublishing ? (
-                                <>
-                                    <Loader2 className="animate-spin" size={24} />
-                                    جاري الإرسال لـ Meta...
-                                </>
-                            ) : publishStatus === 'success' ? (
-                                <>
-                                    <CheckCircle size={24} />
-                                    تم النشر بنجاح!
-                                </>
-                            ) : publishStatus === 'error' ? (
-                                <>
-                                    <AlertCircle size={24} />
-                                    فشل النشر، أعد المحاولة
-                                </>
-                            ) : (
-                                <>
-                                    <Send size={24} />
-                                    انشر على إنستغرام الآن
-                                </>
-                            )}
-                        </button>
                     </div>
                 )}
             </div>

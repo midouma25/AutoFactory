@@ -2,24 +2,25 @@ import React, { useState } from 'react';
 import MainLayout from './layouts/MainLayout';
 import PromptStudio from './pages/PromptStudio';
 import TrendHub from './pages/TrendHub'; 
+import TemplateLab from './pages/TemplateLab'; // أو مسار الملف الصحيح
 
 function App() {
   const [activeTab, setActiveTab] = useState('trend-hub');
 
-  // دالة بسيطة لاختيار الصفحة المعروضة
   const renderContent = () => {
     switch (activeTab) {
       case 'prompt':
         return <PromptStudio />;
       case 'trend-hub':
-         return <TrendHub />;
+         return <TrendHub setActiveTab={setActiveTab} />;
+      case 'template-lab':
+        return <TemplateLab setActiveTab={setActiveTab} />;
       case 'history':
       case 'dashboard':
       case 'settings':
         return <div className="text-gray-500 text-center mt-20 text-xl">جاري تطوير هذا القسم...</div>;
       default:
-
- 
+        return <TrendHub setActiveTab={setActiveTab} />;
     }
   };
 

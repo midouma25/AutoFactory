@@ -20,7 +20,7 @@ const niches = [
     "دمج البرمجة بالعالم المادي (IoT)"
 ];
 
-export default function TrendHub() {
+export default function TrendHub({ setActiveTab }) {
     // حالة التحكم بنوع الواجهة (trend vs lab)
     const [activeMode, setActiveMode] = useState('trend'); 
     
@@ -76,13 +76,13 @@ export default function TrendHub() {
  const navigate = useNavigate();
 const setViralData = useIdeaStore((state) => state.setViralData);
 
-// دالة النقل الذكية
 const handleTransferToStudio = () => {
-    // 1. حفظ البيانات المندسة في المخزن
+    // 1. حفظ البيانات المندسة في المخزن (Zustand)
     setViralData(analysisResult); 
-    // 2. توجيه المستخدم فوراً إلى صفحة الاستوديو
-    navigate('/studio'); 
+    // 2. تغيير التبويب النشط إلى الاستوديو
+    setActiveTab('prompt'); 
 };
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full pb-10">
             

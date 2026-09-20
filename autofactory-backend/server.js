@@ -8,13 +8,14 @@ const path = require('path');
 const axios = require('axios'); // إضافة
 const cloudinary = require('cloudinary').v2; // إضافة
 const cron = require('node-cron');
+const drawTerminalSlide = require('./templates/terminal');
 const app = express();
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.toLocaleString('ar-EG', { month: 'long' });
 app.use(cors());
 app.use(express.json());
-
+const drawAiComparisonSlide = require('./templates/ai_comparison');
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // إعداد Cloudinary
@@ -42,22 +43,31 @@ try {
     console.log('⚠️ تحذير: فشل تحميل الخطوط. تأكد من أسماء الملفات.');
 }
 
-// دالة التفاف النص
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-    const words = text.split(' ');
-    let line = '';
-    for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-            ctx.fillText(line.trim(), x, y);
-            line = words[n] + ' ';
-            y += lineHeight;
-        } else {
-            line = testLine;
+    if (!text) return y;
+    // فصل النص بناءً على الأسطر الجديدة التي يرسلها الذكاء الاصطناعي
+    const paragraphs = text.split('\n');
+    let currentY = y;
+
+    for (let p = 0; p < paragraphs.length; p++) {
+        const words = paragraphs[p].split(' ');
+        let line = '';
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && n > 0) {
+                ctx.fillText(line, x, currentY);
+                line = words[n] + ' ';
+                currentY += lineHeight;
+            } else {
+                line = testLine;
+            }
         }
+        ctx.fillText(line, x, currentY);
+        // إضافة مسافة إضافية صغيرة بين الفقرات
+        currentY += lineHeight + 10; 
     }
-    ctx.fillText(line.trim(), x, y);
-    return y;
+    return currentY;
 }
 
 // رسم المربعات بحواف دائرية (مع ظلال)
@@ -164,299 +174,17 @@ cron.schedule('0 20 * * *', () => {
     timezone: "Africa/Algiers" // تم ضبط التوقيت لضمان النشر بدقة في منطقتك
 });
 
-// يمكنك فك التعليق عن السطر بالأسفل إذا أردت تشغيل الطيار الآلي فوراً بمجرد تشغيل السيرفر (للاختبار)
-// setTimeout(runAutoPilot, 3000);
-// 🎨 المحرك البصري
-async function generateAutoFactorySlide(slide, totalSlides, batchId, categoryBadge ) {
+async function generateAutoFactorySlide(slide, totalSlides, batchId, categoryBadge, templateStyle) {
     const width = 1080;
     const height = 1350;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // الخلفية والشبكة (Blueprint Grid)
-    ctx.fillStyle = '#0F172A';
-    ctx.fillRect(0, 0, width, height);
-    
-    const glow = ctx.createRadialGradient(width/2, height/2, 100, width/2, height/2, 900);
-    glow.addColorStop(0, 'rgba(59, 130, 246, 0.12)');
-    glow.addColorStop(1, 'transparent');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.lineWidth = 1;
-    for(let i = 0; i < width; i += 60) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke(); }
-    for(let i = 0; i < height; i += 60) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(width, i); ctx.stroke(); }
-
-    // ==========================================
-    // الشريحة 1: الخطاف
-    // ==========================================
-if (slide.type === 'hook') {
-        ctx.textAlign = 'center';
-        ctx.direction = 'rtl';
-        
-        // 1. صورة المصمم (البراند الشخصي) مصغرة في الأعلى
-        ctx.save(); 
-        ctx.beginPath();
-        ctx.arc(width / 2, 260, 60, 0, Math.PI * 2); 
-        ctx.clip(); 
-        try {
-            const avatar = await loadImage(path.join(__dirname, 'profile.png'));
-            const size = Math.min(avatar.width, avatar.height); 
-            const sx = (avatar.width - size) / 2; 
-            const sy = (avatar.height - size) / 2; 
-            ctx.drawImage(avatar, sx, sy, size, size, width / 2 - 60, 260 - 60, 120, 120);
-        } catch (err) {}
-        ctx.restore(); 
-
-        // إطار أزرق ناعم حول الصورة المصغرة
-        ctx.beginPath();
-        ctx.arc(width / 2, 260, 60, 0, Math.PI * 2); 
-        ctx.strokeStyle = '#3B82F6';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // 2. اسمك تحت الصورة المصغرة
-        ctx.font = '26px "CairoBoldHack"'; 
-        ctx.fillStyle = '#94A3B8';
-        ctx.fillText("غربي محمد الشريف", width / 2, 365);
-
-        // 3. شارة التصنيف المضيئة (Badge)
-        const pillWidth = 200;
-        ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
-        drawRoundedRect(ctx, (width - pillWidth) / 2, 410, pillWidth, 45, 22);
-        
-        ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        
-        ctx.font = '20px "CairoBoldHack"'; 
-        ctx.fillStyle = '#60A5FA';
-        ctx.fillText(categoryBadge, width / 2, 440);
-
-        // 4. العنوان الرئيسي الجذاب (قمنا بتنزيله للأسفل ليناسب الإضافات)
-        ctx.font = '95px "CairoBoldHack"'; 
-        ctx.fillStyle = '#F8FAFC';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 20;
-        wrapText(ctx, slide.title, width / 2, 620, 900, 130);
-        ctx.shadowColor = 'transparent';
-
-        // 5. دعوة السحب 
-        ctx.font = '40px "CairoRegularHack"'; 
-        ctx.fillStyle = '#3B82F6';
-        ctx.fillText("اسحب لتعرف السر 👈", width / 2, height - 130);
-    }
-    
-    // ==========================================
-    // الشرائح 2,3,4: المحتوى
-    // ==========================================
-    else if (slide.type === 'content') {
-        ctx.save();
-        ctx.font = '280px "CairoBoldHack"';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
-        ctx.textAlign = 'left';
-        ctx.direction = 'ltr';
-        ctx.fillText(`0${slide.slideNumber}`, 30, 260);
-        ctx.restore();
-
-        ctx.save();
-        ctx.direction = 'ltr'; 
-        ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-        drawRoundedRect(ctx, 80, 70, 130, 50, 25);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        
-        ctx.font = '22px "CairoBoldHack"';
-        ctx.fillStyle = '#94A3B8';
-        ctx.fillText(`0${slide.slideNumber} / 0${totalSlides}`, 108, 103);
-        ctx.restore();
-
-        ctx.font = '28px "CairoBoldHack"';
-        ctx.fillStyle = '#3B82F6';
-        ctx.textAlign = 'right';
-        ctx.fillText('AutoFactory ⚡', width - 80, 105);
-
-        ctx.direction = 'rtl';
-        ctx.textAlign = 'right';
-        ctx.font = '72px "CairoBoldHack"';
-        ctx.fillStyle = '#F8FAFC';
-        const titleY = wrapText(ctx, slide.title, width - 80, 230, 850, 90);
-
-        ctx.font = '40px "CairoRegularHack"';
-        ctx.fillStyle = '#CBD5E1';
-        const bodyY = wrapText(ctx, slide.content, width - 80, titleY + 70, 850, 60);
-
-        // نافذة الكود
-        const cardY = bodyY + 70;
-        const cardHeight = height - cardY - 110;
-        
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-        drawRoundedRect(ctx, 80, cardY, width - 160, cardHeight, 24, true);
-        
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        const dotColors = ['#FF5F56', '#FFBD2E', '#27C93F'];
-        dotColors.forEach((color, i) => {
-            ctx.beginPath(); ctx.arc(120 + (i * 32), cardY + 30, 8, 0, Math.PI * 2);
-            ctx.fillStyle = color; ctx.fill();
-        });
-
-        if (slide.codeSnippet) {
-            ctx.save();
-            ctx.direction = 'ltr';
-            ctx.textAlign = 'left';
-            ctx.font = '32px "Consolas", monospace';
-            const lines = slide.codeSnippet.split('\n');
-            let codeY = cardY + 110;
-
-            lines.forEach(line => {
-                if (line.trim().startsWith('#')) {
-                    ctx.fillStyle = '#6A9955';
-                } else if (/\b(print|def|for|in|return|if|else|elif|import)\b/.test(line)) {
-                    ctx.fillStyle = '#569CD6';
-                } else {
-                    ctx.fillStyle = '#E2E8F0';
-                }
-                ctx.fillText(line, 130, codeY);
-                codeY += 50;
-            });
-            ctx.restore();
-        }
-
-        // ✍️ الملاحظة الجانبية بخط اليد 
-        if (slide.handwrittenNote) {
-            ctx.save();
-            ctx.translate(width - 150, cardY + cardHeight - 60);
-            ctx.rotate(-15 * Math.PI / 180); 
-            ctx.direction = 'rtl';
-            ctx.textAlign = 'right';
-            
-            ctx.font = '45px "MarheyBoldHack"'; 
-            ctx.fillStyle = '#FBBF24'; 
-            ctx.shadowColor = 'rgba(0,0,0,0.3)';
-            ctx.shadowBlur = 10;
-            ctx.fillText(slide.handwrittenNote, 0, 0);
-            
-            ctx.beginPath();
-            ctx.moveTo(0, -30);
-            ctx.quadraticCurveTo(-30, -50, -60, -10);
-            ctx.strokeStyle = '#FBBF24';
-            ctx.lineWidth = 4;
-            ctx.stroke();
-            ctx.restore();
-        }
+    // توجيه الرسم حسب القالب (حالياً لدينا قالب واحد، وسنضيف البقية لاحقاً)
+    if (templateStyle === 'terminal' || !templateStyle) {
+        await drawTerminalSlide(ctx, width, height, slide, totalSlides, categoryBadge);
     }
 
-    // ==========================================
-    // الشريحة 5: الختام
-    // ==========================================
-    else if (slide.type === 'cta') {
-        ctx.textAlign = 'center';
-        ctx.direction = 'rtl';
-
-// 1. رسم الظل الخلفي
-        ctx.shadowColor = 'rgba(59, 130, 246, 0.4)';
-        ctx.shadowBlur = 50;
-        ctx.beginPath();
-        ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
-        ctx.fillStyle = '#1E293B';
-        ctx.fill();
-        ctx.shadowColor = 'transparent';
-
-        // 2. تفعيل ميزة القص (Clipping) لجعل الصورة دائرية
-        ctx.save(); 
-        ctx.beginPath();
-        ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
-        ctx.clip(); // أي شيء يُرسم بعد هذا السطر سيكون محصوراً داخل الدائرة
-
-// 3. تحميل الصورة ورسمها باحترافية (بدون تشويه الأبعاد)
-        try {
-            const avatar = await loadImage(path.join(__dirname, 'profile.png'));
-            
-            // خوارزمية الاقتطاع المربع (Crop) للحفاظ على التناسب
-            const size = Math.min(avatar.width, avatar.height); // أخذ أصغر بُعد لصنع مربع
-            const sx = (avatar.width - size) / 2; // نقطة البداية الأفقية للتوسيط
-            const sy = (avatar.height - size) / 2; // نقطة البداية العمودية للتوسيط
-
-            // استخدام الدالة الموسعة: (الصورة, نقطة القص س, ص, عرض القص, طول القص, نقطة الرسم س, ص, عرض الرسم, طول الرسم)
-            ctx.drawImage(avatar, sx, sy, size, size, width / 2 - 110, 280 - 110, 220, 220);
-            
-        } catch (err) {
-            console.log('⚠️ لم يتم العثور على صورة profile.png، سيتم ترك الدائرة فارغة.');
-        }
-        ctx.restore(); // إنهاء القص للعودة للرسم الطبيعي
-
-        // 4. رسم الإطار الأزرق فوق الصورة لتبدو احترافية
-        ctx.beginPath();
-        ctx.arc(width / 2, 280, 110, 0, Math.PI * 2);
-        ctx.strokeStyle = '#3B82F6';
-        ctx.lineWidth = 6;
-        ctx.stroke();
-
-        ctx.font = '50px "CairoBoldHack"';
-        ctx.fillStyle = '#F8FAFC';
-        ctx.fillText("غربي محمد الشريف", width / 2, 460);
-
-        ctx.font = '35px "CairoRegularHack"';
-        ctx.fillStyle = '#94A3B8';
-        ctx.fillText("مهندس برمجيات ومطور أتمتة", width / 2, 520);
-
-        ctx.font = '75px "CairoBoldHack"';
-        ctx.fillStyle = '#F8FAFC';
-        ctx.fillText(slide.title, width / 2, 700);
-
-        ctx.font = '40px "CairoRegularHack"';
-        ctx.fillStyle = '#60A5FA';
-        wrapText(ctx, slide.content, width / 2, 780, 900, 55); 
-
-        // 💡 رسالة الختام بخط اليد
-        ctx.save();
-        ctx.translate(width / 2 + 350, 630);
-        ctx.rotate(10 * Math.PI / 180);
-        ctx.font = '45px "MarheyBoldHack"'; 
-        ctx.fillStyle = '#F472B6'; 
-        ctx.fillText("لا تنسَ الحفظ! 📍", 0, 0);
-        ctx.restore();
-
-        const btnY = 950;
-        const btnWidth = 180;
-        const btnHeight = 150;
-        const gap = 30;
-        const startX = (width - (4 * btnWidth + 3 * gap)) / 2;
-
-        const actions = [
-            { label: 'إعجاب', isPrimary: false },
-            { label: 'رأيك', isPrimary: false },
-            { label: 'شارك', isPrimary: false },
-            { label: 'احفظ', isPrimary: true }
-        ];
-
-        actions.forEach((act, idx) => {
-            const bx = startX + idx * (btnWidth + gap);
-            ctx.fillStyle = act.isPrimary ? 'rgba(37, 99, 235, 0.9)' : 'rgba(30, 41, 59, 0.6)';
-            drawRoundedRect(ctx, bx, btnY, btnWidth, btnHeight, 20, true);
-            ctx.strokeStyle = act.isPrimary ? '#60A5FA' : 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            ctx.font = '32px "CairoBoldHack"';
-            ctx.fillStyle = act.isPrimary ? '#FFFFFF' : '#CBD5E1';
-            ctx.fillText(act.label, bx + btnWidth / 2, btnY + 85);
-        });
-    }
-// ==========================================
-    // 🌟 بصمة العلامة التجارية (تظهر في أسفل كل الشرائح)
-    // ==========================================
-    ctx.textAlign = 'center';
-    ctx.direction = 'rtl';
-    ctx.font = '22px "CairoBoldHack"';
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.4)'; // لون رمادي خافت جداً وشفاف كي لا يزعج القارئ
-    ctx.fillText("غربي محمد الشريف © مهندس برمجيات", width / 2, height - 40);
     const fileName = `post_${batchId}_slide_${slide.slideNumber}.png`;
     const buffer = canvas.toBuffer('image/png');
     fs.writeFileSync(path.join(__dirname, fileName), buffer);
@@ -470,41 +198,39 @@ app.post('/api/generate-lesson', async (req, res) => {
     try {
         console.log(`\n⏳ جاري التأليف والأتمتة بالذكاء الاصطناعي...`);
 
-    const systemPrompt = `
-        أنت خبير واستراتيجي في صناعة المحتوى الرقمي، تمتلك موسوعة معرفية شاملة.
-        مهمتك هي إنشاء محتوى تعليمي وتثقيفي عالي القيمة، بأسلوب احترافي، جذاب، ومبسط.
+const systemPrompt = `
+        أنت مهندس برمجيات محترف وأستاذ أكاديمي مبدع على إنستغرام لعام 2026.
+        مهمتك كتابة درس تقني متكامل، واضح، ومتسلسل بطريقة بيداغوجية سليمة.
         
-        التعليمات الصارمة:
-        1. اللغة: استخدم اللغة العربية الفصحى المعاصرة فقط. يُمنع استخدام الدارجة أو العبارات الركيكة.
-        2. الإيجاز: المساحة البصرية محدودة، كن دقيقاً ومختصراً.
-        3. تنوع المجالات: المحتوى قد يكون في (البرمجة، التداول، المونتاج، المعالجة الصوتية، الذكاء الاصطناعي، الأتمتة، تطوير الويب، أو حكم وتحفيز). تكيف بمرونة مع الموضوع.
-        4. المرونة في الحجم: حدد عدد الشرائح المناسب لتغطية الموضوع بقوة (من 3 إلى 8 شرائح). لا تتقيد بـ 5 شرائح إلا إذا كان الموضوع يتطلب ذلك.
+        ⚠️ تعليمات صارمة جداً لتوليد البيانات:
+        1. التسلسل التعليمي: اشرح الأفكار خطوة بخطوة. لا تقفز للحلول المعقدة دون شرح الأساسيات أولاً.
+        2. دسامة المحتوى: في شرائح المحتوى (content)، اكتب فقرة شرح غنية ودسمة (بين 30 إلى 50 كلمة) لكي لا تبدو الشريحة فارغة.
+        3. الأكواد (codeSnippet): اكتب أمثلة برمجية واضحة ومتعددة الأسطر لملء الشاشة فنياً. استخدم (\\n) للأسطر الجديدة.
+        4. في الشريحة الأخيرة (نوع cta): حقل "content" يجب أن يكون جملة قصيرة جداً (أقل من 8 كلمات).
+        5. الرد يجب أن يكون حصرياً بصيغة JSON صالحة (Valid JSON).
 
-        هيكلة الشرائح:
-        - الشريحة الأولى دائماً (type: "hook"): عنوان جذاب جداً يثير الفضول.
-        - الشرائح الوسطى (type: "content"): عنوان فرعي + شرح + حقل "codeSnippet" (يحتوي كود، أو خطوات مرقمة، أو معادلة حسب المجال) + "handwrittenNote" (ملاحظة بخط اليد من 3 كلمات).
-        - الشريحة الأخيرة دائماً (type: "cta"): عنوان يحفز على الحفظ، وسؤال للنقاش.
-
-        ⚠️ داخل "codeSnippet"، استخدم علامات التنصيص الفردية (') فقط.
-
-        رد بصيغة JSON حصراً بهذا الشكل (أضف شرائح المحتوى حسب الحاجة):
+        إليك الهيكل الدقيق:
         {
-          "caption": "نص المنشور (Caption) لإنستغرام مع الهاشتاجات...",
-          "categoryBadge": "إيموجي وكلمتين لتصنيف الموضوع، مثال: 📈 أسرار التداول، 🎬 خدعة مونتاج، 💻 أتمتة الويب",
+          "caption": "الكابشن الجاهز للنشر",
+          "categoryBadge": "إيموجي وتصنيف (مثال: 🐍 أساسيات بايثون)",
+          "templateStyle": "terminal",
           "slides": [
-            { "slideNumber": 1, "type": "hook", "title": "...", "content": "" },
-            { "slideNumber": 2, "type": "content", "title": "...", "content": "...", "codeSnippet": "...", "handwrittenNote": "..." },
-            { "slideNumber": N, "type": "cta", "title": "...", "content": "..." }
+            { "slideNumber": 1, "type": "hook", "title": "عنوان الدرس بأسلوب جذاب", "content": "" },
+            { "slideNumber": 2, "type": "content", "title": "المقدمة أو شرح الأساسيات", "content": "شرح وافٍ ومفهوم يمهد للدرس بطريقة سلسلة ومريحة للمبتدئين...", "codeSnippet": "مثال برمجي\\nسطر آخر", "handwrittenNote": "ملاحظة" },
+            { "slideNumber": 3, "type": "content", "title": "التطبيق أو المستوى المتقدم", "content": "استكمال الشرح بشكل دسم ومفصل يشرح كيف تعمل الأكواد السابقة...", "codeSnippet": "مثال تطبيقي", "handwrittenNote": "ملاحظة" },
+            { "slideNumber": "الرقم الأخير", "type": "cta", "title": "سؤال تفاعلي للجمهور", "content": "جملة واحدة قصيرة جداً!" }
           ]
         }
         `;
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-            model: 'qwen/qwen3.8-27b', 
-            temperature: 0.8,
-            max_tokens: 950,
-            response_format: { type: 'json_object' }
+const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {role: 'user', content: prompt }            ],
+            model: 'llama-3.1-70b-versatile', // غيّرنا النموذج لنموذج أقوى بحدود مجانية ضخمة
+            temperature: 0.7,
+            max_tokens: 800, // وضعنا سقفاً إجبارياً هنا أيضاً
+            response_format: { type: "json_object" }
         });
 
         const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
@@ -516,7 +242,8 @@ app.post('/api/generate-lesson', async (req, res) => {
                 slide, 
                 lessonData.slides.length, 
                 lessonData.categoryBadge, // 👈 تمرير الشارة هنا
-                batchId
+                batchId,
+                lessonData.templateStyle
             );
             generatedImages.push(fileName);
         }
@@ -692,6 +419,188 @@ app.post('/api/analyze-trend', async (req, res) => {
     } catch (error) {
         console.error('❌ خطأ في تحليل التريند:', error.message);
         res.status(500).json({ success: false, error: 'فشل في الاتصال بالذكاء الاصطناعي أو تحليل الرد.' });
+    }
+});
+
+// ==========================================
+// 🎬 مسار الاستوديو (Prompt Studio)
+// ==========================================
+app.post('/api/generate-content', async (req, res) => {
+    try {
+        const { mode, type, viralData, topic } = req.body;
+        console.log(`\n🎬 [API] طلب إنتاج استوديو - النمط: ${mode === 'cinematic' ? 'سينمائي 🎥' : 'سريع ⚡'}`);
+
+        let systemPrompt = '';
+        let userPrompt = '';
+
+    if (mode === 'cinematic') {
+        systemPrompt = `أنت مهندس برمجيات خبير وصانع محتوى تعليمي محترف على إنستغرام لعام 2026.
+            مهمتك كتابة درس تعليمي متكامل بناءً على "مخطط فيروسي"، ولكن يجب أن يكون الشرح واضحاً، متسلسلاً، ومفهوماً للمبرمجين بجميع مستوياتهم.
+            
+            ⚠️ تعليمات المحتوى (لتجنب الشرائح الفارغة والملخبطة):
+            1. التسلسل المنطقي: ابدأ بتمهيد للمشكلة، ثم الشرح خطوة بخطوة، ثم الحل. لا تقفز للأفكار المعقدة فجأة.
+            2. دسامة المحتوى: في شرائح المحتوى (content)، اكتب فقرة شرح غنية وواضحة (بين 30 إلى 50 كلمة). لا تجعل الشريحة فارغة! يجب أن تقدم قيمة حقيقية للمتابع.
+            3. الأكواد (codeSnippet): اكتب أكواداً واقعية وواضحة (متعددة الأسطر لملء الشاشة بشكل أنيق). استخدم (\\n) لكسر الأسطر.
+            4. الشريحة الأخيرة (cta): يجب أن تحتوي على جملة قصيرة جداً (أقل من 8 كلمات) لتشجيع التفاعل.
+            
+            يجب أن يكون الرد حصرياً بصيغة JSON صالحة، ويحتوي على 4 مفاتيح:
+            {
+              "caption": "الكابشن الجاهز للنشر مع الهاشتاجات.",
+              "categoryBadge": "إيموجي وكلمتين لتصنيف الموضوع",
+              "templateStyle": "اختر واحداً فقط: (terminal, quant, creator, board, blueprint, gym, versus)",
+              "slides": [
+                { "slideNumber": 1, "type": "hook", "title": "عنوان جذاب جداً يطرح المشكلة" },
+                { "slideNumber": 2, "type": "content", "title": "شرح المفهوم أو المشكلة", "content": "فقرة غنية ومفصلة تشرح الفكرة بوضوح تام، استخدم أمثلة من الواقع البرمجي لتبسيط الفكرة...", "codeSnippet": "كود يوضح الفكرة\\nسطر آخر", "handwrittenNote": "ملاحظة" },
+                { "slideNumber": 3, "type": "content", "title": "الحل أو التطبيق العملي", "content": "فقرة غنية أخرى تشرح الحل وتكمل الدرس بطريقة متسلسلة...", "codeSnippet": "كود الحل", "handwrittenNote": "ملاحظة" },
+                { "slideNumber": "الرقم الأخير", "type": "cta", "title": "سؤال للنقاش", "content": "شاركنا رأيك في التعليقات!" }
+              ]
+            }`;
+
+            userPrompt = `قم بإنتاج محتوى من نوع: ${type === 'carousel' ? 'كاروسيل (Carousel - 5 Slides)' : 'فيديو قصير (Reel)'}
+            بناءً على هذا المخطط الفيروسي:
+            - الخطاف (Hook): ${viralData.hook}
+            - أسلوب التقديم البصري: ${viralData.presentation}
+            - الزاوية النفسية: ${viralData.viralAngle}`;
+        }  
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            model: 'qwen/qwen3.8-27b', // تأكد أن هذا هو الموديل الذي تستخدمه في مشروعك
+            temperature: 0.8,
+            response_format: { type: "json_object" }
+        });
+
+        const aiResponse = chatCompletion.choices[0].message.content;
+        const parsedData = JSON.parse(aiResponse);
+
+        console.log(`✅ [نجاح] تم إنتاج المحتوى السينمائي!`);
+        res.json({ success: true, content: parsedData });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد المحتوى بالاستوديو:', error.message);
+        res.status(500).json({ success: false, error: 'فشل في الاتصال بالذكاء الاصطناعي.' });
+    }
+});
+
+
+// ==========================================
+// 🖨️ مسار الطباعة المباشرة من الاستوديو
+// ==========================================
+app.post('/api/print-studio', async (req, res) => {
+    try {
+        // استلام القالب من الواجهة
+        const { slides, categoryBadge, templateStyle } = req.body; 
+        
+        if (!slides || !Array.isArray(slides)) {
+            return res.status(400).json({ error: 'بيانات الشرائح غير صالحة للطباعة.' });
+        }
+
+        console.log(`\n🎨 بدء طباعة ${slides.length} شرائح بنمط (${templateStyle || 'terminal'})...`);
+        const batchId = Date.now();
+        const generatedImages = [];
+
+        for (const slide of slides) {
+            const fileName = await generateAutoFactorySlide(
+                slide, 
+                slides.length, 
+                batchId,
+                categoryBadge || '🔥 تريند سريع',
+                templateStyle || 'terminal' // 👈 تمرير القالب هنا
+            );
+            generatedImages.push(fileName);
+        }
+
+        console.log(`✅ تم طباعة ${generatedImages.length} صور بنجاح!`);
+        res.json({ success: true, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ في الطباعة المباشرة:', error);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء طباعة الصور.' });
+    }
+});
+
+
+// ==========================================
+// ⚖️ مسار توليد قوالب المقارنات (The Expose)
+// ==========================================
+app.post('/api/generate-comparison', async (req, res) => {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع.' });
+
+    try {
+        console.log(`\n⚖️ جاري تصميم كاروسيل المقارنات لموضوع: ${topic}...`);
+
+const systemPrompt = `
+        أنت خبير واستشاري متقدم في تقنيات الذكاء الاصطناعي لعام 2026. مهمتك صناعة منشور كاروسيل (The Expose) يكشف عن أفضل أدوات الـ AI المتخصصة مقابل الأدوات التقليدية.
+        
+        ⚠️ قواعد منطقية صارمة جداً إياك مخالفتها:
+        1. دقة المقارنة (أهم شرط): يجب أن تكون المقارنة عادلة وفي نفس التخصص. لا تقارن أداة هندسة برمجيات (مثل Devin) بمنصة تعليم (مثل Codecademy). 
+        2. الأداة الجيدة (goodTool): يجب أن تكون أداة ذكاء اصطناعي حقيقية وحديثة (مثل NotebookLM, Fitbod, Cursor, Perplexity, Julius).
+        3. منع التكرار: يُمنع منعاً باتاً تكرار نفس الأداة (سواء الجيدة أو السيئة) في أكثر من شريحة واحدة! استخدم أدوات مختلفة دائماً.
+        4. الأسماء الحقيقية فقط: اكتب اسم العلامة التجارية فقط (بدون أي شروحات، أو علامات +). يُمنع استخدام كلمات وصفية عامة مثل (Generic Chatbots, Traditional Tools).
+        5. الترابط السردي (مهم جداً): يجب أن يكون حقل "nextTeaser" في الشريحة الحالية هو نفسه بالضبط حقل "title" في الشريحة التي تليها (لضمان عمل التصميم بشكل صحيح).
+        🚨 استثناء هام جداً لقاعدة الترابط: في الشريحة "ما قبل الأخيرة" (التي تسبق شريحة cta مباشرة)، يجب أن تجعل حقل "nextTeaser" عبارة تشويقية للهدية الختامية (مثال: "تريد القائمة الكاملة؟" أو "جاهز لاكتشاف السر؟").
+        6. الشريحة الأخيرة (cta): اجعل حقل "title" جملة واحدة قصيرة تتضمن كلمة "أدوات".
+        
+        رد بصيغة JSON فقط بهذا الهيكل (6 إلى 8 شرائح):
+        {
+          "caption": "نص المنشور (Caption) لإنستغرام مع الهاشتاجات...",
+          "slides": [
+            {
+              "slideNumber": 1,
+              "type": "comparison",
+              "title": "لشرح الدروس الأكاديمية؟",
+              "badTool": "Khan Academy",
+              "goodTool": "NotebookLM",
+              "nextTeaser": "لكتابة الكود البرمجي؟"
+            },
+            {
+              "slideNumber": 2,
+              "type": "comparison",
+              "title": "لكتابة الكود البرمجي؟",
+              "badTool": "VS Code",
+              "goodTool": "Cursor",
+              "nextTeaser": "تريد القائمة الكاملة؟"
+            },
+            {
+              "slideNumber": 3,
+              "type": "cta",
+              "title": "علق بكلمة أدوات لأرسل لك الدليل الشامل",
+              "badTool": "",
+              "goodTool": "",
+              "nextTeaser": ""
+            }
+          ]
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `قم بعمل مقارنة أدوات حول: ${topic}` }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.8,
+            response_format: { type: "json_object" }
+        });
+
+        const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
+        const batchId = Date.now(); 
+        const generatedImages = [];
+
+        for (const slide of lessonData.slides) {
+            // هنا نستخدم دالة الرسم الجديدة التي صنعناها!
+            const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, batchId);
+            generatedImages.push(fileName);
+        }
+
+        res.json({ success: true, caption: lessonData.caption, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
     }
 });
 
