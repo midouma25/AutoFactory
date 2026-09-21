@@ -91,7 +91,9 @@ function drawCircuitLines(ctx, width, height) {
     ctx.beginPath(); ctx.arc(width - 200, 150, 5, 0, Math.PI*2); ctx.stroke();
 }
 
-async function drawToolBox(ctx, x, y, size, toolName, isGood) {
+// 🔮 صندوق الأداة الذكي (يعتمد على الدومين القادم من الذكاء الاصطناعي مباشرة)
+// 👈 لاحظ أننا أضفنا toolDomain كمتغير هنا
+async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
     // 1. رسم المربع الأساسي
     drawRoundedRect(ctx, x, y, size, size, 35, '#FFFFFF', true);
     
@@ -100,115 +102,24 @@ async function drawToolBox(ctx, x, y, size, toolName, isGood) {
     ctx.lineWidth = 3;
     ctx.stroke();
     
-    // 2. محرك البحث عن الشعارات (Double-Engine)
-    let cleanName = toolName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    let domain = `${cleanName}.com`; // الافتراضي
-    
-// 🌐 القاموس الشامل والعملاق لأدوات التقنية والذكاء الاصطناعي (تحديث 2026)
-    const domainMap = {
-        // 🤖 نماذج اللغة والدردشة (LLMs & Chatbots)
-        'chatgpt': 'openai.com', 'gpt': 'openai.com', 'openai': 'openai.com', 'sora': 'openai.com', 'dalle': 'openai.com',
-        'claude': 'anthropic.com', 'anthropic': 'anthropic.com',
-        'gemini': 'google.com', 'bard': 'google.com', 'google': 'google.com',
-        'copilot': 'microsoft.com', 'bing': 'microsoft.com',
-        'perplexity': 'perplexity.ai',
-        'grok': 'x.ai', 'xai': 'x.ai',
-        'mistral': 'mistral.ai',
-        'huggingface': 'huggingface.co',
-        'meta': 'meta.com', 'llama': 'meta.com',
-        'character': 'character.ai', 'pi': 'inflection.ai',
-        'groq': 'groq.com', 'cohere': 'cohere.com',
-
-        // 💻 البرمجة وهندسة البرمجيات (Coding & Dev AI)
-        'cursor': 'cursor.com', 'devin': 'cognition.ai', 'replit': 'replit.com',
-        'github': 'github.com', 'gitlab': 'gitlab.com', 'bitbucket': 'bitbucket.org',
-        'v0': 'v0.dev', 'vercel': 'vercel.com', 'bolt': 'bolt.new', 'lovable': 'lovable.dev',
-        'tabnine': 'tabnine.com', 'codeium': 'codeium.com', 'pythagora': 'pythagora.ai',
-        'sweep': 'sweep.dev', 'cline': 'cline.bot', 'stackblitz': 'stackblitz.com',
-        'vscode': 'visualstudio.com', 'intellij': 'jetbrains.com',
-
-        // 🎨 توليد الصور والتصميم (Image & Design)
-        'midjourney': 'midjourney.com', 
-        'leonardo': 'leonardo.ai', 'ideogram': 'ideogram.ai',
-        'canva': 'canva.com', 'figma': 'figma.com', 'framer': 'framer.com',
-        'adobe': 'adobe.com', 'photoshop': 'adobe.com', 'illustrator': 'adobe.com',
-        'remove': 'remove.bg', 'photoroom': 'photoroom.com', 'spline': 'spline.design',
-        'webflow': 'webflow.com', 'gamma': 'gamma.app',
-
-        // 🎬 الفيديو والمونتاج (Video & Animation)
-        'runway': 'runwayml.com', 'pika': 'pika.art', 'luma': 'lumalabs.ai',
-        'kling': 'klingai.com', 'haiper': 'haiper.ai',
-        'synthesia': 'synthesia.io', 'heygen': 'heygen.com', 'did': 'd-id.com',
-        'capcut': 'capcut.com', 'premiere': 'adobe.com', 'aftereffects': 'adobe.com',
-        'descript': 'descript.com', 'invideo': 'invideo.io', 'opus': 'opus.pro',
-
-        // 🎵 الصوت والتعليق الصوتي (Audio & Voice)
-        'elevenlabs': 'elevenlabs.io', 'suno': 'suno.com', 'udio': 'udio.com',
-        'murf': 'murf.ai', 'playht': 'play.ht', 'speechify': 'speechify.com',
-
-        // 🚀 الإنتاجية وإدارة المشاريع (Productivity & Workspaces)
-        'notion': 'notion.so', 'obsidian': 'obsidian.md', 'evernote': 'evernote.com',
-        'linear': 'linear.app', 'asana': 'asana.com', 'trello': 'trello.com',
-        'monday': 'monday.com', 'clickup': 'clickup.com', 'jira': 'atlassian.com',
-        'slack': 'slack.com', 'teams': 'microsoft.com', 'zoom': 'zoom.us',
-        'superhuman': 'superhuman.com', 'gmail': 'gmail.com', 'outlook': 'microsoft.com',
-        'motion': 'usemotion.com', 'reclaim': 'reclaim.ai', 'todoist': 'todoist.com',
-
-        // 📈 البيانات والتحليل (Data & Analytics)
-        'julius': 'julius.ai', 'tableau': 'tableau.com', 'powerbi': 'microsoft.com',
-        'excel': 'microsoft.com', 'sheets': 'google.com',
-        'akkio': 'akkio.com', 'snowflake': 'snowflake.com', 'databricks': 'databricks.com',
-
-        // ⚙️ الأتمتة والوكلاء (Automation & Agents)
-        'zapier': 'zapier.com', 'make': 'make.com', 'n8n': 'n8n.io',
-        'langchain': 'langchain.com', 'langgraph': 'langchain.com', 'llamaindex': 'llamaindex.ai',
-        'autogpt': 'agpt.co', 'manus': 'manus.im',
-
-        // 📚 التعليم والأكاديميا (Education & Research)
-        'khan': 'khanacademy.org', 'coursera': 'coursera.org', 'udemy': 'udemy.com',
-        'codecademy': 'codecademy.com', 'w3schools': 'w3schools.com', 'freecodecamp': 'freecodecamp.org',
-        'duolingo': 'duolingo.com', 'speak': 'speak.com', 'babbel': 'babbel.com',
-        'notebooklm': 'google.com', 'scholar': 'google.com', 'researchgate': 'researchgate.net',
-        'quizlet': 'quizlet.com', 'brainly': 'brainly.com',
-
-        // 💰 المال والتداول (Finance & Trading)
-        'bloomberg': 'bloomberg.com', 'tradingview': 'tradingview.com',
-        'robinhood': 'robinhood.com', 'binance': 'binance.com', 'coinbase': 'coinbase.com',
-
-        // 🏋️ الصحة والرياضة (Health & Fitness)
-        'myfitnesspal': 'myfitnesspal.com', 'strava': 'strava.com', 'fitbod': 'fitbod.me',
-        'apple': 'apple.com', 'oura': 'ouraring.com', 'whoop': 'whoop.com',
-
-        // 📝 التسويق وكتابة المحتوى (Marketing & SEO)
-        'jasper': 'jasper.ai', 'copyai': 'copy.ai', 'writesonic': 'writesonic.com',
-        'surfer': 'surferseo.com', 'ahrefs': 'ahrefs.com', 'semrush': 'semrush.com',
-        'sprout': 'sproutsocial.com', 'hootsuite': 'hootsuite.com', 'buffer': 'buffer.com',
-        'hubspot': 'hubspot.com', 'mailchimp': 'mailchimp.com',
-
-        // 🌐 ترجمة وتدقيق لغوي (Translation & Writing)
-        'deepl': 'deepl.com', 'grammarly': 'grammarly.com', 'quillbot': 'quillbot.com'
-    };
-    
-    // البحث في الخريطة وتصحيح الدومين
-    for (const [key, val] of Object.entries(domainMap)) {
-        if (cleanName.includes(key)) domain = val;
-    }
-
     let logoLoaded = false;
+
+    // إذا نسي الذكاء الاصطناعي إرسال الدومين، نخمنه بسرعة
+    let finalDomain = toolDomain ? toolDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : `${toolName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
 
     // المحاولة 1: جلب الشعار عالي الدقة من Clearbit
     try {
-        const logoUrl = `https://logo.clearbit.com/${domain}`;
+        const logoUrl = `https://logo.clearbit.com/${finalDomain}`;
         const logo = await loadImage(logoUrl);
         const logoSize = 110;
         ctx.drawImage(logo, x + (size - logoSize) / 2, y + 40, logoSize, logoSize);
         logoLoaded = true;
     } catch (e) {
-        // المحاولة 2: جلب الشعار من محرك Google السري (مستقر جداً ولا يفشل)
+        // المحاولة 2: جلب الشعار من محرك Google (مستقر جداً)
         try {
-            const fallbackUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+            const fallbackUrl = `https://www.google.com/s2/favicons?domain=${finalDomain}&sz=128`;
             const logo = await loadImage(fallbackUrl);
-            const logoSize = 90; // تصغيره قليلاً لأنه يأتي بحواف أحياناً
+            const logoSize = 90; 
             ctx.drawImage(logo, x + (size - logoSize) / 2, y + 50, logoSize, logoSize);
             logoLoaded = true;
         } catch (err) {
@@ -216,9 +127,8 @@ async function drawToolBox(ctx, x, y, size, toolName, isGood) {
         }
     }
 
-    // المحاولة 3: إذا كانت الأداة وهمية أو لا تمتلك موقعاً، ارسم الحرف الأول
+    // المحاولة 3 (الإنقاذ): إذا كان الموقع غير موجود فعلياً
     if (!logoLoaded) {
-        // استخراج أول حرف إنجليزي أو عربي
         const firstLetter = toolName.replace(/[^a-zA-Zأ-ي]/g, '').charAt(0).toUpperCase() || toolName.charAt(0).toUpperCase();
         
         ctx.beginPath();
@@ -233,7 +143,7 @@ async function drawToolBox(ctx, x, y, size, toolName, isGood) {
         ctx.fillText(firstLetter, x + size / 2, y + 100);
     }
 
-    // 3. رسم اسم الأداة في أسفل المربع
+    // رسم اسم الأداة في أسفل المربع
     ctx.font = '26px "CairoBoldHack"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
@@ -300,10 +210,12 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         drawCross(ctx, width / 2 + 200, 440);
         drawCheckmark(ctx, width / 2 - 200, 440);
 
+        
         const boxY = 510;
         const boxSize = 300;
-        await drawToolBox(ctx, width / 2 + 60, boxY, boxSize, slide.badTool, false);
-        await drawToolBox(ctx, width / 2 - 360, boxY, boxSize, slide.goodTool, true);
+        // 👈 تمرير الدومين السيء والجيد للدالة
+        await drawToolBox(ctx, width / 2 + 60, boxY, boxSize, slide.badTool, slide.badToolDomain, false);
+        await drawToolBox(ctx, width / 2 - 360, boxY, boxSize, slide.goodTool, slide.goodToolDomain, true);   
 
         // ⬅️ إصلاح السهم والنص السفلي
         if (slide.nextTeaser) {
@@ -320,36 +232,54 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
     // ==========================================
     // شريحة الختام (CTA)
     // ==========================================
+
     else if (slide.type === 'cta') {
         ctx.save();
+
+        const imgX = width / 2;
+        const imgY = 280; // 👈 رفعنا الصورة للأعلى لتترك مساحة للنصوص
+        const imgRadius = 120; // 👈 تصغير حقيقي وأنيق (بدلاً من 200 العملاقة)
+
+        // 1. الدائرة البيضاء مع الظل (Shadow)
         ctx.beginPath();
-        ctx.arc(width / 2, 300, 200, 0, Math.PI * 2); 
-        ctx.lineWidth = 15;
+        ctx.arc(imgX, imgY, imgRadius, 0, Math.PI * 2);
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.4)';
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 15;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+
+        // 2. إيقاف الظل فوراً لتجنب التشويه
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+
+        // 3. إضافة إطار أبيض حول صورتك (Stroke) لزيادة الجمالية
+        ctx.lineWidth = 10;
         ctx.strokeStyle = '#FFFFFF';
         ctx.stroke();
+
+        // 4. القص والرسم مع الحفاظ على أبعادك (Center Crop)
         ctx.clip();
         try {
             const avatar = await loadImage(path.join(__dirname, '../profile.png'));
             const s = Math.min(avatar.width, avatar.height);
             const sx = (avatar.width - s) / 2;
             const sy = (avatar.height - s) / 2;
-            ctx.drawImage(avatar, sx, sy, s, s, width / 2 - 200, 300 - 200, 400, 400);
-        } catch (err) {}
+            
+            const destSize = imgRadius * 2;
+            ctx.drawImage(avatar, sx, sy, s, s, imgX - imgRadius, imgY - imgRadius, destSize, destSize);
+        } catch (err) {
+            console.log("⚠️ الصورة الشخصية غير موجودة.");
+        }
         ctx.restore();
         
-        ctx.beginPath(); ctx.arc(width / 2, 300, 200, 0, Math.PI * 2);
-        ctx.shadowColor = 'rgba(0,0,0,0.15)'; ctx.shadowBlur = 40; ctx.stroke(); ctx.shadowColor = 'transparent';
-
+        // --------------------------------------------------
+        // نصوص الشريحة الختامية
+        // --------------------------------------------------
         ctx.font = '45px "CairoBoldHack"'; 
-        ctx.textAlign = 'center';
-        
-// تم تجاهل النص القادم من الذكاء الاصطناعي (slide.title) 
-        // لرسم النص الملون والمنسق يدوياً وتفادي التداخل
+        ctx.textAlign = 'right';
 
-        ctx.font = '45px "CairoBoldHack"'; 
-        ctx.textAlign = 'right'; // نضبط المحاذاة لليمين لرسم الجملة بشكل متسلسل
-
-        // 1. حساب عرض الكلمات لضبط المسافات
+        // حساب عرض الكلمات لضبط المسافات
         const part1 = "علق بكلمة ";
         const part2 = '"أدوات"';
         const part3 = " وراح ارسلك افضل 30 اداة ذكاء";
@@ -359,30 +289,33 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         const w2 = ctx.measureText(part2).width;
         const w3 = ctx.measureText(part3).width;
         
-        // إجمالي عرض السطر الأول لتوسيطه
         const totalWidthLine1 = w1 + w2 + w3;
         let currentX = (width / 2) + (totalWidthLine1 / 2);
 
-        // 2. رسم السطر الأول
+        // رسم السطر الأول (صعدنا به للأعلى قليلاً Y=580)
         ctx.fillStyle = '#0F172A';
-        ctx.fillText(part1, currentX, 620);
+        ctx.fillText(part1, currentX, 580);
         currentX -= w1;
 
-        ctx.fillStyle = '#0F766E'; // اللون الأخضر المميز لكلمة "أدوات"
-        ctx.fillText(part2, currentX, 620);
+        ctx.fillStyle = '#0F766E'; // اللون الأخضر لكلمة "أدوات"
+        ctx.fillText(part2, currentX, 580);
         currentX -= w2;
 
         ctx.fillStyle = '#0F172A';
-        ctx.fillText(part3, currentX, 620);
+        ctx.fillText(part3, currentX, 580);
 
-        // 3. رسم السطر الثاني (موسط)
+        // رسم السطر الثاني (موسط)
         ctx.textAlign = 'center';
-        ctx.fillText(part4, width / 2, 690);
+        ctx.fillText(part4, width / 2, 650);
 
-        const iconY = 850;
+        // --------------------------------------------------
+        // الأيقونات والنصوص السفلية (Call to Actions)
+        // --------------------------------------------------
+        const iconY = 820; // رفعنا الأيقونات لتناسب التصميم الجديد
         ctx.strokeStyle = '#1E293B';
         ctx.lineWidth = 4;
         
+        // رسم الأيقونات (حفظ، مشاركة، تعليق، لايك)
         ctx.beginPath(); ctx.moveTo(width/2 - 250, iconY); ctx.lineTo(width/2 - 210, iconY); ctx.lineTo(width/2 - 210, iconY+50); ctx.lineTo(width/2 - 230, iconY+35); ctx.lineTo(width/2 - 250, iconY+50); ctx.closePath(); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(width/2 - 90, iconY+10); ctx.lineTo(width/2 - 50, iconY-10); ctx.lineTo(width/2 - 70, iconY+40); ctx.lineTo(width/2 - 80, iconY+20); ctx.closePath(); ctx.stroke();
         ctx.beginPath(); ctx.arc(width/2 + 90, iconY+20, 25, 0, Math.PI*2); ctx.stroke();
@@ -399,28 +332,40 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
     // ==========================================
     // الفوتر 
     // ==========================================
-    drawRoundedRect(ctx, 40, height - 120, 360, 90, 45, '#FFFFFF', true);
+drawRoundedRect(ctx, 40, height - 120, 360, 90, 45, '#FFFFFF', true);
     
     ctx.save();
+    
+    // ----------------------------------------------------
+    // رسم الصورة المصغرة بجانب اسمك في الفوتر
+    // ----------------------------------------------------
     ctx.beginPath();
-    ctx.arc(350, height - 75, 35, 0, Math.PI * 2);
+    ctx.arc(320, height - 75, 30, 0, Math.PI * 2); // صورة أصغر في الزاوية
     ctx.clip();
+    
     try {
         const avatar = await loadImage(path.join(__dirname, '../profile.png'));
+        
+        // منطق القص للحفاظ على الأبعاد (Center Crop)
         const s = Math.min(avatar.width, avatar.height);
         const sx = (avatar.width - s) / 2;
         const sy = (avatar.height - s) / 2;
-        ctx.drawImage(avatar, sx, sy, s, s, 315, height - 110, 70, 70);
-    } catch (e) {}
+        
+        // رسم الصورة المصغرة
+        ctx.drawImage(avatar, sx, sy, s, s, 290, height - 105, 60, 60);
+    } catch (e) {
+        console.log("⚠️ الصورة الشخصية المصغرة غير موجودة.");
+    }
+    
     ctx.restore();
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#0F172A';
     ctx.font = '24px "CairoBoldHack"';
-    ctx.fillText("غربي محمد الشريف", 290, height - 85);
+    ctx.fillText("غربي محمد الشريف", 270, height - 85);
     ctx.fillStyle = '#64748B';
     ctx.font = '16px "CairoRegularHack"';
-    ctx.fillText("مستشار وخبير أتمتة و AI", 290, height - 55);
+    ctx.fillText("مستشار وخبير أتمتة و AI", 270, height - 55);
 
     const fileName = `post_${batchId}_slide_${slide.slideNumber}.png`;
     const buffer = canvas.toBuffer('image/png');
