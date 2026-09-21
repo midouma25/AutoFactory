@@ -534,7 +534,7 @@ app.post('/api/print-studio', async (req, res) => {
 // ==========================================
 app.post('/api/generate-comparison', async (req, res) => {
     // 👈 استلام المتغير الجديد (slideCount) وتحديد 6 كقيمة افتراضية للحماية
-    const { topic, slideCount } = req.body;
+    const { topic, slideCount, platform = 'instagram' } = req.body;
     const count = slideCount || 6; 
 
     if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع.' });
@@ -594,14 +594,22 @@ app.post('/api/generate-comparison', async (req, res) => {
             response_format: { type: "json_object" }
         });
 
-        const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
+    const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
         const batchId = Date.now(); 
         const generatedImages = [];
 
-        for (const slide of lessonData.slides) {
-            // نمرر الكائن slide بالكامل لدالة الرسم التي ستستخرج الدومينات مباشرة
-            const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, batchId);
-            generatedImages.push(fileName);
+        // 👈 تحديد المنصات التي سنطبع لها (إذا اختار "كلاهما"، سنطبع للنسختين)
+        const targetPlatforms = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+
+        for (const currentPlatform of targetPlatforms) {
+            // إضافة اسم المنصة للـ ID لكي لا تمسح الصور بعضها
+            const platformBatchId = `${batchId}_${currentPlatform}`;
+            
+            for (const slide of lessonData.slides) {
+                // نمرر المتغيرات بذكاء للمطبعة
+                const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, platformBatchId, currentPlatform);
+                generatedImages.push(fileName);
+            }
         }
 
         res.json({ success: true, caption: lessonData.caption, images: generatedImages });
@@ -613,16 +621,31 @@ app.post('/api/generate-comparison', async (req, res) => {
 });
 
 // ==========================================
-// 💡 مسار إلهام أفكار المقارنات (Trend Suggestion)
+// 💡 مسار إلهام أفكار المقارنات (Trend Suggestion - النسخة الموسوعية)
 // ==========================================
 app.get('/api/suggest-comparison-topic', async (req, res) => {
     try {
-        console.log('\n💡 جاري البحث عن فكرة مقارنة تريند...');
+        console.log('\n💡 جاري البحث عن فكرة مقارنة تريند موسوعية...');
         
-        const systemPrompt = `أنت خبير في صناعة المحتوى التقني الفيروسي لعام 2026. 
-        مهمتك إعطائي فكرة واحدة فقط لمقارنة ساخنة ومثيرة للجدل بين "أدوات تقنية تقليدية" و"أدوات ذكاء اصطناعي حديثة".
-        - يجب أن تكون الفكرة محددة وقصيرة (مثال: "برمجة المواقع: VS Code ضد Cursor" أو "تحرير الفيديو: Premiere ضد Runway").
-        - لا تكرر الأفكار المبتذلة، ابحث عن أدوات قوية وتخصصات دقيقة (تصميم 3D، هندسة صوتية، تحليل بيانات، إلخ).
+        const systemPrompt = `أنت خبير استراتيجي في صناعة المحتوى التقني الفيروسي (Growth Hacker) لعام 2026.
+        مهمتك استلهام فكرة واحدة فقط لمقارنة ساخنة ومثيرة للجدل بين "أدوات/أساليب تقليدية" و"أدوات/تقنيات ذكاء اصطناعي حديثة".
+
+        لضمان التنوع الشديد، يجب أن تختار عشوائياً في كل مرة "مجالاً واحداً فقط" من هذه القائمة الشاملة لتبني عليه الفكرة:
+        1. تطوير الويب المتكامل (Node.js, React, Express)
+        2. التداول الكمي والخوارزميات المالية (Python, Backtesting)
+        3. المونتاج، الموشن جرافيك (After Effects) وصناعة المحتوى
+        4. التعليق الصوتي والمعالجة الصوتية الاحترافية
+        5. تبسيط الخوارزميات والرياضيات البرمجية بأسلوب مدرسي ممتع
+        6. التلعيب (Gamification) وتطوير مشاريع مستوحاة من الألعاب والأنمي (مثل Solo Leveling)
+        7. عالم الهاردوير، تجميع الحواسيب، والمقارنات التقنية لقطع الـ PC
+        8. دمج البرمجة بالعالم المادي وإنترنت الأشياء (IoT، الكاميرات، تعديل الدراجات)
+        9. صحة المبرمج (الروتين الرياضي، رفع الأثقال، الانضباط، والمكملات مثل الكرياتين)
+        10. نماذج الذكاء الاصطناعي الكبيرة (LLMs) واستغلالها في أتمتة المهام
+
+        تعليمات صارمة:
+        - اختر مجالاً واحداً فقط من القائمة أعلاه بشكل عشوائي تماماً في كل مرة يتم سؤالك.
+        - صغ فكرة المقارنة بحيث تكون محددة جداً وجذابة (مثال: "في واجهات React: الطريقة التقليدية ضد أداة v0" أو "في التداول الكمي: التحليل اليدوي ضد سكريبتات بايثون").
+        - يجب ألا تتجاوز الفكرة 12 كلمة.
         
         رد بصيغة JSON فقط بهذا الهيكل:
         {
@@ -632,13 +655,11 @@ app.get('/api/suggest-comparison-topic', async (req, res) => {
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'اقترح لي فكرة مقارنة تريند الآن.' }
+                { role: 'user', content: 'استخرج لي فكرة مقارنة تريند الآن من أحد المجالات المذكورة.' }
             ],
-            // 👇 عدنا إلى نموذج Qwen الموجود في مفتاحك، وهو ممتاز في الـ JSON
             model: 'qwen/qwen3.8-27b', 
-            temperature: 0.9, 
-            // 👇 هذا السطر هو المنقذ الذي يمنع تجاوز الحد المجاني 1000 توكن
-            max_tokens: 150, 
+            temperature: 0.95, // حرارة شبه قصوى لضمان عدم تكرار نفس المجال
+            max_tokens: 150, // حماية من خطأ 429
             response_format: { type: "json_object" }
         });
 

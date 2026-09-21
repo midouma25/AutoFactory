@@ -62,7 +62,6 @@ function drawCross(ctx, x, y) {
     ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.stroke();
 }
 
-// ⬅️ دالة رسم السهم
 function drawArrowLeft(ctx, x, y) {
     ctx.beginPath(); 
     ctx.moveTo(x, y); 
@@ -91,23 +90,17 @@ function drawCircuitLines(ctx, width, height) {
     ctx.beginPath(); ctx.arc(width - 200, 150, 5, 0, Math.PI*2); ctx.stroke();
 }
 
-// 🔮 صندوق الأداة الذكي (يعتمد على الدومين القادم من الذكاء الاصطناعي مباشرة)
-// 👈 لاحظ أننا أضفنا toolDomain كمتغير هنا
 async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
-    // 1. رسم المربع الأساسي
     drawRoundedRect(ctx, x, y, size, size, 35, '#FFFFFF', true);
     
-    // إطار المربع (أخضر أو أحمر)
     ctx.strokeStyle = isGood ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
     ctx.lineWidth = 3;
     ctx.stroke();
     
     let logoLoaded = false;
 
-    // إذا نسي الذكاء الاصطناعي إرسال الدومين، نخمنه بسرعة
     let finalDomain = toolDomain ? toolDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : `${toolName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
 
-    // المحاولة 1: جلب الشعار عالي الدقة من Clearbit
     try {
         const logoUrl = `https://logo.clearbit.com/${finalDomain}`;
         const logo = await loadImage(logoUrl);
@@ -115,7 +108,6 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
         ctx.drawImage(logo, x + (size - logoSize) / 2, y + 40, logoSize, logoSize);
         logoLoaded = true;
     } catch (e) {
-        // المحاولة 2: جلب الشعار من محرك Google (مستقر جداً)
         try {
             const fallbackUrl = `https://www.google.com/s2/favicons?domain=${finalDomain}&sz=128`;
             const logo = await loadImage(fallbackUrl);
@@ -127,7 +119,6 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
         }
     }
 
-    // المحاولة 3 (الإنقاذ): إذا كان الموقع غير موجود فعلياً
     if (!logoLoaded) {
         const firstLetter = toolName.replace(/[^a-zA-Zأ-ي]/g, '').charAt(0).toUpperCase() || toolName.charAt(0).toUpperCase();
         
@@ -143,7 +134,6 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
         ctx.fillText(firstLetter, x + size / 2, y + 100);
     }
 
-    // رسم اسم الأداة في أسفل المربع
     ctx.font = '26px "CairoBoldHack"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
@@ -151,41 +141,42 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
     wrapText(ctx, toolName, x + size / 2, y + 210, size - 20, 35);
 }
 
-async function drawAiComparisonSlide(slide, totalSlides, batchId) {
+// 👈 1. التعديل الأول: إضافة platform هنا
+async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'instagram') {
     const width = 1080;
     const height = 1350;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // الخلفية
     ctx.fillStyle = '#F8FAFC';
     ctx.fillRect(0, 0, width, height);
     drawCircuitLines(ctx, width, height);
 
     ctx.direction = 'rtl';
     
-    // 🟢 النقاط العلوية الديناميكية (تحل مشكلة التعبير عن الصفحة)
-    const dotSpacing = 45;
-    const dotRadius = 12;
-    const totalDotsWidth = (totalSlides - 1) * dotSpacing;
-    const startCX = (width - totalDotsWidth) / 2;
-    
-    ctx.lineWidth = 2;
-    for(let i = 0; i < totalSlides; i++) {
-        ctx.beginPath(); 
-        ctx.arc(startCX + (i * dotSpacing), 70, dotRadius, 0, Math.PI*2); 
+    // 👈 2. التعديل الثاني: إخفاء نقاط التمرير في الفيسبوك
+    if (platform === 'instagram') {
+        const dotSpacing = 45;
+        const dotRadius = 12;
+        const totalDotsWidth = (totalSlides - 1) * dotSpacing;
+        const startCX = (width - totalDotsWidth) / 2;
         
-        if (i + 1 === slide.slideNumber) {
-            ctx.fillStyle = '#0F766E'; // لون الدائرة النشطة
-            ctx.fill();
-            ctx.strokeStyle = '#0F766E';
-        } else {
-            ctx.strokeStyle = '#CBD5E1'; // لون الدوائر الفارغة
+        ctx.lineWidth = 2;
+        for(let i = 0; i < totalSlides; i++) {
+            ctx.beginPath(); 
+            ctx.arc(startCX + (i * dotSpacing), 70, dotRadius, 0, Math.PI*2); 
+            
+            if (i + 1 === slide.slideNumber) {
+                ctx.fillStyle = '#0F766E';
+                ctx.fill();
+                ctx.strokeStyle = '#0F766E';
+            } else {
+                ctx.strokeStyle = '#CBD5E1';
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 
-    // مربع رقم الصفحة
     drawRoundedRect(ctx, 40, 40, 90, 80, 15, '#FFFFFF', true);
     ctx.strokeStyle = 'rgba(15, 118, 110, 0.2)'; ctx.lineWidth = 2; ctx.stroke();
     ctx.font = '45px "CairoBoldHack"';
@@ -210,21 +201,17 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         drawCross(ctx, width / 2 + 200, 440);
         drawCheckmark(ctx, width / 2 - 200, 440);
 
-        
         const boxY = 510;
         const boxSize = 300;
-        // 👈 تمرير الدومين السيء والجيد للدالة
         await drawToolBox(ctx, width / 2 + 60, boxY, boxSize, slide.badTool, slide.badToolDomain, false);
         await drawToolBox(ctx, width / 2 - 360, boxY, boxSize, slide.goodTool, slide.goodToolDomain, true);   
 
-        // ⬅️ إصلاح السهم والنص السفلي
         if (slide.nextTeaser) {
             ctx.font = '35px "CairoBoldHack"';
             ctx.fillStyle = '#334155';
             ctx.textAlign = 'center';
             ctx.fillText(slide.nextTeaser, width / 2, 1080);
             
-            // حساب عرض النص لضمان التصاق السهم به دائماً
             const textWidth = ctx.measureText(slide.nextTeaser).width;
             drawArrowLeft(ctx, (width / 2) - (textWidth / 2) - 70, 1070);
         }
@@ -232,15 +219,13 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
     // ==========================================
     // شريحة الختام (CTA)
     // ==========================================
-
     else if (slide.type === 'cta') {
         ctx.save();
 
         const imgX = width / 2;
-        const imgY = 280; // 👈 رفعنا الصورة للأعلى لتترك مساحة للنصوص
-        const imgRadius = 120; // 👈 تصغير حقيقي وأنيق (بدلاً من 200 العملاقة)
+        const imgY = 280; 
+        const imgRadius = 120; 
 
-        // 1. الدائرة البيضاء مع الظل (Shadow)
         ctx.beginPath();
         ctx.arc(imgX, imgY, imgRadius, 0, Math.PI * 2);
         ctx.shadowColor = 'rgba(15, 23, 42, 0.4)';
@@ -249,16 +234,13 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
 
-        // 2. إيقاف الظل فوراً لتجنب التشويه
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
 
-        // 3. إضافة إطار أبيض حول صورتك (Stroke) لزيادة الجمالية
         ctx.lineWidth = 10;
         ctx.strokeStyle = '#FFFFFF';
         ctx.stroke();
 
-        // 4. القص والرسم مع الحفاظ على أبعادك (Center Crop)
         ctx.clip();
         try {
             const avatar = await loadImage(path.join(__dirname, '../profile.png'));
@@ -273,17 +255,24 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         }
         ctx.restore();
         
-        // --------------------------------------------------
-        // نصوص الشريحة الختامية
-        // --------------------------------------------------
+        // 👈 3. التعديل الثالث: نصوص وأيقونات الشريحة الختامية الذكية
         ctx.font = '45px "CairoBoldHack"'; 
         ctx.textAlign = 'right';
 
-        // حساب عرض الكلمات لضبط المسافات
-        const part1 = "علق بكلمة ";
-        const part2 = '"أدوات"';
-        const part3 = " وراح ارسلك افضل 30 اداة ذكاء";
-        const part4 = "اصطناعي مع وصفها لسنة 2026";
+        let part1, part2, part3, part4;
+
+        // خوارزمية تحديد النص حسب المنصة
+        if (platform === 'facebook') {
+            part1 = "الروابط كاملة في ";
+            part2 = '"أول تعليق"';
+            part3 = " 👇 شارك المنشور";
+            part4 = "لتعود إليه لاحقاً وتفيد غيرك ↪️";
+        } else {
+            part1 = "علق بكلمة ";
+            part2 = '"أدوات"';
+            part3 = " وراح أرسلك أفضل الأدوات";
+            part4 = "والمقارنات لسنة 2026";
+        }
 
         const w1 = ctx.measureText(part1).width;
         const w2 = ctx.measureText(part2).width;
@@ -292,66 +281,65 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId) {
         const totalWidthLine1 = w1 + w2 + w3;
         let currentX = (width / 2) + (totalWidthLine1 / 2);
 
-        // رسم السطر الأول (صعدنا به للأعلى قليلاً Y=580)
         ctx.fillStyle = '#0F172A';
         ctx.fillText(part1, currentX, 580);
         currentX -= w1;
 
-        ctx.fillStyle = '#0F766E'; // اللون الأخضر لكلمة "أدوات"
+        // اللون المميز (أزرق لفيسبوك، أخضر لإنستغرام)
+        ctx.fillStyle = platform === 'facebook' ? '#2563EB' : '#0F766E'; 
         ctx.fillText(part2, currentX, 580);
         currentX -= w2;
 
         ctx.fillStyle = '#0F172A';
         ctx.fillText(part3, currentX, 580);
 
-        // رسم السطر الثاني (موسط)
         ctx.textAlign = 'center';
         ctx.fillText(part4, width / 2, 650);
 
-        // --------------------------------------------------
-        // الأيقونات والنصوص السفلية (Call to Actions)
-        // --------------------------------------------------
-        const iconY = 820; // رفعنا الأيقونات لتناسب التصميم الجديد
+        // رسم الأيقونات السفلية حسب المنصة
+        const iconY = 820; 
         ctx.strokeStyle = '#1E293B';
         ctx.lineWidth = 4;
-        
-        // رسم الأيقونات (حفظ، مشاركة، تعليق، لايك)
-        ctx.beginPath(); ctx.moveTo(width/2 - 250, iconY); ctx.lineTo(width/2 - 210, iconY); ctx.lineTo(width/2 - 210, iconY+50); ctx.lineTo(width/2 - 230, iconY+35); ctx.lineTo(width/2 - 250, iconY+50); ctx.closePath(); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(width/2 - 90, iconY+10); ctx.lineTo(width/2 - 50, iconY-10); ctx.lineTo(width/2 - 70, iconY+40); ctx.lineTo(width/2 - 80, iconY+20); ctx.closePath(); ctx.stroke();
-        ctx.beginPath(); ctx.arc(width/2 + 90, iconY+20, 25, 0, Math.PI*2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(width/2 + 250, iconY+20, 22, 0, Math.PI*2); ctx.stroke();
-
-        ctx.font = '24px "CairoBoldHack"';
         ctx.fillStyle = '#334155';
-        ctx.fillText("احفظه يمكن", width/2 - 230, iconY + 90); ctx.fillText("تحتاجه بيوم", width/2 - 230, iconY + 120);
-        ctx.fillText("شاركه مع", width/2 - 70, iconY + 90);   ctx.fillText("اللي تحبه", width/2 - 70, iconY + 120);
-        ctx.fillText("رأيك يهمني", width/2 + 90, iconY + 90); ctx.fillText("بالتعليقات", width/2 + 90, iconY + 120);
-        ctx.fillText("لايك واحد", width/2 + 250, iconY + 90);  ctx.fillText("ما يضر", width/2 + 250, iconY + 120);
+        ctx.font = '24px "CairoBoldHack"';
+        
+        if (platform === 'facebook') {
+            // أيقونات فيسبوك 
+            ctx.fillText("↪️ مشاركة", width/2 - 200, iconY + 50);
+            ctx.fillText("💬 تعليق", width/2, iconY + 50);
+            ctx.fillText("👍 إعجاب", width/2 + 200, iconY + 50);
+        } else {
+            // أيقونات إنستغرام
+            ctx.beginPath(); ctx.moveTo(width/2 - 250, iconY); ctx.lineTo(width/2 - 210, iconY); ctx.lineTo(width/2 - 210, iconY+50); ctx.lineTo(width/2 - 230, iconY+35); ctx.lineTo(width/2 - 250, iconY+50); ctx.closePath(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(width/2 - 90, iconY+10); ctx.lineTo(width/2 - 50, iconY-10); ctx.lineTo(width/2 - 70, iconY+40); ctx.lineTo(width/2 - 80, iconY+20); ctx.closePath(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(width/2 + 90, iconY+20, 25, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(width/2 + 250, iconY+20, 22, 0, Math.PI*2); ctx.stroke();
+
+            ctx.fillText("احفظه يمكن", width/2 - 230, iconY + 90); ctx.fillText("تحتاجه بيوم", width/2 - 230, iconY + 120);
+            ctx.fillText("شاركه مع", width/2 - 70, iconY + 90);   ctx.fillText("اللي تحبه", width/2 - 70, iconY + 120);
+            ctx.fillText("رأيك يهمني", width/2 + 90, iconY + 90); ctx.fillText("بالتعليقات", width/2 + 90, iconY + 120);
+            ctx.fillText("لايك واحد", width/2 + 250, iconY + 90);  ctx.fillText("ما يضر", width/2 + 250, iconY + 120);
+        }
     }
 
     // ==========================================
     // الفوتر 
     // ==========================================
-drawRoundedRect(ctx, 40, height - 120, 360, 90, 45, '#FFFFFF', true);
+    drawRoundedRect(ctx, 40, height - 120, 360, 90, 45, '#FFFFFF', true);
     
     ctx.save();
     
-    // ----------------------------------------------------
-    // رسم الصورة المصغرة بجانب اسمك في الفوتر
-    // ----------------------------------------------------
     ctx.beginPath();
-    ctx.arc(320, height - 75, 30, 0, Math.PI * 2); // صورة أصغر في الزاوية
+    ctx.arc(320, height - 75, 30, 0, Math.PI * 2);
     ctx.clip();
     
     try {
         const avatar = await loadImage(path.join(__dirname, '../profile.png'));
         
-        // منطق القص للحفاظ على الأبعاد (Center Crop)
         const s = Math.min(avatar.width, avatar.height);
         const sx = (avatar.width - s) / 2;
         const sy = (avatar.height - s) / 2;
         
-        // رسم الصورة المصغرة
         ctx.drawImage(avatar, sx, sy, s, s, 290, height - 105, 60, 60);
     } catch (e) {
         console.log("⚠️ الصورة الشخصية المصغرة غير موجودة.");
