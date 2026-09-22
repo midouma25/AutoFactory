@@ -16,6 +16,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 const drawAiComparisonSlide = require('./templates/ai_comparison');
+const drawTripleComparisonSlide = require('./templates/triple_comparison');
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // إعداد Cloudinary
@@ -28,6 +29,7 @@ cloudinary.config({
 // متغيرات Meta API
 const TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const IG_ID = '17841404465286460'; // معرّف إنستغرام الخاص بك
+const FB_PAGE_ID = '1356519727534543'; // 👈 أضف هذا
 const VERSION = 'v20.0';
 
 // ==========================================
@@ -185,9 +187,11 @@ async function generateAutoFactorySlide(slide, totalSlides, batchId, categoryBad
         await drawTerminalSlide(ctx, width, height, slide, totalSlides, categoryBadge);
     }
 
+// العودة إلى صيغة PNG المدعومة أصلياً والمستقرة
     const fileName = `post_${batchId}_slide_${slide.slideNumber}.png`;
-    const buffer = canvas.toBuffer('image/png');
-    fs.writeFileSync(path.join(__dirname, fileName), buffer);
+    const buffer = canvas.toBuffer('image/png'); // إزالة أي إشارة لـ jpeg
+    
+    fs.writeFileSync(path.join(__dirname, '../', fileName), buffer);
     return fileName;
 }
 
@@ -530,93 +534,216 @@ app.post('/api/print-studio', async (req, res) => {
 // ⚖️ مسار توليد قوالب المقارنات (The Expose)
 // ==========================================
 // ==========================================
-// ⚖️ مسار توليد قوالب المقارنات (The Expose) - [النسخة الديناميكية]
+// ⚖️ مسار توليد قوالب المقارنات (مع الكابشن المزدوج الذكي)
 // ==========================================
 app.post('/api/generate-comparison', async (req, res) => {
-    // 👈 استلام المتغير الجديد (slideCount) وتحديد 6 كقيمة افتراضية للحماية
     const { topic, slideCount, platform = 'instagram' } = req.body;
     const count = slideCount || 6; 
 
     if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع.' });
 
     try {
-        console.log(`\n⚖️ جاري تصميم كاروسيل المقارنات لموضوع: ${topic} بعدد (${count}) شرائح...`);
+        console.log(`\n⚖️ جاري تصميم المقارنة المزدوجة لموضوع: ${topic}...`);
 
-        // 👈 دمج المتغير (count) وإضافة قواعد إلزامية لاستخراج الدومين (Domain)
-        const systemPrompt = `
-        أنت خبير واستشاري متقدم في تقنيات الذكاء الاصطناعي لعام 2026. مهمتك صناعة منشور كاروسيل (The Expose) يكشف عن أفضل أدوات الـ AI المتخصصة مقابل الأدوات التقليدية.
+const systemPrompt = `
+        أنت خبير تسويق فيروسي (Growth Hacker) لعام 2026. مهمتك صناعة كاروسيل مقارنة وكتابة وصف مخصص لكل منصة.
         
-        ⚠️ قواعد منطقية صارمة جداً إياك مخالفتها:
-        1. دقة المقارنة (أهم شرط): يجب أن تكون المقارنة عادلة وفي نفس التخصص. لا تقارن أداة هندسة برمجيات بمنصة تعليم. 
-        2. الأداة الجيدة (goodTool): يجب أن تكون أداة ذكاء اصطناعي حقيقية وحديثة.
-        3. منع التكرار: يُمنع منعاً باتاً تكرار نفس الأداة (سواء الجيدة أو السيئة) في أكثر من شريحة واحدة! استخدم أدوات مختلفة دائماً.
-        4. الأسماء الحقيقية فقط: اكتب اسم العلامة التجارية فقط بدون شروحات.
-        5. استخراج الدومين (رابط الموقع): يجب عليك كتابة الدومين الرسمي لكل أداة (مثال: google.com, openai.com) في الحقول المخصصة لذلك (badToolDomain و goodToolDomain).
-        6. الترابط السردي (مهم جداً): يجب أن يكون حقل "nextTeaser" في الشريحة الحالية هو نفسه بالضبط حقل "title" في الشريحة التي تليها.
-        🚨 استثناء هام لقاعدة الترابط: في الشريحة "ما قبل الأخيرة" (رقم ${count - 1})، يجب أن تجعل حقل "nextTeaser" عبارة تشويقية للهدية الختامية (مثال: "تريد القائمة الكاملة؟" أو "جاهز لاكتشاف السر؟").
-        7. الشريحة الأخيرة (cta) يجب أن تكون حصراً الشريحة رقم ${count}: اجعل حقل "title" جملة واحدة قصيرة تتضمن كلمة "أدوات".
+        ⚠️ قواعد اللغة (حاسمة وصارمة جداً):
+        - يجب استخدام "لغة عربية فصحى معاصرة، بليغة، ومبسطة" (Modern Standard Arabic).
+        - يُمنع منعاً باتاً وقاطعاً استخدام أي لهجة عامية محلية (مثل: دي، كده، مش، لسه، بتبكي، زفت، وغيرها).
+        - الأسلوب يجب أن يكون احترافياً، غامضاً قليلاً، ومثيراً للاهتمام (Hook) ليناسب المحترفين والمبرمجين.
         
-        رد بصيغة JSON فقط بهذا الهيكل (يجب أن يحتوي على ${count} شرائح بالضبط لا أكثر ولا أقل):
+        ⚠️ استراتيجية الوصف (Captions):
+        - igCaption (لإنستغرام): 
+          1. ابدأ بجملة افتتاحية صادمة بالفصحى (Hook).
+          2. سطران لشرح الفكرة باختصار وقوة.
+          3. دعوة واضحة للتفاعل نصها: (اكتب كلمة "أدوات" في التعليقات لأرسل لك القائمة الكاملة والروابط فوراً عبر الرسائل).
+          4. أضف 6 إلى 8 هاشتاجات تقنية ترند في النهاية (مثل: #ذكاء_اصطناعي #برمجة #أدوات_تقنية #تطوير_الويب ...).
+          
+        - fbCaption (لفيسبوك): 
+          1. ابدأ بسؤال يثير الجدل والنقاش الفكري بين المهنيين (مثال: هل انتهى عصر العمل اليدوي؟).
+          2. سرد حقيقة تقنية أو مقارنة توضح كيف تغيرت قواعد اللعبة.
+          3. دعوة للتفاعل نصها: (جميع الروابط والأدوات المذكورة تجدونها في "أول تعليق" 👇. شاركونا آراءكم، هل تتفقون مع هذه المقارنة؟).
+          4. أضف 3 إلى 5 هاشتاجات عامة.
+
+        ⚠️ قواعد الشرائح:
+        1. مقارنة عادلة، استخدم أسماء أدوات AI حقيقية وحديثة ضد أدوات كلاسيكية.
+        2. لا تكرر الأدوات أبداً. استخرج الدومين الرسمي لكل أداة (مثال: openai.com).
+        3. اربط الشرائح منطقياً بحقل "nextTeaser".
+        4. الشريحة الأخيرة (رقم ${count}) يجب أن تدعو للتفاعل حصراً وتتضمن كلمة "أدوات".
+
+        رد بصيغة JSON فقط:
         {
-          "caption": "نص المنشور (Caption) لإنستغرام مع الهاشتاجات...",
+          "igCaption": "وصف الانستغرام هنا...",
+          "fbCaption": "وصف الفيسبوك هنا...",
           "slides": [
-            {
-              "slideNumber": 1,
-              "type": "comparison",
-              "title": "لشرح الدروس الأكاديمية؟",
-              "badTool": "Khan Academy",
-              "badToolDomain": "khanacademy.org",
-              "goodTool": "NotebookLM",
-              "goodToolDomain": "google.com",
-              "nextTeaser": "لكتابة الكود البرمجي؟"
-            },
-            // ... (الاستمرار حتى الشريحة ما قبل الأخيرة),
-            {
-              "slideNumber": ${count},
-              "type": "cta",
-              "title": "علق بكلمة أدوات لأرسل لك الدليل الشامل",
-              "badTool": "",
-              "badToolDomain": "",
-              "goodTool": "",
-              "goodToolDomain": "",
-              "nextTeaser": ""
-            }
+            { "slideNumber": 1, "type": "comparison", "title": "لشرح الدروس؟", "badTool": "Khan Academy", "badToolDomain": "khanacademy.org", "goodTool": "NotebookLM", "goodToolDomain": "google.com", "nextTeaser": "لكتابة الكود؟" },
+            // ... أكمل حتى الشريحة ${count} (الشريحة الأخيرة تكون type: cta)
           ]
         }`;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `قم بعمل مقارنة أدوات حول: ${topic}` }
+                { role: 'user', content: `الموضوع: ${topic}` }
             ],
             model: 'qwen/qwen3.8-27b',
             temperature: 0.8,
             response_format: { type: "json_object" }
         });
 
-    const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
+        const lessonData = JSON.parse(chatCompletion.choices[0].message.content);
         const batchId = Date.now(); 
-        const generatedImages = [];
+        const generatedImages = { instagram: [], facebook: [] };
 
-        // 👈 تحديد المنصات التي سنطبع لها (إذا اختار "كلاهما"، سنطبع للنسختين)
         const targetPlatforms = platform === 'both' ? ['instagram', 'facebook'] : [platform];
 
         for (const currentPlatform of targetPlatforms) {
-            // إضافة اسم المنصة للـ ID لكي لا تمسح الصور بعضها
             const platformBatchId = `${batchId}_${currentPlatform}`;
-            
             for (const slide of lessonData.slides) {
-                // نمرر المتغيرات بذكاء للمطبعة
                 const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, platformBatchId, currentPlatform);
-                generatedImages.push(fileName);
+                generatedImages[currentPlatform].push(fileName);
             }
         }
 
-        res.json({ success: true, caption: lessonData.caption, images: generatedImages });
+        res.json({ 
+            success: true, 
+            igCaption: lessonData.igCaption,
+            fbCaption: lessonData.fbCaption,
+            images: generatedImages 
+        });
 
     } catch (error) {
         console.error('❌ خطأ:', error);
         res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
+    }
+});
+
+// ==========================================
+// 🚀 مسار النشر الشامل (الإنستغرام + الفيسبوك)
+// ==========================================
+app.post('/api/publish-omni', async (req, res) => {
+    const { platform, images, igCaption, fbCaption } = req.body;
+    
+    try {
+        console.log(`\n🚀 بدء دورة النشر لمنصة: ${platform}`);
+        
+// 1. رفع الصور للسحابة 
+        console.log('☁️ 1. جاري الرفع للسحابة...');
+        let imageUrls = { instagram: [], facebook: [] };
+        const platformsToPublish = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+
+        for (const p of platformsToPublish) {
+            for (const img of images[p]) {
+                const uploadRes = await cloudinary.uploader.upload(path.join(__dirname, img), { 
+                    folder: 'AutoFactory_Carousel',
+                    format: 'jpg' // هذا السطر هو السحر الذي يحول الـ PNG السليم إلى JPG خفيف لإنستغرام
+                });
+                
+                const url = uploadRes.secure_url; 
+                imageUrls[p].push(url);
+                console.log(`   ✅ تم الرفع: ${url}`);
+            }
+        }
+        
+        console.log('⏳ استراحة 5 ثوانٍ...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        let results = {};
+
+        // 2. النشر على إنستغرام (مع نظام الإنقاذ الهادئ من ملفك القديم)
+        if (platformsToPublish.includes('instagram')) {
+            console.log('\n📱 جاري النشر على إنستغرام...');
+            let creationIds = [];
+            
+            for (const [index, url] of imageUrls['instagram'].entries()) {
+                let success = false;
+                let attempts = 0; 
+                let itemId = null;
+
+                // 🧠 نظام الإنقاذ الهادئ: 4 محاولات لكل صورة
+                while (!success && attempts < 4) {
+                    attempts++;
+                    try {
+                        if (attempts > 1) {
+                            console.log(`   🔄 إعادة المحاولة (${attempts}/4) للصورة ${index + 1}...`);
+                        } else {
+                            console.log(`   📦 جاري إرسال الصورة ${index + 1} لإنستغرام...`);
+                        }
+                        
+                        const itemRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media`, null, {
+                            params: { image_url: url, is_carousel_item: true, access_token: TOKEN }
+                        });
+                        
+                        itemId = itemRes.data.id;
+                        success = true; 
+                        creationIds.push(itemId);
+                        console.log(`   ✅ تم إنشاء حاوية للصورة ${index + 1} (ID: ${itemId})`);
+                        
+                    } catch (err) {
+                        console.error(`   ⚠️ فشلت المحاولة ${attempts} للصورة ${index + 1}.`);
+                        if (attempts === 4) { 
+                            throw err; // ارمي الخطأ إذا استنفدنا جميع المحاولات الـ 4
+                        }
+                        
+                        console.log('   ⏳ ننتظر 15 ثانية لتهدئة السيرفرات وتخزين الكاش قبل المحاولة مجدداً...');
+                        await new Promise(resolve => setTimeout(resolve, 15000));
+                    }
+                }
+                
+                // استراحة 12 ثانية بين صورة وأخرى كما في كودك القديم
+                if (index < imageUrls['instagram'].length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 12000));
+                }
+            }
+            
+            console.log('\n📦 جاري تجميع الصور في حاوية الكاروسيل...');
+            const carouselRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media`, null, {
+                params: { media_type: 'CAROUSEL', children: creationIds.join(','), caption: igCaption, access_token: TOKEN }
+            });
+            
+            // إضافة استراحة لإنستغرام لمعالجة الكاروسيل قبل النشر
+            console.log('⏳ إنستغرام يقوم الآن بمعالجة الحاوية، يرجى الانتظار 15 ثانية...');
+            await new Promise(resolve => setTimeout(resolve, 15000));
+            
+            console.log('🚀 جاري إطلاق النشر النهائي...');
+            const publishRes = await axios.post(`https://graph.facebook.com/${VERSION}/${IG_ID}/media_publish`, null, {
+                params: { creation_id: carouselRes.data.id, access_token: TOKEN }
+            });
+            
+            results.instagram = publishRes.data.id;
+            console.log('✅ تم نشر إنستغرام بنجاح!');
+        }
+
+        // 3. النشر على فيسبوك (Facebook Page)
+        if (platformsToPublish.includes('facebook')) {
+            console.log('\n📘 جاري النشر على فيسبوك...');
+            let attachedMedia = [];
+            for (const url of imageUrls['facebook']) {
+                const photoRes = await axios.post(`https://graph.facebook.com/${VERSION}/${FB_PAGE_ID}/photos`, null, {
+                    params: { url: url, published: false, access_token: TOKEN }
+                });
+                attachedMedia.push({ media_fbid: photoRes.data.id });
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            
+            const fbPublishRes = await axios.post(`https://graph.facebook.com/${VERSION}/${FB_PAGE_ID}/feed`, null, {
+                params: { 
+                    message: fbCaption, 
+                    attached_media: JSON.stringify(attachedMedia),
+                    access_token: TOKEN 
+                }
+            });
+            results.facebook = fbPublishRes.data.id;
+            console.log('✅ تم نشر فيسبوك بنجاح!');
+        }
+
+        res.json({ success: true, results });
+
+    } catch (error) {
+        const errorDetails = error.response ? error.response.data : (error.message || error);
+        console.error('\n❌ خطأ نهائي في عملية النشر:', JSON.stringify(errorDetails, null, 2));
+        res.status(500).json({ error: 'فشل النشر. راجع الـ Terminal للتفاصيل.' });
     }
 });
 
@@ -673,7 +800,91 @@ app.get('/api/suggest-comparison-topic', async (req, res) => {
         res.status(500).json({ success: false, error: 'فشل استلهام الفكرة.' });
     }
 });
+ 
 
 
+app.post('/api/generate-triple', async (req, res) => {
+    const { topic, count, platform } = req.body; 
+
+    try {
+        console.log(`\n🤖 جاري توليد محتوى (قالب ثلاثي) عن: ${topic}`);
+
+        // تنبيه: تأكد أنك تستخدم مكتبة Groq هنا كما فعلنا سابقاً لضمان السرعة والتوحيد
+        const systemPrompt = `
+        أنت خبير في إنشاء محتوى إنستغرام وفيسبوك التقني الفيروسي لعام 2026.
+        الموضوع: ${topic}
+        المطلوب: توليد ${count} شرائح بنظام "المقارنة الثلاثية" (سيئ، جيد، احترافي).
+        
+        رد بصيغة JSON فقط بهذا الهيكل الدقيق:
+        {
+          "caption": "اكتب هنا نص المنشور الجذاب مع الهاشتاجات المناسبة...",
+          "slides": [
+            {
+              "slideNumber": 1,
+              "type": "comparison",
+              "title": "عنوان المقارنة (مثال: توليد الفيديوهات)",
+              "badTool": "أداة سيئة",
+              "badToolDomain": "domain1.com",
+              "goodTool": "أداة جيدة",
+              "goodToolDomain": "domain2.com",
+              "proTool": "أداة احترافية",
+              "proToolDomain": "domain3.com",
+              "nextTeaser": "NEXT"
+            },
+            // ... (استمر حتى الشريحة ما قبل الأخيرة) ...
+            {
+              "slideNumber": ${count},
+              "type": "cta",
+              "title": "", "badTool": "", "badToolDomain": "", "goodTool": "", "goodToolDomain": "", "proTool": "", "proToolDomain": "", "nextTeaser": ""
+            }
+          ]
+        }
+        `;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `ابدأ التوليد للموضوع: ${topic}` }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.8,
+            response_format: { type: "json_object" }
+        });
+
+        const contentData = JSON.parse(chatCompletion.choices[0].message.content);
+        const batchId = Date.now();
+        
+        // تجهيز الصور لكلا المنصتين (Review Studio)
+        let finalImages = { instagram: [], facebook: [] };
+
+        if (platform === 'instagram' || platform === 'both') {
+            for (const slide of contentData.slides) {
+                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'instagram');
+                finalImages.instagram.push(fileName);
+            }
+        }
+
+        if (platform === 'facebook' || platform === 'both') {
+            for (const slide of contentData.slides) {
+                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'facebook');
+                finalImages.facebook.push(fileName);
+            }
+        }
+
+        const igCaption = contentData.caption;
+        const fbCaption = contentData.caption + '\n\n🔗 روابط جميع الأدوات المذكورة في أول تعليق 👇';
+
+        res.json({
+            success: true,
+            images: finalImages,
+            igCaption: igCaption,
+            fbCaption: fbCaption
+        });
+
+    } catch (error) {
+        console.error('❌ خطأ في القالب الثلاثي:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));

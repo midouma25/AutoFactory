@@ -29,6 +29,66 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     return currentY;
 }
 
+// 🚀 الدالة الجديدة: رسم العنوان مع تلوين الكلمة الأخيرة (Highlighting)
+function drawSmartTitleRTL(ctx, text, x, y, maxWidth, lineHeight, mainColor, highlightColor) {
+    if (!text) return y;
+    
+    const words = text.trim().split(/\s+/);
+    let lines = [];
+    let currentLine = words[0];
+
+    // تقسيم النص إلى أسطر حسب عرض الشاشة
+    for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + " " + word).width;
+        if (width < maxWidth) {
+            currentLine += " " + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    lines.push(currentLine);
+
+    ctx.save();
+    ctx.textAlign = 'right'; 
+    ctx.direction = 'rtl'; 
+    
+    let currentY = y;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineWidth = ctx.measureText(line).width;
+        let startX = x + (lineWidth / 2); // التوسيط الهندسي
+
+        // إذا كان هذا هو السطر الأخير، نلصق التلوين على الكلمة الأخيرة
+        if (i === lines.length - 1) {
+            const lineWords = line.split(' ');
+            const lastWord = lineWords.pop();
+            const restOfLine = lineWords.join(' ');
+
+            if (restOfLine.length > 0) {
+                ctx.fillStyle = mainColor;
+                ctx.fillText(restOfLine + ' ', startX, currentY);
+                
+                // حساب المسافة لطباعة الكلمة الأخيرة الملونة
+                const restWidth = ctx.measureText(restOfLine + ' ').width;
+                ctx.fillStyle = highlightColor;
+                ctx.fillText(lastWord, startX - restWidth, currentY);
+            } else {
+                ctx.fillStyle = highlightColor;
+                ctx.fillText(lastWord, startX, currentY);
+            }
+        } else {
+            ctx.fillStyle = mainColor;
+            ctx.fillText(line, startX, currentY);
+        }
+        currentY += lineHeight;
+    }
+    ctx.restore();
+    return currentY;
+}
+
 function drawRoundedRect(ctx, x, y, width, height, radius, bgColor, shadow = true) {
     if (shadow) {
         ctx.shadowColor = 'rgba(148, 163, 184, 0.3)';
@@ -141,7 +201,6 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
     wrapText(ctx, toolName, x + size / 2, y + 210, size - 20, 35);
 }
 
-// 👈 1. التعديل الأول: إضافة platform هنا
 async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'instagram') {
     const width = 1080;
     const height = 1350;
@@ -154,7 +213,6 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
 
     ctx.direction = 'rtl';
     
-    // 👈 2. التعديل الثاني: إخفاء نقاط التمرير في الفيسبوك
     if (platform === 'instagram') {
         const dotSpacing = 45;
         const dotRadius = 12;
@@ -177,25 +235,58 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
         }
     }
 
-    drawRoundedRect(ctx, 40, 40, 90, 80, 15, '#FFFFFF', true);
+    // --------------------------------------------------
+    // 1. مربع رقم الصفحة
+    // --------------------------------------------------
+    const snX = width - 130; 
+    drawRoundedRect(ctx, snX, 40, 90, 80, 15, '#FFFFFF', true);
     ctx.strokeStyle = 'rgba(15, 118, 110, 0.2)'; ctx.lineWidth = 2; ctx.stroke();
     ctx.font = '45px "CairoBoldHack"';
     ctx.fillStyle = '#0F766E';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${slide.slideNumber}`, 85, 85);
+    ctx.fillText(`${slide.slideNumber}`, snX + 45, 85);
     ctx.textBaseline = 'alphabetic';
+
+    // --------------------------------------------------
+    // 2. زر SAVE THE POST 
+    // --------------------------------------------------
+    ctx.save();
+    const saveX = 50;
+    const saveY = 80; 
+    
+    ctx.beginPath();
+    ctx.moveTo(saveX, saveY - 14);
+    ctx.lineTo(saveX + 18, saveY - 14);
+    ctx.lineTo(saveX + 18, saveY + 16);
+    ctx.lineTo(saveX + 9, saveY + 8);
+    ctx.lineTo(saveX, saveY + 16);
+    ctx.closePath();
+    ctx.fillStyle = '#0F172A'; 
+    ctx.fill();
+
+    ctx.direction = 'ltr'; 
+    ctx.font = 'bold 22px "CairoBoldHack"';
+    ctx.fillStyle = '#0F172A';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("SAVE THE POST", saveX + 30, saveY);
+    ctx.restore();
 
     // ==========================================
     // شريحة المقارنة
     // ==========================================
     if (slide.type === 'comparison') {
-        ctx.font = '65px "CairoBoldHack"'; 
-        ctx.fillStyle = '#0F172A';
-        ctx.textAlign = 'center';
+        // 🚀 تعديل الحجم إلى 85 ليكون أضخم وأكثر جاذبية
+        ctx.font = '85px "CairoBoldHack"'; 
         
-        ctx.shadowColor = 'rgba(0,0,0,0.15)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
-        wrapText(ctx, slide.title, width / 2, 260, 950, 85);
+        ctx.shadowColor = 'rgba(0,0,0,0.15)'; 
+        ctx.shadowBlur = 10; 
+        ctx.shadowOffsetY = 5;
+        
+        // 🚀 استخدام الدالة الذكية لطباعة العنوان وتلوين الكلمة الأخيرة باللون الأحمر الفاقع
+        drawSmartTitleRTL(ctx, slide.title, width / 2, 230, 950, 110, '#0F172A', '#EF4444');
+        
         ctx.shadowColor = 'transparent';
 
         drawCross(ctx, width / 2 + 200, 440);
@@ -255,13 +346,11 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
         }
         ctx.restore();
         
-        // 👈 3. التعديل الثالث: نصوص وأيقونات الشريحة الختامية الذكية
         ctx.font = '45px "CairoBoldHack"'; 
         ctx.textAlign = 'right';
 
         let part1, part2, part3, part4;
 
-        // خوارزمية تحديد النص حسب المنصة
         if (platform === 'facebook') {
             part1 = "الروابط كاملة في ";
             part2 = '"أول تعليق"';
@@ -285,7 +374,6 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
         ctx.fillText(part1, currentX, 580);
         currentX -= w1;
 
-        // اللون المميز (أزرق لفيسبوك، أخضر لإنستغرام)
         ctx.fillStyle = platform === 'facebook' ? '#2563EB' : '#0F766E'; 
         ctx.fillText(part2, currentX, 580);
         currentX -= w2;
@@ -296,29 +384,77 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
         ctx.textAlign = 'center';
         ctx.fillText(part4, width / 2, 650);
 
-        // رسم الأيقونات السفلية حسب المنصة
         const iconY = 820; 
         ctx.strokeStyle = '#1E293B';
-        ctx.lineWidth = 4;
-        ctx.fillStyle = '#334155';
+        ctx.lineWidth = 3;
+        
+        const btnGap = 200; 
+        const startX = width / 2 - (btnGap * 1.5); 
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, iconY); 
+        ctx.lineTo(startX + 30, iconY); 
+        ctx.lineTo(startX + 30, iconY + 40); 
+        ctx.lineTo(startX + 15, iconY + 25); 
+        ctx.lineTo(startX, iconY + 40); 
+        ctx.closePath(); 
+        ctx.stroke();
+
+        if (platform === 'facebook') {
+            ctx.beginPath();
+            ctx.moveTo(startX + btnGap + 15, iconY + 15);
+            ctx.lineTo(startX + btnGap + 35, iconY + 15);
+            ctx.lineTo(startX + btnGap + 35, iconY + 35);
+            ctx.moveTo(startX + btnGap + 35, iconY + 15);
+            ctx.lineTo(startX + btnGap + 10, iconY + 40);
+            ctx.stroke();
+        } else {
+            ctx.beginPath(); 
+            ctx.moveTo(startX + btnGap, iconY + 35); 
+            ctx.lineTo(startX + btnGap + 30, iconY); 
+            ctx.lineTo(startX + btnGap + 15, iconY + 40); 
+            ctx.lineTo(startX + btnGap + 10, iconY + 20); 
+            ctx.closePath(); 
+            ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(startX + (btnGap * 2) + 15, iconY + 25, 20, 0, Math.PI * 2);
+        if (platform === 'facebook') {
+            ctx.moveTo(startX + (btnGap * 2), iconY + 40);
+            ctx.lineTo(startX + (btnGap * 2) - 10, iconY + 50);
+            ctx.lineTo(startX + (btnGap * 2) + 5, iconY + 43);
+        }
+        ctx.stroke();
+
+        if (platform === 'facebook') {
+            ctx.beginPath();
+            const thumbX = startX + (btnGap * 3) + 15;
+            const thumbY = iconY + 25;
+            ctx.moveTo(thumbX, thumbY + 15); ctx.lineTo(thumbX - 10, thumbY + 15); ctx.lineTo(thumbX - 10, thumbY - 5); ctx.lineTo(thumbX, thumbY - 5);
+            ctx.moveTo(thumbX, thumbY - 5); ctx.lineTo(thumbX + 5, thumbY - 15); ctx.lineTo(thumbX + 10, thumbY - 15); ctx.lineTo(thumbX + 10, thumbY - 5);
+            ctx.lineTo(thumbX + 20, thumbY - 5); ctx.lineTo(thumbX + 15, thumbY + 15); ctx.closePath();
+            ctx.stroke();
+        } else {
+            ctx.beginPath(); 
+            ctx.arc(startX + (btnGap * 3) + 15, iconY + 25, 20, 0, Math.PI * 2); 
+            ctx.stroke();
+        }
+
         ctx.font = '24px "CairoBoldHack"';
+        ctx.fillStyle = '#334155';
+        ctx.textAlign = 'center';
         
         if (platform === 'facebook') {
-            // أيقونات فيسبوك 
-            ctx.fillText("↪️ مشاركة", width/2 - 200, iconY + 50);
-            ctx.fillText("💬 تعليق", width/2, iconY + 50);
-            ctx.fillText("👍 إعجاب", width/2 + 200, iconY + 50);
+            ctx.fillText("احفظه لتعود", startX + 15, iconY + 80); ctx.fillText("إليه لاحقاً", startX + 15, iconY + 110);
+            ctx.fillText("شارك المنشور", startX + btnGap + 15, iconY + 80); ctx.fillText("لتفيد غيرك", startX + btnGap + 15, iconY + 110);
+            ctx.fillText("رأيك يهمني", startX + (btnGap * 2) + 15, iconY + 80); ctx.fillText("بالتعليقات", startX + (btnGap * 2) + 15, iconY + 110);
+            ctx.fillText("إعجاب", startX + (btnGap * 3) + 15, iconY + 80); ctx.fillText("ما يضر", startX + (btnGap * 3) + 15, iconY + 110);
         } else {
-            // أيقونات إنستغرام
-            ctx.beginPath(); ctx.moveTo(width/2 - 250, iconY); ctx.lineTo(width/2 - 210, iconY); ctx.lineTo(width/2 - 210, iconY+50); ctx.lineTo(width/2 - 230, iconY+35); ctx.lineTo(width/2 - 250, iconY+50); ctx.closePath(); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(width/2 - 90, iconY+10); ctx.lineTo(width/2 - 50, iconY-10); ctx.lineTo(width/2 - 70, iconY+40); ctx.lineTo(width/2 - 80, iconY+20); ctx.closePath(); ctx.stroke();
-            ctx.beginPath(); ctx.arc(width/2 + 90, iconY+20, 25, 0, Math.PI*2); ctx.stroke();
-            ctx.beginPath(); ctx.arc(width/2 + 250, iconY+20, 22, 0, Math.PI*2); ctx.stroke();
-
-            ctx.fillText("احفظه يمكن", width/2 - 230, iconY + 90); ctx.fillText("تحتاجه بيوم", width/2 - 230, iconY + 120);
-            ctx.fillText("شاركه مع", width/2 - 70, iconY + 90);   ctx.fillText("اللي تحبه", width/2 - 70, iconY + 120);
-            ctx.fillText("رأيك يهمني", width/2 + 90, iconY + 90); ctx.fillText("بالتعليقات", width/2 + 90, iconY + 120);
-            ctx.fillText("لايك واحد", width/2 + 250, iconY + 90);  ctx.fillText("ما يضر", width/2 + 250, iconY + 120);
+            ctx.fillText("احفظه يمكن", startX + 15, iconY + 80); ctx.fillText("تحتاجه بيوم", startX + 15, iconY + 110);
+            ctx.fillText("شاركه مع", startX + btnGap + 15, iconY + 80); ctx.fillText("اللي تحبه", startX + btnGap + 15, iconY + 110);
+            ctx.fillText("رأيك يهمني", startX + (btnGap * 2) + 15, iconY + 80); ctx.fillText("بالتعليقات", startX + (btnGap * 2) + 15, iconY + 110);
+            ctx.fillText("لايك واحد", startX + (btnGap * 3) + 15, iconY + 80); ctx.fillText("ما يضر", startX + (btnGap * 3) + 15, iconY + 110);
         }
     }
 
@@ -355,8 +491,8 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
     ctx.font = '16px "CairoRegularHack"';
     ctx.fillText("مستشار وخبير أتمتة و AI", 270, height - 55);
 
-    const fileName = `post_${batchId}_slide_${slide.slideNumber}.png`;
-    const buffer = canvas.toBuffer('image/png');
+    const fileName = `post_${batchId}_slide_${slide.slideNumber}.jpg`;
+    const buffer = canvas.toBuffer('image/jpeg', { quality: 0.95 });
     fs.writeFileSync(path.join(__dirname, '../', fileName), buffer);
     return fileName;
 }
