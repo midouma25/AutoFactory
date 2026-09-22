@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Sparkles, Layers, Loader2, Image as ImageIcon, Share2, Send, CheckCircle } from 'lucide-react';
+import { Sparkles, Layers, Loader2, Image as ImageIcon, Share2, Send, CheckCircle, Target } from 'lucide-react';
 
 export default function TripleTemplateLab() {
   const [topic, setTopic] = useState('');
@@ -16,8 +16,18 @@ export default function TripleTemplateLab() {
   const [publishing, setPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
 
-  // جلب فكرة تريند
-  const suggestTopic = async () => {
+  // 1. جلب فكرة بسيطة ومباشرة
+  const suggestBasicTopic = async () => {
+    setIsSuggesting(true);
+    try {
+      const res = await axios.get('http://localhost:5000/api/suggest-basic-topic');
+      if (res.data.success) setTopic(res.data.topic); 
+    } catch (error) { console.error(error); }
+    setIsSuggesting(false);
+  };
+
+  // 2. جلب فكرة تريند شاملة (فيروسية)
+  const suggestViralTopic = async () => {
     setIsSuggesting(true);
     try {
       const res = await axios.get('http://localhost:5000/api/suggest-comparison-topic');
@@ -31,7 +41,6 @@ export default function TripleTemplateLab() {
     if (!topic) return alert('اكتب الموضوع أو اضغط على زر الإلهام أولاً!');
     setLoading(true); setShowReview(false); setPublishSuccess(false);
     try {
-      // 🚀 إرسال الطلب إلى المسار الجديد (generate-triple)
       const res = await axios.post('http://localhost:5000/api/generate-triple', { 
         topic, 
         count: slideCount, 
@@ -50,7 +59,7 @@ export default function TripleTemplateLab() {
     setLoading(false);
   };
 
-  // النشر (يستخدم نفس مسار النشر الموحد!)
+  // النشر
   const handlePublish = async () => {
     setPublishing(true);
     try {
@@ -88,23 +97,34 @@ export default function TripleTemplateLab() {
             <button onClick={() => setPlatform('both')} className={`flex-1 p-3 rounded-xl font-bold border-2 ${platform === 'both' ? 'bg-teal-600 border-transparent text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>كلاهما معاً</button>
           </div>
           
-          <div className="flex flex-col gap-3 mb-6 w-full">
+          <div className="flex flex-col gap-4 mb-6 w-full">
+            <input 
+              type="text" 
+              placeholder="عن ماذا ستتحدث؟ (مثال: توليد الفيديوهات)" 
+              className="w-full p-4 bg-slate-700/50 border border-slate-600 rounded-xl text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder:text-slate-500"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
+
+            {/* أزرار الإلهام الجديدة */}
             <div className="flex gap-2 w-full">
               <button 
-                onClick={suggestTopic} 
+                onClick={suggestBasicTopic} 
                 disabled={isSuggesting} 
-                className="bg-amber-500 hover:bg-amber-600 text-slate-900 p-3 rounded-lg font-bold transition-all flex items-center justify-center shrink-0 w-12 disabled:opacity-50"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 border border-slate-600"
               >
-                {isSuggesting ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                {isSuggesting ? <Loader2 size={18} className="animate-spin" /> : <Target size={18} />}
+                <span className="text-sm">إلهام بسيط</span>
               </button>
               
-              <input 
-                type="text" 
-                placeholder="عن ماذا ستتحدث؟ (مثال: توليد الفيديوهات)" 
-                className="flex-1 p-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all placeholder:text-slate-500"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-              />
+              <button 
+                onClick={suggestViralTopic} 
+                disabled={isSuggesting} 
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 p-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-amber-900/20"
+              >
+                {isSuggesting ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                <span className="text-sm">إلهام فيروسي</span>
+              </button>
             </div>
 
             <select

@@ -1,11 +1,11 @@
 import React from 'react';
-// قمت بإضافة أيقونة FlaskConical (دورق المختبر) لتناسب "مختبر القوالب"
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
   { id: 'trend-hub', name: 'مركز الترند والذكاء', icon: <TrendingUp size={20} /> },
-  { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> }, // 👈 تمت إضافة الصفحة الجديدة هنا بنجاح
+  { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> },
+  { id: 'triple-template-lab', name: 'المقارنة الثلاثية', icon: <Layers size={20} /> }, // 👈 تمت إضافة مسار الصفحة الجديدة هنا
   { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
   { id: 'history', name: 'أرشيف النشر', icon: <History size={20} /> },
   { id: 'settings', name: 'الإعدادات', icon: <Settings size={20} /> },
@@ -39,7 +39,7 @@ export default function MainLayout({ activeTab, setActiveTab, children }) {
         
         {/* توقيعك الشخصي في أسفل القائمة */}
         <div className="mt-auto pt-4 border-t border-gray-700 text-center">
-            <p className="text-xs text-gray-500 font-bold">م/ محمد الشريف غربي</p>
+            <p className="text-xs text-gray-500 font-bold">م/ غربي محمد الشريف</p>
         </div>
       </div>
 

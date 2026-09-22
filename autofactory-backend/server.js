@@ -601,11 +601,11 @@ const systemPrompt = `
         for (const currentPlatform of targetPlatforms) {
             const platformBatchId = `${batchId}_${currentPlatform}`;
             for (const slide of lessonData.slides) {
-                const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, platformBatchId, currentPlatform);
+                // ✅ الكود الجديد: تم تمرير المتغير topic للدالة
+                const fileName = await drawAiComparisonSlide(slide, lessonData.slides.length, platformBatchId, currentPlatform, topic);
                 generatedImages[currentPlatform].push(fileName);
             }
         }
-
         res.json({ 
             success: true, 
             igCaption: lessonData.igCaption,
@@ -748,50 +748,53 @@ app.post('/api/publish-omni', async (req, res) => {
 });
 
 // ==========================================
-// 💡 مسار إلهام أفكار المقارنات (Trend Suggestion - النسخة الموسوعية)
+// 💡 مسار إلهام أفكار المقارنة الثلاثية (Viral Growth Edition)
 // ==========================================
 app.get('/api/suggest-comparison-topic', async (req, res) => {
     try {
-        console.log('\n💡 جاري البحث عن فكرة مقارنة تريند موسوعية...');
+        console.log('\n💡 جاري هندسة فكرة تريند شاملة للمقارنة الثلاثية...');
         
-        const systemPrompt = `أنت خبير استراتيجي في صناعة المحتوى التقني الفيروسي (Growth Hacker) لعام 2026.
-        مهمتك استلهام فكرة واحدة فقط لمقارنة ساخنة ومثيرة للجدل بين "أدوات/أساليب تقليدية" و"أدوات/تقنيات ذكاء اصطناعي حديثة".
+        const systemPrompt = `أنت خبير "Growth Hacker" وصانع محتوى فيروسي تقني لعام 2026.
+        مهمتك إعطائي فكرة "موضوع" (Topic) واحد فقط لمقارنة ثلاثية (مبتدئ -> متوسط -> احترافي/خبير) أو (سيئ -> جيد -> أسطوري).
+        الهدف هو جذب ملايين المشاهدات والتفاعلات من خلال استهداف اهتمامات الجمهور التقني الواسع (المبرمجين، الطلاب، صناع المحتوى، والباحثين عن الإنتاجية).
+        الوصف يجب أن يكون دقيقاً، طويلاً نسبياً، ويشرح الفكرة بوضوح للذكاء الاصطناعي لكي يبني عليها المحتوى.
 
-        لضمان التنوع الشديد، يجب أن تختار عشوائياً في كل مرة "مجالاً واحداً فقط" من هذه القائمة الشاملة لتبني عليه الفكرة:
-        1. تطوير الويب المتكامل (Node.js, React, Express)
-        2. التداول الكمي والخوارزميات المالية (Python, Backtesting)
-        3. المونتاج، الموشن جرافيك (After Effects) وصناعة المحتوى
-        4. التعليق الصوتي والمعالجة الصوتية الاحترافية
-        5. تبسيط الخوارزميات والرياضيات البرمجية بأسلوب مدرسي ممتع
-        6. التلعيب (Gamification) وتطوير مشاريع مستوحاة من الألعاب والأنمي (مثل Solo Leveling)
-        7. عالم الهاردوير، تجميع الحواسيب، والمقارنات التقنية لقطع الـ PC
-        8. دمج البرمجة بالعالم المادي وإنترنت الأشياء (IoT، الكاميرات، تعديل الدراجات)
-        9. صحة المبرمج (الروتين الرياضي، رفع الأثقال، الانضباط، والمكملات مثل الكرياتين)
-        10. نماذج الذكاء الاصطناعي الكبيرة (LLMs) واستغلالها في أتمتة المهام
+        ⚠️ اختر الفكرة عشوائياً وبشكل مبتكر من هذه المجالات الواسعة:
+        1. مسارات ولغات البرمجة: (مثال: لغات تطوير الويب Full-stack، لغات تحليل البيانات، لغات بناء الذكاء الاصطناعي).
+        2. أدوات المطورين: (محررات الأكواد، منصات الاستضافة، أتمتة المهام).
+        3. الذكاء الاصطناعي التوليدي: (وكلاء AI، المحادثة، البحث، وتوليد الأكواد).
+        4. صناعة المحتوى والمونتاج: (تحرير الفيديو، المؤثرات الحركية Motion Graphics، التعليق الصوتي، استنساخ الصوت).
+        5. التعليم والتدريس: (أدوات وشروحات الرياضيات المتقدمة، تبسيط العلوم، تطبيقات تعلم اللغات الأجنبية).
+        6. الإنتاجية وتنظيم الحياة: (إدارة المشاريع، تدوين الملاحظات، الجدولة الذكية للوقت).
+        7. المال والأعمال: (أدوات التداول الكمي والتحليل المالي، منصات العمل الحر، إدارة المتاجر).
+        8. الصحة والروتين للمبرمجين: (تطبيقات الجيم وتتبع التمارين والأوزان، إدارة الدايت والمكملات، الانضباط اليومي).
 
-        تعليمات صارمة:
-        - اختر مجالاً واحداً فقط من القائمة أعلاه بشكل عشوائي تماماً في كل مرة يتم سؤالك.
-        - صغ فكرة المقارنة بحيث تكون محددة جداً وجذابة (مثال: "في واجهات React: الطريقة التقليدية ضد أداة v0" أو "في التداول الكمي: التحليل اليدوي ضد سكريبتات بايثون").
-        - يجب ألا تتجاوز الفكرة 12 كلمة.
-        
+        أمثلة لردود "فيروسية" ممتازة:
+        - "لغات البرمجة الأفضل لتطوير الويب وبناء تطبيقات كاملة (Full-stack)، من اللغات القديمة والمعقدة إلى مكتبات الجافاسكريبت الحديثة المطلوبة في سوق العمل."
+        - "أفضل اللغات والأدوات للتحليل المالي والتداول الكمي (Quant Trading)، من استخدام الجداول العادية إلى لغات البرمجة المتخصصة في تحليل البيانات الضخمة."
+        - "أدوات وتطبيقات المونتاج والموشن جرافيك، من التطبيقات الهاتفية البسيطة للمبتدئين إلى برامج الاستوديوهات الاحترافية."
+        - "الأساليب والأدوات الحديثة لتعلم وإتقان اللغة الإنجليزية، من الحفظ التلقيني الممل إلى معسكرات الذكاء الاصطناعي التفاعلية."
+        - "منصات تعليم وشرح الرياضيات للطلاب، من الطرق التقليدية إلى أدوات الذكاء الاصطناعي التفاعلية لحل المعادلات المعقدة."
+        - "تطبيقات تتبع التمارين الرياضية وبناء العضلات، من التسجيل الورقي العشوائي إلى المدرب الشخصي المدعوم بالذكاء الاصطناعي."
+
         رد بصيغة JSON فقط بهذا الهيكل:
         {
-          "topic": "اكتب الفكرة الجذابة هنا"
+          "topic": "اكتب الوصف التفصيلي الجذاب هنا"
         }`;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'استخرج لي فكرة مقارنة تريند الآن من أحد المجالات المذكورة.' }
+                // 👈 تم إضافة رسالة المستخدم لكي لا يرفض الموديل الطلب
+                { role: 'user', content: 'اقترح لي فكرة تريند شاملة للمقارنة الثلاثية الآن.' }
             ],
             model: 'qwen/qwen3.8-27b', 
-            temperature: 0.95, // حرارة شبه قصوى لضمان عدم تكرار نفس المجال
-            max_tokens: 150, // حماية من خطأ 429
+            temperature: 0.95, 
             response_format: { type: "json_object" }
         });
 
         const parsedData = JSON.parse(chatCompletion.choices[0].message.content);
-        console.log(`✅ تم اقتراح فكرة: ${parsedData.topic}`);
+        console.log(`✅ تم ابتكار فكرة: ${parsedData.topic}`);
         
         res.json({ success: true, topic: parsedData.topic });
 
@@ -802,19 +805,27 @@ app.get('/api/suggest-comparison-topic', async (req, res) => {
 });
  
 
-
+// ==========================================
+// 🚀 مسار توليد القالب الثلاثي المزدوج
+// ==========================================
 app.post('/api/generate-triple', async (req, res) => {
     const { topic, count, platform } = req.body; 
 
     try {
         console.log(`\n🤖 جاري توليد محتوى (قالب ثلاثي) عن: ${topic}`);
 
-        // تنبيه: تأكد أنك تستخدم مكتبة Groq هنا كما فعلنا سابقاً لضمان السرعة والتوحيد
         const systemPrompt = `
         أنت خبير في إنشاء محتوى إنستغرام وفيسبوك التقني الفيروسي لعام 2026.
-        الموضوع: ${topic}
-        المطلوب: توليد ${count} شرائح بنظام "المقارنة الثلاثية" (سيئ، جيد، احترافي).
+        بناءً على هذا الوصف التفصيلي للموضوع: "${topic}"
+        المطلوب: توليد ${count} شرائح بنظام "المقارنة الثلاثية" (أداة سيئة للمبتدئين، أداة جيدة، منصة احترافية للخبراء).
         
+        🚨🚨 شروط قاسية جداً لنجاح التصميم (إياك ومخالفتها):
+        1. حقل "title": هذا الحقل سيطبع في المربع البرتقالي أعلى الصورة. **يجب أن يكون قصيراً جداً (من كلمة إلى 3 كلمات كحد أقصى)** لكي لا يفسد التصميم!
+           - أمثلة صحيحة: "توليد الفيديوهات", "الصور الرمزية", "دراسة اللغات", "كتابة الأكواد", "الوكلاء الأذكياء".
+           - ممنوع كتابة جمل طويلة هنا.
+        2. الأدوات: يجب أن تكون أدوات حقيقية وموجودة. لا تكرر نفس الأداة في شرائح مختلفة أبداً.
+        3. الدومين (Domain): استخرج الرابط الرسمي القصير لكل أداة (مثال: canva.com).
+
         رد بصيغة JSON فقط بهذا الهيكل الدقيق:
         {
           "caption": "اكتب هنا نص المنشور الجذاب مع الهاشتاجات المناسبة...",
@@ -822,16 +833,16 @@ app.post('/api/generate-triple', async (req, res) => {
             {
               "slideNumber": 1,
               "type": "comparison",
-              "title": "عنوان المقارنة (مثال: توليد الفيديوهات)",
-              "badTool": "أداة سيئة",
+              "title": "عنوان قصير جداً (1-3 كلمات)",
+              "badTool": "اسم الأداة المبتدئة",
               "badToolDomain": "domain1.com",
-              "goodTool": "أداة جيدة",
+              "goodTool": "اسم الأداة الجيدة",
               "goodToolDomain": "domain2.com",
-              "proTool": "أداة احترافية",
+              "proTool": "اسم الأداة الاحترافية",
               "proToolDomain": "domain3.com",
               "nextTeaser": "NEXT"
             },
-            // ... (استمر حتى الشريحة ما قبل الأخيرة) ...
+            // ... (استمر حتى الشريحة ما قبل الأخيرة بنفس النمط) ...
             {
               "slideNumber": ${count},
               "type": "cta",
@@ -844,7 +855,7 @@ app.post('/api/generate-triple', async (req, res) => {
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: `ابدأ التوليد للموضوع: ${topic}` }
+                { role: 'user', content: `ابدأ التوليد بناءً على الموضوع المعطى وبألقاب قصيرة جداً للشرائح.` }
             ],
             model: 'qwen/qwen3.8-27b',
             temperature: 0.8,
@@ -854,25 +865,26 @@ app.post('/api/generate-triple', async (req, res) => {
         const contentData = JSON.parse(chatCompletion.choices[0].message.content);
         const batchId = Date.now();
         
-        // تجهيز الصور لكلا المنصتين (Review Studio)
         let finalImages = { instagram: [], facebook: [] };
 
         if (platform === 'instagram' || platform === 'both') {
             for (const slide of contentData.slides) {
-                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'instagram');
+                // 🚀 لاحظ إضافة المتغير topic في نهاية القوس هنا
+                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'instagram', topic);
                 finalImages.instagram.push(fileName);
             }
         }
 
         if (platform === 'facebook' || platform === 'both') {
             for (const slide of contentData.slides) {
-                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'facebook');
+                // 🚀 وإضافته هنا أيضاً لنسخة فيسبوك
+                const fileName = await drawTripleComparisonSlide(slide, count, batchId, 'facebook', topic);
                 finalImages.facebook.push(fileName);
             }
         }
 
         const igCaption = contentData.caption;
-        const fbCaption = contentData.caption + '\n\n🔗 روابط جميع الأدوات المذكورة في أول تعليق 👇';
+        const fbCaption = contentData.caption + '\n\n🔗 روابط جميع المنصات المذكورة في أول تعليق 👇';
 
         res.json({
             success: true,
@@ -886,5 +898,57 @@ app.post('/api/generate-triple', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// ==========================================
+// 💡 مسار إلهام أفكار المقارنة الثلاثية (Basic Edition - المطور ضد التكرار)
+// ==========================================
+app.get('/api/suggest-basic-topic', async (req, res) => {
+    try {
+        console.log('\n🎯 جاري جلب فكرة تريند بسيطة (بدون تكرار)...');
+        
+        // خدعة برمجية: توليد رقم عشوائي لحقنه في الطلب لكسر تكرار الذكاء الاصطناعي
+        const randomSeed = Math.floor(Math.random() * 1000000);
+
+        const systemPrompt = `أنت خبير محتوى تقني إبداعي. مهمتك إعطائي فكرة "واحدة فقط" لمقارنة ثلاثية بسيطة جداً ومباشرة.
+        الهدف هو فكرة قصيرة ومألوفة للجمهور العام (طولها من كلمتين إلى 5 كلمات كحد أقصى).
+        
+        🚨 قواعد صارمة ضد التكرار:
+        - إياك أن تكرر الأفكار الشائعة. أريد فكرة فريدة من نوعها في كل مرة.
+        - اختر بشكل عشوائي جداً من أحد هذه المجالات: (لغات البرمجة، محررات الأكواد، أدوات المونتاج، الذكاء الاصطناعي للصوت/الصور/الفيديو، أدوات الـ UI/UX، تطبيقات الإنتاجية، أنظمة التشغيل، متصفحات الويب).
+
+        أمثلة سريعة (لا تقم بنسخها أبداً، بل قِس عليها):
+        - "لغات تطوير تطبيقات الموبايل"
+        - "برامج هندسة وتعديل الصوت"
+        - "أدوات الذكاء الاصطناعي للرسم"
+        - "متصفحات الويب للمبرمجين"
+        - "تطبيقات تدوين الملاحظات"
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "topic": "الفكرة القصيرة جداً هنا"
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                // تمرير الرقم العشوائي يجبر الموديل على إعطاء استجابة مختلفة تماماً كل مرة
+                { role: 'user', content: `أعطني فكرة مقارنة ثلاثية بسيطة، قصيرة، وجديدة كلياً الآن. (مفتاح العشوائية: ${randomSeed})` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.98, // 👈 رفعنا الحرارة لأقصى درجة إبداع ممكنة
+            response_format: { type: "json_object" }
+        });
+
+        const parsedData = JSON.parse(chatCompletion.choices[0].message.content);
+        console.log(`✅ تم ابتكار فكرة بسيطة جديدة: ${parsedData.topic}`);
+        
+        res.json({ success: true, topic: parsedData.topic });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب الفكرة البسيطة:', error.message);
+        res.status(500).json({ success: false, error: 'فشل استلهام الفكرة البسيطة.' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));

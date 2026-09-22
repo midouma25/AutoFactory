@@ -201,7 +201,8 @@ async function drawToolBox(ctx, x, y, size, toolName, toolDomain, isGood) {
     wrapText(ctx, toolName, x + size / 2, y + 210, size - 20, 35);
 }
 
-async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'instagram') {
+// 🚀 تمت إضافة globalTopic كمعامل أخير
+async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'instagram', globalTopic = '') {
     const width = 1080;
     const height = 1350;
     const canvas = createCanvas(width, height);
@@ -222,7 +223,8 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
         ctx.lineWidth = 2;
         for(let i = 0; i < totalSlides; i++) {
             ctx.beginPath(); 
-            ctx.arc(startCX + (i * dotSpacing), 70, dotRadius, 0, Math.PI*2); 
+            // 🚀 تم رفع النقاط للأعلى لمنع التداخل مع العنوان
+            ctx.arc(startCX + (i * dotSpacing), 35, dotRadius, 0, Math.PI*2); 
             
             if (i + 1 === slide.slideNumber) {
                 ctx.fillStyle = '#0F766E';
@@ -273,18 +275,40 @@ async function drawAiComparisonSlide(slide, totalSlides, batchId, platform = 'in
     ctx.fillText("SAVE THE POST", saveX + 30, saveY);
     ctx.restore();
 
+    // --------------------------------------------------
+    // 🚀 3. رسم العنوان العام للمنشور (باستثناء الشريحتين الأخيرتين)
+    // --------------------------------------------------
+    if (globalTopic && slide.slideNumber <= totalSlides - 1) {
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.font = '24px "CairoRegularHack"'; 
+        ctx.fillStyle = '#94A3B8'; 
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const textWidth = ctx.measureText(globalTopic).width;
+        const centerX = width / 2;
+        const centerY = 95; // مناسب للابتعاد عن النقاط في إنستغرام
+        
+        ctx.fillText(globalTopic, centerX, centerY);
+        
+        ctx.strokeStyle = '#E2E8F0'; 
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(centerX - textWidth/2 - 25, centerY); ctx.lineTo(centerX - textWidth/2 - 10, centerY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(centerX + textWidth/2 + 10, centerY); ctx.lineTo(centerX + textWidth/2 + 25, centerY); ctx.stroke();
+        ctx.restore();
+    }
+
     // ==========================================
     // شريحة المقارنة
     // ==========================================
     if (slide.type === 'comparison') {
-        // 🚀 تعديل الحجم إلى 85 ليكون أضخم وأكثر جاذبية
         ctx.font = '85px "CairoBoldHack"'; 
         
         ctx.shadowColor = 'rgba(0,0,0,0.15)'; 
         ctx.shadowBlur = 10; 
         ctx.shadowOffsetY = 5;
         
-        // 🚀 استخدام الدالة الذكية لطباعة العنوان وتلوين الكلمة الأخيرة باللون الأحمر الفاقع
         drawSmartTitleRTL(ctx, slide.title, width / 2, 230, 950, 110, '#0F172A', '#EF4444');
         
         ctx.shadowColor = 'transparent';
