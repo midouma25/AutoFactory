@@ -1,11 +1,12 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers } from 'lucide-react';
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map } from 'lucide-react'; // 👈 أضفنا أيقونة Map
 
 const menuItems = [
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
   { id: 'trend-hub', name: 'مركز الترند والذكاء', icon: <TrendingUp size={20} /> },
   { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> },
-  { id: 'triple-template-lab', name: 'المقارنة الثلاثية', icon: <Layers size={20} /> }, // 👈 تمت إضافة مسار الصفحة الجديدة هنا
+  { id: 'triple-template-lab', name: 'المقارنة الثلاثية', icon: <Layers size={20} /> },
+  { id: 'roadmap-lab', name: 'صانع الخطوات', icon: <Map size={20} /> }, // 👈 المسار الجديد لخرائط الطريق
   { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
   { id: 'history', name: 'أرشيف النشر', icon: <History size={20} /> },
   { id: 'settings', name: 'الإعدادات', icon: <Settings size={20} /> },
@@ -44,7 +45,7 @@ export default function MainLayout({ activeTab, setActiveTab, children }) {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-8 overflow-y-auto">
+      <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-8">
           <h2 className="text-3xl font-bold text-gray-100 flex items-center gap-3">
             {menuItems.find(i => i.id === activeTab)?.icon}

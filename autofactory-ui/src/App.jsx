@@ -4,7 +4,7 @@ import PromptStudio from './pages/PromptStudio';
 import TrendHub from './pages/TrendHub'; 
 import TemplateLab from './pages/TemplateLab'; // أو مسار الملف الصحيح
 import TripleTemplateLab from './pages/TripleTemplateLab'; // أو مسار الملف الصحيح
-
+import RoadmapLab from './pages/RoadmapLab'; // تأكد من مسار الملف
 function App() {
   const [activeTab, setActiveTab] = useState('trend-hub');
 
@@ -18,6 +18,8 @@ function App() {
         return <TemplateLab setActiveTab={setActiveTab} />;
       case 'triple-template-lab':
         return <TripleTemplateLab setActiveTab={setActiveTab} />;
+      case 'roadmap-lab':
+        return <RoadmapLab setActiveTab={setActiveTab} />;
       case 'history':
       case 'dashboard':
       case 'settings':
