@@ -1192,9 +1192,10 @@ const chatCompletion = await groq.chat.completions.create({
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `الموضوع: ${topic}` }
             ],
-            model: 'openai/gpt-oss-20b', // أو النموذج الذي تستخدمه حالياً
-            max_tokens: 2500, // 👈 السر هنا: ارفع هذا الرقم لتعطيه مساحة كافية ليكمل الـ JSON
+            model: 'qwen/qwen3.8-27b', // استخدم هذا النموذج فهو ممتاز ويدعم نصوصاً أطول
+            max_tokens: 6000, // 👈 قمنا برفع الحد الأقصى بشكل كبير جداً لمنع الانقطاع
             temperature: 0.7,
+            response_format: { type: "json_object" } // 👈 أضفنا هذا لضمان إرجاع JSON
         });
 
 // 🧹 استخراج JSON بقوة من أي مكان في النص
@@ -1239,25 +1240,55 @@ const magicPrompt = `
    - أضف ظلالاً أرضية (Drop Shadow) خفيفة أو توهجاً (Glow) حول المجسم ليفصله عن الخلفية الداكنة باحترافية.
    - لا تقم بتغيير، مسح، أو تشويه أي نص موجود في الصورة أو صورتي الشخصية الموجودة بالأسفل.
 `;
+// ... (داخل مسار /api/generate-roadmap)
         console.log("\n✨ ======================================= ✨");
         console.log("🎨 [البرومبت السحري لإكمال الشريحة الأولى عبر Gemini]:");
         console.log(magicPrompt);
         console.log("✨ ======================================= ✨\n");
         const batchId = Date.now(); 
-        const generatedImages = [];
+        
+        // 🚀 تعديل: يجب أن نرسل كائناً يحتوي على مصفوفتين (واحدة للفيسبوك وأخرى للإنستغرام) 
+        // لتطابق الهيكل الذي تتوقعه الواجهة الأمامية (RoadmapLab.jsx)
+        const generatedImages = { instagram: [], facebook: [] };
 
-        for (const slide of roadmapData.slides) {
-            // نمرر الـ topic في النهاية لكي يظهر كعنوان رئيسي في أعلى الصورة
-            const fileName = await drawAiRoadmapSlide(slide, roadmapData.slides.length, batchId, platform, topic);
-            generatedImages.push(fileName);
+        // تحديد المنصات المطلوبة
+        const targetPlatforms = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+
+        // حلقة تكرار للمنصات
+        for (const currentPlatform of targetPlatforms) {
+            const platformBatchId = `${batchId}_${currentPlatform}`;
+            
+            // حلقة تكرار لرسم الشرائح الخاصة بكل منصة
+            for (const slide of roadmapData.slides) {
+                const fileName = await drawAiRoadmapSlide(
+                    slide, 
+                    roadmapData.slides.length, 
+                    platformBatchId, 
+                    currentPlatform, 
+                    topic
+                );
+                
+                // إضافة الصورة للمنصة المناسبة
+                generatedImages[currentPlatform].push(fileName);
+            }
         }
-        console.log(`✅ تم تصميم ${generatedImages.length} شرائح لخريطة الطريق بنجاح!`);
-        res.json({ success: true, caption: roadmapData.caption, images: generatedImages });
+
+        console.log(`✅ تم تصميم شرائح خريطة الطريق بنجاح!`);
+        
+        // إرسال البيانات للواجهة: نرسل الـ caption والـ magicPrompt مع الصور
+        res.json({ 
+            success: true, 
+            caption: roadmapData.caption, 
+            magicPrompt: magicPrompt, // 👈 تمرير البرومبت السحري للواجهة
+            images: generatedImages // 👈 الهيكل الجديد للصور (كائن يحتوي على مصفوفتين)
+        });
 
     } catch (error) {
         console.error('❌ خطأ في توليد خريطة الطريق:', error);
         res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
     }
 });
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));

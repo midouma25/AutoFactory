@@ -335,13 +335,7 @@ async function drawAiRoadmapSlide(slide, totalSlides, batchId, platform = 'insta
     // 🎨 شريحة الخطاف (Hook - الصفحة الأولى)
     // ==========================================
 if (slideType === 'hook') {
-        // 1. خلفية بيضاء نقية مع ظل خفيف في الأسفل (كما في المثال)
-        const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-        bgGrad.addColorStop(0, '#0F172A'); 
-        bgGrad.addColorStop(0.8, '#0F172A'); 
-        bgGrad.addColorStop(1, '#0F172A'); 
-        ctx.fillStyle = bgGrad; 
-        ctx.fillRect(0, 0, width, height);
+
 
         // 2. زر الحفظ (Save the Post) في أعلى اليسار
         ctx.save();
@@ -388,32 +382,35 @@ if (slideType === 'hook') {
         // الخدعة: يمكننا استخدام دالة رسم النصوص المختلطة التي برمجناها سابقاً، 
         // أو دالة wrapText العادية، مع إضافة لون مختلف لاسم الأداة (toolName)
         textY = wrapText(ctx, slide.title, width/2, textY, 950, 100); 
-
-        // 6. زر السحب للبدء (نفس تصميم الصورة المرجعية تقريباً)
-        const btnY = 1180;
-        let actionText = "NEXT";
-        
+// ------------------------------------------
+        // 6. مؤشر الحركة (The Action Cue) الديناميكي
+        // ------------------------------------------
+        const btnY = 1100; // قللنا الرقم ليرتفع الزر للأعلى (يمكنك تغييره لـ 1080 إذا أردته أعلى أكثر)
         ctx.save();
-        ctx.font = 'bold 30px "CairoBoldHack"';
+        
+        // تحديد النص بناءً على المنصة
+        let actionText = platform === 'facebook' ? "اضغط على الصور للتفاصيل 👆" : "اسحب للبدء 👉";
+        
+        ctx.font = 'bold 32px "CairoBoldHack"';
+        const textWidth = ctx.measureText(actionText).width;
+        
+        // حساب أبعاد الزر بناءً على طول النص (ديناميكي)
+        const paddingX = 50;
+        const btnWidth = textWidth + (paddingX * 2);
+        const btnHeight = 75;
+        
+        // توسيط الزر في المنتصف السفلي تماماً
+        const btnX = (width / 2) - (btnWidth / 2);
+        
+        // رسم خلفية الزر (أخضر فاقع للفت الانتباه مع ظل خفيف)
+        drawRoundedRect(ctx, btnX, btnY - (btnHeight / 2), btnWidth, btnHeight, 35, '#10B981', true);
+        
+        // رسم النص داخل الزر (بلون كحلي داكن لتباين بصري يريح العين)
         ctx.fillStyle = '#0F172A';
-        ctx.textAlign = 'right';
-        ctx.fillText(actionText, width - 120, btnY + 10);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(actionText, width / 2, btnY);
         
-        // رسم أيقونة السهم داخل دائرة
-        ctx.beginPath();
-        ctx.arc(width - 70, btnY, 30, 0, Math.PI * 2);
-        ctx.strokeStyle = '#0F172A';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // رسم السهم
-        ctx.beginPath();
-        ctx.moveTo(width - 85, btnY);
-        ctx.lineTo(width - 55, btnY);
-        ctx.lineTo(width - 65, btnY - 10);
-        ctx.moveTo(width - 55, btnY);
-        ctx.lineTo(width - 65, btnY + 10);
-        ctx.stroke();
         ctx.restore();
     }
 
@@ -423,16 +420,37 @@ if (slideType === 'hook') {
     // ==========================================
     else if (slideType === 'step') {
         
-        // زر الحفظ يظهر فقط في الخطوات
+// ------------------------------------------
+        // زر الحفظ (تم نقله للأسفل يميناً لعمل توازن بصري)
+        // ------------------------------------------
         ctx.save();
-        const saveX = 60; const saveY = 80; 
+        
+        // تحديد موقع الزر: مقابل للفوتر الشخصي (height - 80) ومحاذٍ للطرف الأيمن للمستطيل
+        const saveY = height - 80; 
+        
+        ctx.direction = 'ltr'; 
+        ctx.font = 'bold 24px "CairoBoldHack"'; 
+        const textWidth = ctx.measureText("SAVE THE POST").width;
+        
+        // محاذاة النص مع الحافة اليمنى للمستطيل الداكن (التي تنتهي عند 1000 بكسل)
+        const textEndX = 1000; 
+        const saveX = textEndX - textWidth - 35; // 35 هي مسافة الأيقونة والفراغ
+        
+        // رسم الأيقونة (Ribbon)
         ctx.beginPath();
-        ctx.moveTo(saveX, saveY - 14); ctx.lineTo(saveX + 18, saveY - 14);
-        ctx.lineTo(saveX + 18, saveY + 16); ctx.lineTo(saveX + 9, saveY + 8);
-        ctx.lineTo(saveX, saveY + 16); ctx.closePath();
-        ctx.fillStyle = '#94A3B8'; ctx.fill();
-        ctx.direction = 'ltr'; ctx.font = 'bold 22px "CairoBoldHack"'; ctx.fillStyle = '#94A3B8';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.moveTo(saveX, saveY - 14); 
+        ctx.lineTo(saveX + 18, saveY - 14);
+        ctx.lineTo(saveX + 18, saveY + 16); 
+        ctx.lineTo(saveX + 9, saveY + 8);
+        ctx.lineTo(saveX, saveY + 16); 
+        ctx.closePath();
+        ctx.fillStyle = '#94A3B8'; 
+        ctx.fill();
+        
+        // رسم النص
+        ctx.fillStyle = '#94A3B8';
+        ctx.textAlign = 'left'; 
+        ctx.textBaseline = 'middle';
         ctx.fillText("SAVE THE POST", saveX + 30, saveY);
         ctx.restore();
 
