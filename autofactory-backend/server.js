@@ -17,6 +17,7 @@ app.use(cors());
 app.use(express.json());
 const drawAiComparisonSlide = require('./templates/ai_comparison');
 const drawTripleComparisonSlide = require('./templates/triple_comparison');
+const drawAiRoadmapSlide = require('./templates/ai_roadmap'); // 👈 استدعاء رسام خرائط الطريق
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // إعداد Cloudinary
@@ -949,6 +950,314 @@ app.get('/api/suggest-basic-topic', async (req, res) => {
         res.status(500).json({ success: false, error: 'فشل استلهام الفكرة البسيطة.' });
     }
 });
+// ==========================================
+// 🚀 مسار توليد أفكار خرائط الطريق (Step-by-Step Roadmaps)
+// ==========================================
+app.post('/api/suggest-roadmap-topic', async (req, res) => {
+    try {
+        const { topic } = req.body; // نأخذ الفكرة من الواجهة (مثال: "بناء روبوت تداول")
 
+        const systemPrompt = `
+        أنت خبير تقني محترف ومصمم محتوى تعليمي تسلسلي.
+        مهمتك هي تقسيم موضوع المستخدم إلى "خريطة طريق" (Roadmap) عملية تتكون من 5 أو 6 خطوات متسلسلة بدقة.
+        
+        شروط توليد المحتوى:
+        1. كل خطوة يجب أن تقترح "أداة تقنية"، "برنامج"، أو "لغة برمجة" محددة (مثل: Python, Vercel, Claude, Make.com).
+        2. تجنب ذكر نفس الأداة في أكثر من خطوة.
+        3. اكتب عنواناً صغيراً يعبر عن "دور" الخطوة (مثال: "العقل المدبر"، "تحليل البيانات"، "بيئة التطوير").
+        4. اكتب شرحاً عملياً ومختصراً (جملة واحدة قوية) لما يجب فعله في هذه الخطوة.
+        5. يجب أن يكون السرد تصاعدياً ومنطقياً (من الصفر حتى النتيجة النهائية).
+        
+        استخدم هيكل JSON التالي بالضبط:
+        {
+          "title": "عنوان جذاب للبوست (مثال: كيف تبني روبوت تداول في 5 خطوات)",
+          "steps": [
+            {
+              "stepNumber": 1,
+              "role": "دور الخطوة (مثال: التخطيط والهيكلة)",
+              "toolName": "اسم الأداة (مثال: ChatGPT)",
+              "description": "وصف الخطوة بوضوح وإيجاز."
+            },
+            ... (أكمل باقي الخطوات)
+          ]
+        }
+        `;
+
+        let userPrompt = "اقترح لي خريطة طريق تريند وشاملة الآن.";
+        if (topic) {
+            userPrompt = `قم بتوليد خريطة طريق عملية متسلسلة حول هذا الموضوع: ${topic}`;
+        }
+
+        console.log(`\n💡 جاري توليد خريطة طريق متسلسلة للموضوع: ${topic || 'فكرة عامة'}...`);
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            model: 'qwen/qwen3.8-27b', // يمكنك تغيير الموديل إذا لزم الأمر
+            temperature: 0.9,
+            response_format: { type: "json_object" }
+        });
+
+// 🧹 استخراج JSON بقوة من أي مكان في النص (يتجاهل الثرثرة وعلامات Markdown)
+        const rawContent = chatCompletion.choices[0].message.content;
+        let cleanJson = "";
+
+        try {
+            // 1. محاولة التقاط ما بين علامات ```json و ```
+            const jsonBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            
+            if (jsonBlockMatch && jsonBlockMatch[1]) {
+                cleanJson = jsonBlockMatch[1].trim();
+            } else {
+                // 2. إذا لم تكن هناك علامات، نبحث عن أول { وأخر }
+                const jsonObjectMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonObjectMatch) {
+                    cleanJson = jsonObjectMatch[0].trim();
+                } else {
+                    throw new Error("لم يتم العثور على هيكل JSON صالح في الرد.");
+                }
+            }
+
+            // الآن نقوم بفك التشفير بأمان تام
+            const roadmapData = JSON.parse(cleanJson);
+            
+            console.log('✅ تم توليد وفك تشفير خريطة الطريق بنجاح!');
+            
+            // إرسال البيانات الناجحة إلى الواجهة الأمامية
+            res.json(roadmapData);
+
+        } catch (parseError) {
+            console.error("❌ فشل ذريع في استخراج أو قراءة JSON:", parseError.message);
+            console.error("النص الخام الذي أعطاه الذكاء الاصطناعي كان:\n", rawContent);
+            return res.status(500).json({ error: 'الذكاء الاصطناعي أرجع تنسيقاً غير مفهوم.' });
+        }
+
+    } catch (error) {
+        console.error('❌ خطأ في الاتصال بالذكاء الاصطناعي:', error.response?.status, error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء الاتصال بالذكاء الاصطناعي' });
+    }
+});
+// ==========================================
+// 💡 مسار إلهامات خرائط الطريق (Roadmap Inspirations) - [مع رادار التريند اليومي]
+// ==========================================
+app.post('/api/inspire-roadmap', async (req, res) => {
+    try {
+        const { type } = req.body; 
+
+        // 🎲 مصفوفة المجالات الشاملة للإلهام العادي والفيروسي
+        const niches = [
+            "تطوير الويب وهندسة البرمجيات (MERN, React, Node.js)",
+            "التداول الكمي والخوارزميات (Python, Backtesting, Data Analysis)",
+            "الذكاء الاصطناعي وأتمتة المهام (Make.com, AI Agents)",
+            "الموشن جرافيك وتحرير الفيديو (Adobe After Effects, AI Tools)",
+            "منهجيات تعلم اللغات والإنجليزية التقنية (برامج الانغماس)",
+            "تعليم الرياضيات وأتمتة الجداول المدرسية (شرح تفاعلي, خوارزميات جدولة)",
+            "روتين المبرمج الصحي (رفع الأثقال، المكملات الرياضية، التركيز الذهني)",
+            "بناء منتجات SaaS وريادة الأعمال التقنية",
+            "عالم الهاردوير (تجميع الـ PC) وصيانة الأجهزة",
+            "الأمن السيبراني وحماية تطبيقات الويب"
+        ];
+
+        const selectedNiche = niches[Math.floor(Math.random() * niches.length)];
+        let promptInstructions = "";
+        
+        if (type === 'viral') {
+            promptInstructions = `أنت خبير Growth Hacking على إنستغرام لعام 2026.
+            أعطني عنواناً فيروسياً واحداً فقط لـ "خريطة طريق" (Step-by-Step).
+            يجب أن يخلق العنوان فضولاً شديداً (FOMO) ويوحي بحل سحري.
+            ⚠️ المجال الإجباري: "${selectedNiche}".
+            التعليمات الصارمة: لا تكتب أي مقدمات، لا تضع علامات تنصيص. اكتب العنوان فقط.`;
+            
+        } else if (type === 'trend') {
+            // 🚀 النمط الجديد: رادار التريند اليومي
+            const today = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+            
+            promptInstructions = `أنت محلل بيانات (Trend Analyst) تقني وتعليمي.
+            تاريخ اليوم هو: ${today}.
+            مهمتك هي تحديد موضوع "رائج جداً" (Trending) يُحدث ضجة في مجتمعات المطورين أو المتعلمين هذا الأسبوع، وكتابة عنوان لـ "خريطة طريق" متسلسلة تشرح هذا التريند.
+            
+            يمكنك اختيار تريند يتعلق بـ:
+            - مكتبة بايثون أو أداة تحليل بيانات انفجرت شعبيتها مؤخراً.
+            - تحديث ثوري في أطر عمل الويب (React, Node.js, Express).
+            - أداة ذكاء اصطناعي جديدة غيرت قواعد اللعبة في تحرير الفيديو (After Effects).
+            - تطبيق أو منهجية حديثة جداً لاكتساب اللغة الإنجليزية بسرعة.
+            
+            أمثلة للنمط:
+            - "خريطة طريق لإتقان مكتبة الـ AI الجديدة التي يتحدث عنها الجميع في بايثون اليوم."
+            - "كيف تستغل تحديث React الأخير لبناء تطبيقاتك في 5 خطوات."
+            
+            التعليمات الصارمة: لا تكتب أي مقدمات، لا تضع علامات تنصيص. اكتب العنوان فقط.`;
+            
+        } else {
+            promptInstructions = `أنت أستاذ أكاديمي ومهندس محترف.
+            أعطني عنواناً تعليمياً وعملياً واحداً فقط لـ "خريطة طريق" (Step-by-Step) تفيد المتابعين في التطبيق المباشر.
+            ⚠️ المجال الإجباري: "${selectedNiche}".
+            التعليمات الصارمة: لا تكتب أي مقدمات، لا تضع علامات تنصيص. اكتب العنوان بصيغة دليل أو خطوات.`;
+        }
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: promptInstructions },
+                { role: 'user', content: "أعطني العنوان الآن بناءً على التعليمات المحددة." }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: type === 'trend' ? 0.9 : 0.8, // حرارة أعلى للتريند لزيادة الإبداع
+        });
+
+        const idea = chatCompletion.choices[0].message.content.trim().replace(/["'*]/g, "");
+        
+        console.log(`✨ تم توليد إلهام خريطة طريق (${type}):`, idea);
+        res.json({ success: true, idea });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب الإلهام:', error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء جلب الإلهام.' });
+    }
+});
+
+// ==========================================
+// 🗺️ مسار توليد وتصميم خرائط الطريق (Roadmap Generator)
+// ==========================================
+app.post('/api/generate-roadmap', async (req, res) => {
+    const { topic, platform, slideCount } = req.body;
+    const count = slideCount || 6; // الافتراضي 6 شرائح
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع.' });
+
+    try {
+        console.log(`\n🗺️ جاري تفكيك وتصميم خريطة طريق لموضوع: ${topic} بعدد (${count}) شرائح...`);
+
+    const systemPrompt = `
+        أنت خبير 'Growth Hacking' تقني واستشاري ذكاء اصطناعي محترف لعام 2026.
+        مهمتك تصميم "خريطة طريق" (Roadmap) عملية، سريعة، ومصممة لتكون "فيروسية" (Viral) وتنتشر كالفيضان.
+        
+        ⚠️ كسر القيود (العدد الديناميكي للشرائح):
+        لا تتقيد بعدد ثابت من الشرائح! قم بتقسيم الدرس إلى العدد الذي يراه عقلك مناسباً لتغطية الموضوع باحترافية تامة (من 5 إلى 15 شريحة، أو أكثر إذا تطلب الأمر ذلك) لضمان عدم وجود حشو، مع تغطية كل الخطوات اللازمة.
+        
+        🔥 أسرار الانتشار (قواعد صارمة جداً إياك مخالفتها):
+        1. شريحة الخطاف (hook) (الشريحة رقم 1):
+           - العنوان (title): يجب أن يكون صادماً، يلعب على الفضول (5-7 كلمات).
+           - الوصف (explanation): جملة تشويقية سيكولوجية تدفع المتابع للسحب فوراً (12 كلمة كحد أقصى).
+        
+        2. شرائح الخطوات (step) (باقي الشرائح في الوسط):
+           - اسم الأداة (toolName): 🚨 حرج جداً 🚨 يجب أن يكون "كلمة واحدة فقط" وبدون فلسفة (اكتب React وليس React.js / اكتب Node وليس Node+Express).
+           - الوصف (explanation): لا تعطني تعريفاً مملاً! أعطني "الزبدة والفائدة العملية" في جملة واحدة قوية (15 كلمة كحد أقصى).
+           - الدومين (toolDomain): استخرج الدومين الرسمي للأداة لنجلب اللوجو (مثال: react.dev).
+
+        3. شريحة الختام (cta) (الشريحة الأخيرة دائماً): 
+           - يجب أن تكون الشريحة الأخيرة دائماً وأساساً من نوع "cta".
+        
+        4. تأكد بنسبة 1000% أن الرد هو JSON صالح (Valid JSON) تماماً.
+        
+        رد بصيغة JSON فقط بهذا الهيكل الدقيق:
+        {
+          "caption": "اكتب كابشن تسويقي جذاب جداً، يبدأ بسؤال قوي، يليه شرح بسيط، وينتهي بطلب التعليق (CTA) مع 5 هاشتاجات قوية.",
+          "slides": [
+            {
+              "slideNumber": 1,
+              "type": "hook",
+              "title": "عنوان فيروسي خاطف للأنظار",
+              "searchKeyword": "3d programming laptop",
+              "toolName": "",
+              "toolDomain": "",
+              "explanation": "وصف نفسي مشوق يسحب القارئ.",
+              "nextTeaser": "اسحب للبدء 👉"
+            },
+            {
+              "slideNumber": 2,
+              "type": "step",
+              "title": "اسم الخطوة العملية",
+              "toolName": "كلمة_واحدة_فقط",
+              "toolDomain": "domain.com",
+              "explanation": "فائدة الأداة العملية والسرية في جملة مختصرة وقوية.",
+              "nextTeaser": "الخطوة التالية؟"
+            },
+            // ... (أضف هنا العدد الذي تحتاجه من الشرائح الوسطى بناءً على عمق الموضوع: 3، 4، 5، 6، 7، 8، 9...)
+            {
+              "slideNumber": 99, // (اكتب هنا الرقم التسلسلي الأخير الفعلي)
+              "type": "cta",
+              "title": "الختام",
+              "toolName": "",
+              "toolDomain": "",
+              "explanation": "",
+              "nextTeaser": ""
+            }
+          ]
+        }`;
+
+const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `الموضوع: ${topic}` }
+            ],
+            model: 'openai/gpt-oss-20b', // أو النموذج الذي تستخدمه حالياً
+            max_tokens: 2500, // 👈 السر هنا: ارفع هذا الرقم لتعطيه مساحة كافية ليكمل الـ JSON
+            temperature: 0.7,
+        });
+
+// 🧹 استخراج JSON بقوة من أي مكان في النص
+        const rawContent = chatCompletion.choices[0].message.content;
+        let cleanJson = "";
+        let roadmapData;
+
+        try {
+            const jsonBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            
+            if (jsonBlockMatch && jsonBlockMatch[1]) {
+                cleanJson = jsonBlockMatch[1].trim();
+            } else {
+                const jsonObjectMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonObjectMatch) {
+                    cleanJson = jsonObjectMatch[0].trim();
+                } else {
+                    throw new Error("لم يتم العثور على هيكل JSON صالح في الرد.");
+                }
+            }
+
+            roadmapData = JSON.parse(cleanJson);
+            
+        } catch (parseError) {
+            console.error('❌ فشل في فك تشفير JSON. الذكاء الاصطناعي أرسل صيغة خاطئة:\n', rawContent);
+            return res.status(500).json({ error: 'الذكاء الاصطناعي أنتج بيانات غير صالحة. حاول مرة أخرى.' });
+        }
+// --- إضافة البرومبت السحري ---
+        // استبدل req.body.topic بالمتغير الذي يحمل اسم موضوعك الأساسي في مسارك
+        const topicForPrompt = req.body.topic || "الموضوع المذكور في الشريحة"; 
+
+const magicPrompt = `
+إليك صورة غلاف لمنشور كاروسيل (Carousel) غير مكتملة بخلفية داكنة (Dark Mode). 
+موضوع المنشور هو: "${topicForPrompt}".
+
+مهمتك هي العمل كخبير دمج وتصميم ثلاثي الأبعاد (3D Artist & Compositor):
+1. قم بتوليد عنصر 3D أيقوني، فخم، وحديث يعبر بدقة عن هذا الموضوع.
+2. يجب أن يكون العنصر 3D معزولاً ومركّزاً ببراعة في "المساحة الفارغة" الموجودة في منتصف الصورة.
+3. **قواعد صارمة جداً لتناسب الوضع الداكن:**
+   - حافظ على لون الخلفية الداكن الأصلي (لا تقم بتفتيحه أو إضافة سماء أو خلفيات معقدة).
+   - اجعل إضاءة العنصر الـ 3D (Lighting) تتناسب مع البيئة الداكنة لتبدو سينمائية وجذابة.
+   - أضف ظلالاً أرضية (Drop Shadow) خفيفة أو توهجاً (Glow) حول المجسم ليفصله عن الخلفية الداكنة باحترافية.
+   - لا تقم بتغيير، مسح، أو تشويه أي نص موجود في الصورة أو صورتي الشخصية الموجودة بالأسفل.
+`;
+        console.log("\n✨ ======================================= ✨");
+        console.log("🎨 [البرومبت السحري لإكمال الشريحة الأولى عبر Gemini]:");
+        console.log(magicPrompt);
+        console.log("✨ ======================================= ✨\n");
+        const batchId = Date.now(); 
+        const generatedImages = [];
+
+        for (const slide of roadmapData.slides) {
+            // نمرر الـ topic في النهاية لكي يظهر كعنوان رئيسي في أعلى الصورة
+            const fileName = await drawAiRoadmapSlide(slide, roadmapData.slides.length, batchId, platform, topic);
+            generatedImages.push(fileName);
+        }
+        console.log(`✅ تم تصميم ${generatedImages.length} شرائح لخريطة الطريق بنجاح!`);
+        res.json({ success: true, caption: roadmapData.caption, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد خريطة الطريق:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
+    }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
