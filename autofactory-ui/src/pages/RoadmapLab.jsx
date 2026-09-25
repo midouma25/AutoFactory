@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Copy, CheckCircle2, Wand2, Share2, ImageIcon } from 'lucide-react'; // استيراد أيقونات أنيقة
-
+import { Copy, CheckCircle2, Wand2, Share2, ImageIcon, Smartphone, Globe } from 'lucide-react';
 const RoadmapLab = () => {
   const [platform, setPlatform] = useState('instagram');
   const [topic, setTopic] = useState('');
@@ -9,10 +8,14 @@ const RoadmapLab = () => {
   const [isInspiring, setIsInspiring] = useState(false); 
   const [images, setImages] = useState([]); 
   
-  // 🚀 حالات جديدة لتخزين النصوص الوصفية والبرومبت السحري
-  const [caption, setCaption] = useState('');
+  // 🚀 حالات مخصصة لكل وصف بشكل منفصل
+  const [igCaption, setIgCaption] = useState('');
+  const [fbCaption, setFbCaption] = useState('');
   const [magicPrompt, setMagicPrompt] = useState('');
-  const [copiedCaption, setCopiedCaption] = useState(false);
+  
+  // حالات أزرار النسخ
+  const [copiedIgCaption, setCopiedIgCaption] = useState(false);
+  const [copiedFbCaption, setCopiedFbCaption] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   // دالة النسخ مع تغيير حالة الزر مؤقتاً
@@ -45,8 +48,9 @@ const RoadmapLab = () => {
   const handleGenerate = async () => {
     setIsLoading(true);
     setImages([]); 
-    setCaption(''); // تصفير النص القديم
-    setMagicPrompt(''); // تصفير البرومبت القديم
+    setIgCaption(''); // تصفير وصف IG
+    setFbCaption(''); // تصفير وصف FB
+    setMagicPrompt(''); // تصفير البرومبت
 
     try {
       const res = await axios.post('http://localhost:5000/api/generate-roadmap', { 
@@ -56,14 +60,17 @@ const RoadmapLab = () => {
       });
       
       if (res.data.success) {
-setImages([
-    ...(res.data.images.instagram || []), 
-    ...(res.data.images.facebook || [])
-]);        
-        // 🚀 استقبال النص الوصفي من السيرفر
-        setCaption(res.data.caption || 'لم يتم توليد وصف لهذه الخريطة.');
+        // جمع الصور من المنصتين وعرضها
+        setImages([
+            ...(res.data.images.instagram || []), 
+            ...(res.data.images.facebook || [])
+        ]);        
         
-        // 🚀 توليد البرومبت السحري تلقائياً بناءً على الموضوع الذي تم إدخاله
+        // 🚀 استقبال النصوص الوصفية (إن لم يرسل السيرفر ig/fb سيستخدم caption العادي كاحتياطي)
+        setIgCaption(res.data.igCaption || res.data.caption || 'لم يتم توليد وصف لإنستغرام.');
+        setFbCaption(res.data.fbCaption || res.data.caption || 'لم يتم توليد وصف لفيسبوك.');
+        
+        // 🚀 توليد البرومبت السحري 
         const generatedPrompt = `إليك صورة غلاف لمنشور كاروسيل (Carousel) غير مكتملة بخلفية داكنة (Dark Mode).\nموضوع المنشور هو: "${topic}".\n\nمهمتك هي العمل كخبير دمج وتصميم ثلاثي الأبعاد (3D Artist & Compositor):\n1. قم بتوليد عنصر 3D أيقوني، فخم، وحديث يعبر بدقة عن هذا الموضوع.\n2. يجب أن يكون العنصر 3D معزولاً ومركّزاً ببراعة في "المساحة الفارغة" الموجودة في منتصف الصورة.\n3. **قواعد صارمة جداً لتناسب الوضع الداكن:**\n   - حافظ على لون الخلفية الداكن الأصلي (لا تقم بتفتيحه أو إضافة سماء أو خلفيات معقدة).\n   - اجعل إضاءة العنصر الـ 3D (Lighting) تتناسب مع البيئة الداكنة لتبدو سينمائية وجذابة.\n   - أضف ظلالاً أرضية (Drop Shadow) خفيفة أو توهجاً (Glow) حول المجسم ليفصله عن الخلفية الداكنة باحترافية.\n   - لا تقم بتغيير، مسح، أو تشويه أي نص موجود في الصورة أو صورتي الشخصية الموجودة بالأسفل.`;
         setMagicPrompt(res.data.magicPrompt || generatedPrompt);
       }
@@ -156,36 +163,54 @@ setImages([
             {/* القسم الأيسر: النصوص والبرومبت السحري */}
             <div className="space-y-6">
               
-              {/* صندوق الوصف (Caption) */}
-              <div className="bg-slate-800 p-5 rounded-2xl border border-blue-500/30 relative">
-                <h4 className="font-bold text-blue-400 mb-3 flex items-center gap-2">
-                  <Share2 size={18} /> الوصف الخاص بالمنشور (Caption)
+              {/* 📱 صندوق وصف إنستغرام (IG) */}
+              <div className="bg-slate-800 p-5 rounded-2xl border border-pink-500/40 relative shadow-[0_0_15px_rgba(219,39,119,0.1)]">
+                <h4 className="font-bold text-pink-400 mb-3 flex items-center gap-2">
+                  <Smartphone size={18} /> وصف إنستغرام (Instagram)
                 </h4>
                 <textarea 
                   readOnly 
-                  value={caption} 
-                  className="w-full h-40 bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-300 text-sm outline-none resize-none custom-scrollbar"
+                  value={igCaption} 
+                  className="w-full h-32 bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-300 text-sm outline-none resize-none custom-scrollbar"
                 />
                 <button 
-                  onClick={() => handleCopy(caption, setCopiedCaption)}
+                  onClick={() => handleCopy(igCaption, setCopiedIgCaption)}
                   className="absolute bottom-6 left-6 bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-all flex items-center gap-2 text-xs"
                 >
-                  {copiedCaption ? <><CheckCircle2 size={16} className="text-green-400"/> تم النسخ</> : <><Copy size={16} /> نسخ النص</>}
+                  {copiedIgCaption ? <><CheckCircle2 size={16} className="text-green-400"/> تم النسخ</> : <><Copy size={16} /> نسخ النص</>}
                 </button>
               </div>
 
-              {/* صندوق البرومبت السحري لجيميني */}
-              <div className="bg-slate-800 p-5 rounded-2xl border border-purple-500/30 relative shadow-[0_0_20px_rgba(168,85,247,0.1)]">
+              {/* 📘 صندوق وصف فيسبوك (FB) */}
+              <div className="bg-slate-800 p-5 rounded-2xl border border-blue-500/40 relative shadow-[0_0_15px_rgba(37,99,235,0.1)]">
+                <h4 className="font-bold text-blue-400 mb-3 flex items-center gap-2">
+                  <Globe size={18} /> وصف فيسبوك (Facebook)
+                </h4>
+                <textarea 
+                  readOnly 
+                  value={fbCaption} 
+                  className="w-full h-32 bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-300 text-sm outline-none resize-none custom-scrollbar"
+                />
+                <button 
+                  onClick={() => handleCopy(fbCaption, setCopiedFbCaption)}
+                  className="absolute bottom-6 left-6 bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-all flex items-center gap-2 text-xs"
+                >
+                  {copiedFbCaption ? <><CheckCircle2 size={16} className="text-green-400"/> تم النسخ</> : <><Copy size={16} /> نسخ النص</>}
+                </button>
+              </div>
+
+              {/* 🪄 صندوق البرومبت السحري لجيميني */}
+              <div className="bg-slate-800 p-5 rounded-2xl border border-purple-500/40 relative shadow-[0_0_20px_rgba(168,85,247,0.1)]">
                 <h4 className="font-bold text-purple-400 mb-3 flex items-center gap-2">
                   <Wand2 size={18} /> البرومبت السحري (لـ Gemini)
                 </h4>
                 <p className="text-xs text-slate-400 mb-3">
-                  قم بنسخ هذا النص والصقه في Gemini مع الصورة الأولى (الغلاف) لإضافة المجسم 3D.
+                  انسخ النص والصقه في Gemini مع صورة الغلاف لإضافة المجسم 3D.
                 </p>
                 <textarea 
                   readOnly 
                   value={magicPrompt} 
-                  className="w-full h-48 bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-300 text-sm outline-none resize-none custom-scrollbar font-mono leading-relaxed"
+                  className="w-full h-40 bg-slate-900 border border-slate-700 rounded-xl p-3 text-slate-300 text-sm outline-none resize-none custom-scrollbar font-mono leading-relaxed"
                 />
                 <button 
                   onClick={() => handleCopy(magicPrompt, setCopiedPrompt)}
