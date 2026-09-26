@@ -368,7 +368,40 @@ if (slideType === 'hook') {
 // 4. تجهيز المسرح (مساحة فارغة للذكاء الاصطناعي)
         // تم إيقاف التوليد التلقائي هنا عمداً.
         // سيتم ترك المساحة فوق صورتك الشخصية فارغة لتقوم بدمج عنصر 3D لاحقاً عبر Gemini.
+// ==========================================
+        // 💎 إضافة شارة القيمة (في الموضع العلوي)
+        // ==========================================
+        const stepsCount = totalSlides > 2 ? totalSlides - 2 : totalSlides;
+        const valueBadgeText = `✨ خريطة طريق من ${stepsCount} خطوات`; 
+        
+        ctx.save();
+        ctx.direction = 'rtl';
+        ctx.font = 'bold 24px "CairoBoldHack"'; // 👈 صغرنا الخط قليلاً للأناقة
+        const badgeTextWidth = ctx.measureText(valueBadgeText).width;
+        const badgeWidth = badgeTextWidth + 60; 
+        const badgeHeight = 50;
+        
+        // 📍 نقل الشارة للأعلى تحت النقاط مباشرة
+        const badgeY = 160; // 👈 هذا الرقم هو الذي يحدد ارتفاعها
+        const badgeX = (width - badgeWidth) / 2;
 
+        // 1. رسم خلفية الشارة (زجاجية خفيفة)
+        drawRoundedRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight / 2, 'rgba(16, 185, 129, 0.1)', false);
+        
+        // 2. رسم الإطار مع توهج خفيف
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(16, 185, 129, 0.6)';
+        ctx.shadowBlur = 15;
+        ctx.stroke();
+
+        // 3. كتابة النص باللون الأخضر المتوهج
+        ctx.shadowColor = 'transparent';
+        ctx.fillStyle = '#10B981';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(valueBadgeText, width / 2, badgeY + (badgeHeight / 2) + 2);
+        ctx.restore();
         
         // 5. العنوان العريض (الخطاف) في النصف السفلي
         // نستخدم خطاً أسود عريضاً جداً مع تظليل بعض الكلمات
@@ -376,12 +409,16 @@ if (slideType === 'hook') {
         ctx.fillStyle = '#F8FAFC';
         ctx.textAlign = 'center'; 
         
+
+
         // نقطة بداية العنوان (تحت الصورة الشخصية)
         let textY = 850; 
         
         // الخدعة: يمكننا استخدام دالة رسم النصوص المختلطة التي برمجناها سابقاً، 
         // أو دالة wrapText العادية، مع إضافة لون مختلف لاسم الأداة (toolName)
         textY = wrapText(ctx, slide.title, width/2, textY, 950, 100); 
+
+
 // ------------------------------------------
         // 6. مؤشر الحركة (The Action Cue) الديناميكي
         // ------------------------------------------

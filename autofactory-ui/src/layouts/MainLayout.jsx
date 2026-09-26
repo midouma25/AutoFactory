@@ -1,12 +1,13 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map } from 'lucide-react'; // 👈 أضفنا أيقونة Map
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map, Briefcase } from 'lucide-react'; // 👈 أضفنا أيقونة Briefcase
 
 const menuItems = [
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
   { id: 'trend-hub', name: 'مركز الترند والذكاء', icon: <TrendingUp size={20} /> },
   { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> },
   { id: 'triple-template-lab', name: 'المقارنة الثلاثية', icon: <Layers size={20} /> },
-  { id: 'roadmap-lab', name: 'صانع الخطوات', icon: <Map size={20} /> }, // 👈 المسار الجديد لخرائط الطريق
+  { id: 'roadmap-lab', name: 'صانع الخطوات', icon: <Map size={20} /> }, 
+  { id: 'business-lab', name: 'مصنع الأرباح', icon: <Briefcase size={20} /> }, // 👈 المسار الجديد لخرائط الأرباح
   { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
   { id: 'history', name: 'أرشيف النشر', icon: <History size={20} /> },
   { id: 'settings', name: 'الإعدادات', icon: <Settings size={20} /> },
@@ -29,8 +30,10 @@ export default function MainLayout({ activeTab, setActiveTab, children }) {
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                activeTab === item.id ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-              }`}
+                activeTab === item.id 
+                ? (item.id === 'business-lab' ? 'bg-gradient-to-r from-yellow-600 to-emerald-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg') 
+                : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+              }`} // 👈 إضافة تلوين مميز للزر الجديد عندما يكون نشطاً
             >
               {item.icon}
               <span className="font-medium">{item.name}</span>

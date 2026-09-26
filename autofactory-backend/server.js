@@ -20,6 +20,10 @@ const drawTripleComparisonSlide = require('./templates/triple_comparison');
 const drawAiRoadmapSlide = require('./templates/ai_roadmap'); // 👈 استدعاء رسام خرائط الطريق
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+
+const drawBusinessRoadmapSlide = require('./templates/business_roadmap');
+
+
 // إعداد Cloudinary
 cloudinary.config({ 
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
@@ -41,7 +45,9 @@ try {
     registerFont(path.join(__dirname, 'Cairo-Bold.ttf'), { family: 'CairoBoldHack' });
     registerFont(path.join(__dirname, 'Cairo-Regular.ttf'), { family: 'CairoRegularHack' });
     registerFont(path.join(__dirname, 'Marhey-Bold.ttf'), { family: 'MarheyBoldHack' }); 
-    console.log('✅ تم اختراق نظام الخطوط وتحميلها بنجاح قاطع!');
+    registerFont(path.join(__dirname, 'Alexandria-Bold.ttf'), { family: 'AlexandriaHack' });
+    registerFont(path.join(__dirname, 'Tajawal-Bold.ttf'), { family: 'TajawalHack' });
+    console.log('✅ تم تحميل جميع الخطوط (بما فيها خطوط البيزنس) بنجاح!');
 } catch (error) {
     console.log('⚠️ تحذير: فشل تحميل الخطوط. تأكد من أسماء الملفات.');
 }
@@ -1138,9 +1144,9 @@ const systemPrompt = `
         
         🔥 أسرار الانتشار (قواعد صارمة جداً إياك مخالفتها):
         1. شريحة الخطاف (hook) (الشريحة رقم 1):
-           - العنوان (title): يجب أن يكون صادماً ويثير الفضول (5-8 كلمات). 🚨 تحذير صارم: يجب أن يحتوي العنوان صراحةً على "الكلمة المفتاحية" للتقنية المذكورة (مثل: LLM، بايثون، React) لكي يفهم المتابع سياق المنشور فوراً. إياك وكتابة عنوان غامض أو تنمية بشرية!
-           - الوصف (explanation): جملة تشويقية سيكولوجية تدفع المتابع للسحب فوراً (12 كلمة كحد أقصى).
-        
+           - العنوان (title): يجب أن يكون صادماً ويثير الفضول (5-9 كلمات). 🚨 تحذير صارم: يجب أن يحتوي العنوان صراحةً على "الكلمة المفتاحية" للتقنية، ويجب أن يربط هذه التقنية بـ "المال الذكي" (مثل: بناء منتج SaaS مربح، رفع الدخل كمستقل، أو توفير التكاليف للشركات). إياك واستخدام عبارات الثراء السريع الرخيصة! استخدم أسلوباً احترافياً للمطورين ورواد الأعمال.
+           - الوصف (explanation): جملة تشويقية سيكولوجية تدفع المتابع للسحب فوراً لمعرفة السر العملي (12 كلمة كحد أقصى).
+
         2. شرائح الخطوات (step) (باقي الشرائح في الوسط):
            - اسم الأداة (toolName): 🚨 حرج جداً 🚨 يجب أن يكون "كلمة واحدة فقط" وبدون فلسفة (اكتب React وليس React.js / اكتب Node وليس Node+Express).
            - الوصف (explanation): لا تعطني تعريفاً مملاً! أعطني "الزبدة والفائدة العملية" في جملة واحدة قوية (15 كلمة كحد أقصى).
@@ -1305,6 +1311,189 @@ console.log(`✅ تم تصميم شرائح خريطة الطريق بنجاح!`
     }
 });
 
+// ==========================================
+// 💰 مسار 1: إلهام خرائط طريق الأعمال (مصفوفة الأفكار اللانهائية)
+// ==========================================
+app.get('/api/suggest-business-roadmap', async (req, res) => {
+    try {
+        console.log('\n🎰 جاري تدوير عجلة الأفكار التجارية اللانهائية...');
+
+        // 1. مصفوفة المجالات الشاملة (كل تخصصاتك)
+        const niches = [
+            "تطوير البرمجيات (تطبيقات ويب، موبايل، أو ديسكتوب)",
+            "برمجة الألعاب ومحركات 3D",
+            "الذكاء الاصطناعي ووكلاء الأتمتة المستقلين (AI Agents)",
+            "التجارة الإلكترونية، دروبشيبينغ، أو التجارة المحلية",
+            "التعليق الصوتي والهندسة الصوتية (التقليدي أو عبر استنساخ الصوت بالـ AI)",
+            "المونتاج، الموشن جرافيك، وصناعة المحتوى المرئي (بأدوات AI)",
+            "التداول الخوارزمي، الفوركس، وتطوير بوتات الخيارات الثنائية (Binary Options)",
+            "بناء منتجات الـ SaaS والـ Micro-SaaS",
+            "الربح من الإنترنت (المنتجات الرقمية والعمل الحر عالي القيمة)",
+            "تعلم اللغات الأجنبية (الإنجليزية/اليابانية) واستغلالها في الترجمة التقنية",
+            "اقتناص فرص الهجرة، العمل عن بعد، وتأشيرات الـ Digital Nomad"
+        ];
+
+        // 2. مصفوفة نماذج الربح السلبي والتجاري
+        const monetizationModels = [
+            "بيع اشتراكات شهرية (MRR) للعملاء",
+            "بيع خدمات عالية القيمة (High-Ticket Services) بأسعار تبدأ من 1000$",
+            "تحقيق دخل سلبي تام (Passive Income) يعمل أثناء النوم",
+            "بناء أصول رقمية وبيعها كقوالب أو سكريبتات جاهزة",
+            "اقتطاع نسبة (عمولة) من أرباح العملاء عبر تقليل تكاليفهم"
+        ];
+
+        // 3. مصفوفة الزوايا التسويقية (الـ Hook النفسي)
+        const psychologicalAngles = [
+            "استهداف المبتدئين للوصول لأول 1000$ بأسرع وقت",
+            "أتمتة عملية معقدة جداً لتقليل الجهد البشري بنسبة 90%",
+            "دمج مهارتين مختلفتين لخلق خدمة لا منافس لها في السوق",
+            "استغلال ثغرة أو تريند تقني جديد قبل أن ينتبه له الجميع",
+            "تحويل مهارة يدوية مملة إلى آلة طباعة أموال تعمل آلياً"
+        ];
+
+        // السحب العشوائي
+        const randomNiche = niches[Math.floor(Math.random() * niches.length)];
+        const randomModel = monetizationModels[Math.floor(Math.random() * monetizationModels.length)];
+        const randomAngle = psychologicalAngles[Math.floor(Math.random() * psychologicalAngles.length)];
+
+        const systemPrompt = `أنت العقل المدبر لأكبر شركات التقنية ومستشار نمو (Growth Hacker) أسطوري.
+        لقد اخترت لك هذا المزيج العشوائي لبناء فكرة خريطة طريق تقنية/تجارية:
+        - المجال: ${randomNiche}
+        - نموذج الربح: ${randomModel}
+        - الزاوية التسويقية: ${randomAngle}
+
+        المطلوب:
+        اكتب فكرة موضوع "خارقة للعادة" و"مغرية جداً" لخريطة طريق من 6 خطوات.
+        الفكرة يجب أن تكون جملة واحدة دسمة، تشرح ماذا سنبني؟ وكيف سنربح منه؟
+        اجعلها تبدو كأنها "سر خطير" أو "استراتيجية حصرية" تدر المال.
+        
+        أمثلة سابقة للأسلوب المطلوب:
+        - "بناء بوت تداول خوارزمي بـ Python يحلل سيولة الفوركس، وتأجيره للمتداولين المبتدئين باشتراك شهري 100$."
+        - "استنساخ الأصوات بالـ AI لأتمتة قنوات يوتيوب أجنبية بالكامل، وتحقيق دخل سلبي من إعلانات أدسنس دون التحدث بكلمة."
+        
+        رد بصيغة JSON فقط بهذا الهيكل:
+        { "topic": "الفكرة الجشعة والمغرية هنا" }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'أعطني فكرة المليون دولار القادمة.' }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.95, // حرارة عالية للإبداع والجنون في الأفكار
+            response_format: { type: "json_object" }
+        });
+
+        const parsedData = JSON.parse(chatCompletion.choices[0].message.content);
+        console.log(`✅ فكرة جديدة ملهمة: ${parsedData.topic}`);
+        res.json({ success: true, topic: parsedData.topic });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب الفكرة التجارية:', error.message);
+        res.status(500).json({ success: false, error: 'فشل استلهام الفكرة.' });
+    }
+});
+
+// ==========================================
+// 💼 مسار 2: توليد ورسم خريطة الأرباح (Business Roadmap)
+// ==========================================
+app.post('/api/generate-business-roadmap', async (req, res) => {
+    const { topic, slideCount, platform = 'instagram' } = req.body;
+    const count = slideCount || 6; 
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع.' });
+
+    try {
+        console.log(`\n💼 جاري هندسة خريطة الأرباح لموضوع: ${topic}...`);
+
+const systemPrompt = `أنت مهندس برمجيات وخبير استراتيجي في بناء الـ SaaS وتحقيق الدخل السلبي لعام 2026.
+        مهمتك تحويل الفكرة التقنية التالية إلى خريطة طريق تجارية من ${count} شرائح بالضبط.
+        
+        🚨 قواعد صارمة وغير قابلة للتفاوض:
+        1. عدد الشرائح الكلي يجب أن يكون ${count} فقط. الشريحة رقم 1 هي "hook". الشريحة رقم ${count} هي "cta".
+        2. الشريحة الأولى (hook): 
+           - العنوان (title): يجب أن يكون شديد الجشع، يثير الفضول والطمع الإيجابي، ويحتوي على أرقام محددة بالدولار ($). يجب ألا يتجاوز 8 كلمات.
+           - ⚠️ قاموس الكلمات (هام جداً): يُمنع منعاً باتاً استخدام كلمات ركيكة مثل "در"، "لدر"، أو "إدرار". استخدم أفعالاً عربية قوية وطبيعية مثل: (كسب، جني، تحقيق، حصد، صناعة).
+             (أمثلة صحيحة: "كيف تبني SaaS وتكسب 2000$ شهرياً"، "وظف الـ AI لجني 500$ أسبوعياً"، "خطوات تحقيق 1000$ كدخل سلبي").
+           - الوصف (explanation): جملة تشويقية سيكولوجية تضرب على الوتر الحساس للمطور. (مثال: "توقف عن بيع وقتك، وابدأ ببيع الأصول الرقمية").
+        3. في شرائح "step": حقل "toolName" يجب أن يكون كلمة إنجليزية واحدة فقط (مثال: Stripe, React, Node).
+        4. في شرائح "step": حقل "explanation" يجب أن يكون شرحاً دسماً وعملياً يركز على الجانب التجاري وكيف تساهم هذه الأداة في جني المال، وأن يكون خالياً من الترقيم والأقواس الغريبة.
+
+        رد بصيغة JSON فقط بهذا الهيكل الدقيق:
+        {
+          "igCaption": "كابشن إنستغرام بأسلوب تسويقي يحفز على الحفظ والتعليق بكلمة 'أرباح' + 6 هاشتاجات",
+          "fbCaption": "كابشن فيسبوك يبدأ بسؤال يثير النقاش حول بناء الدخل السلبي + 4 هاشتاجات",
+          "slides": [
+            { "slideNumber": 1, "type": "hook", "title": "عنوان جشع يحتوي على أرقام ($)", "explanation": "جملة نفسية قصيرة", "nextTeaser": "اكتشف خريطة الأرباح 👉" },
+            { "slideNumber": 2, "type": "step", "title": "عنوان المرحلة (مثال: أتمتة الدفع)", "toolName": "Stripe", "toolDomain": "stripe.com", "explanation": "شرح دسم يركز على التطبيق العملي للربح وبناء الـ SaaS." },
+            { "slideNumber": ${count}, "type": "cta", "title": "الختام", "toolName": "", "toolDomain": "", "explanation": "", "nextTeaser": "" }
+          ]
+        }`;
+
+const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `الموضوع التجاري: ${topic}` }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            max_tokens: 6000, // 👈 هذا هو السطر السحري لاستيعاب 17 شريحة دون انقطاع
+            temperature: 0.85,
+            response_format: { type: "json_object" }
+        });
+
+        // 🧹 استخراج JSON بقوة لضمان عدم حدوث خطأ مع النصوص الطويلة جداً
+        const rawContent = chatCompletion.choices[0].message.content;
+        let cleanJson = "";
+        let lessonData;
+
+        try {
+            const jsonBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            
+            if (jsonBlockMatch && jsonBlockMatch[1]) {
+                cleanJson = jsonBlockMatch[1].trim();
+            } else {
+                const jsonObjectMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonObjectMatch) {
+                    cleanJson = jsonObjectMatch[0].trim();
+                } else {
+                    throw new Error("لم يتم العثور على هيكل JSON صالح في الرد.");
+                }
+            }
+
+            lessonData = JSON.parse(cleanJson);
+            
+        } catch (parseError) {
+            console.error('❌ فشل في فك تشفير JSON الطويل:\n', rawContent);
+            return res.status(500).json({ error: 'الذكاء الاصطناعي أنتج بيانات غير صالحة. حاول مرة أخرى.' });
+        }
+        
+        // 🛡️ جدار الحماية لاقتطاع الشرائح الزائدة إذا هلوس النموذج
+        if (lessonData.slides.length > count) {
+            lessonData.slides = lessonData.slides.slice(0, count);
+        }
+        // إجبار الشريحة الأخيرة لتكون CTA
+        const lastIndex = lessonData.slides.length - 1;
+        lessonData.slides[lastIndex].type = 'cta';
+
+        const batchId = Date.now(); 
+        const generatedImages = { instagram: [], facebook: [] };
+        const targetPlatforms = platform === 'both' ? ['instagram', 'facebook'] : [platform];
+
+        for (const currentPlatform of targetPlatforms) {
+            for (const slide of lessonData.slides) {
+                // استدعاء ملف الرسام الخاص بالبيزنس
+                const fileName = await drawBusinessRoadmapSlide(slide, count, batchId, currentPlatform, topic);
+                generatedImages[currentPlatform].push(fileName);
+            }
+        }
+
+        res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ في مسار البيزنس:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء المعالجة.' });
+    }
+});
 
 
 const PORT = process.env.PORT || 5000;
