@@ -335,7 +335,7 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
         ctx.moveTo(saveX, saveY - 14); ctx.lineTo(saveX + 18, saveY - 14);
         ctx.lineTo(saveX + 18, saveY + 16); ctx.lineTo(saveX + 9, saveY + 8);
         ctx.lineTo(saveX, saveY + 16); ctx.closePath();
-        ctx.fillStyle = '#94A3B8'; ctx.fill();
+        ctx.fillStyle = '#f6f7f9'; ctx.fill();
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText("SAVE THIS", saveX + 30, saveY);
         ctx.restore();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map, Briefcase } from 'lucide-react'; // 👈 أضفنا أيقونة Briefcase
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map, Briefcase, BookOpen } from 'lucide-react'; // 👈 استيراد BookOpen
 
 const menuItems = [
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> },
@@ -7,13 +7,21 @@ const menuItems = [
   { id: 'template-lab', name: 'مختبر القوالب', icon: <FlaskConical size={20} /> },
   { id: 'triple-template-lab', name: 'المقارنة الثلاثية', icon: <Layers size={20} /> },
   { id: 'roadmap-lab', name: 'صانع الخطوات', icon: <Map size={20} /> }, 
-  { id: 'business-lab', name: 'مصنع الأرباح', icon: <Briefcase size={20} /> }, // 👈 المسار الجديد لخرائط الأرباح
+  { id: 'business-lab', name: 'مصنع الأرباح', icon: <Briefcase size={20} /> },
+  { id: 'story-lab', name: 'استوديو القصص', icon: <BookOpen size={20} /> }, // 👈 المسار الجديد لاستوديو القصص
   { id: 'prompt', name: 'استوديو الأوامر', icon: <PenTool size={20} /> },
   { id: 'history', name: 'أرشيف النشر', icon: <History size={20} /> },
   { id: 'settings', name: 'الإعدادات', icon: <Settings size={20} /> },
 ];
 
 export default function MainLayout({ activeTab, setActiveTab, children }) {
+  // دالة مساعدة لتحديد ستايل الزر النشط بناءً على المسار
+  const getActiveStyle = (id) => {
+    if (id === 'business-lab') return 'bg-gradient-to-r from-yellow-600 to-emerald-600 text-white shadow-lg';
+    if (id === 'story-lab') return 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-lg shadow-fuchsia-900/30'; // 👈 ستايل مميز للقصص
+    return 'bg-blue-600 text-white shadow-lg';
+  };
+
   return (
     <div dir="rtl" className="flex h-screen bg-gray-900 text-white font-sans">
       {/* Sidebar */}
@@ -24,16 +32,16 @@ export default function MainLayout({ activeTab, setActiveTab, children }) {
           </div>
           <h1 className="text-2xl font-bold tracking-wider text-blue-400">AutoFactory</h1>
         </div>
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 activeTab === item.id 
-                ? (item.id === 'business-lab' ? 'bg-gradient-to-r from-yellow-600 to-emerald-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-lg') 
+                ? getActiveStyle(item.id) 
                 : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-              }`} // 👈 إضافة تلوين مميز للزر الجديد عندما يكون نشطاً
+              }`}
             >
               {item.icon}
               <span className="font-medium">{item.name}</span>

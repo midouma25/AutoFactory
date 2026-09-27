@@ -5,7 +5,8 @@ import TrendHub from './pages/TrendHub';
 import TemplateLab from './pages/TemplateLab'; 
 import TripleTemplateLab from './pages/TripleTemplateLab'; 
 import RoadmapLab from './pages/RoadmapLab'; 
-import BusinessLab from './pages/BusinessLab'; // 👈 استيراد مصنع الأرباح الجديد
+import BusinessLab from './pages/BusinessLab';
+import StoryLab from './pages/StoryLab'; // 👈 استيراد استوديو القصص
 
 function App() {
   const [activeTab, setActiveTab] = useState('trend-hub');
@@ -22,8 +23,10 @@ function App() {
         return <TripleTemplateLab setActiveTab={setActiveTab} />;
       case 'roadmap-lab':
         return <RoadmapLab setActiveTab={setActiveTab} />;
-      case 'business-lab': // 👈 ربط المسار بالصفحة
+      case 'business-lab': 
         return <BusinessLab setActiveTab={setActiveTab} />;
+      case 'story-lab': // 👈 ربط المسار بالصفحة الجديدة
+        return <StoryLab setActiveTab={setActiveTab} />;
       case 'history':
       case 'dashboard':
       case 'settings':

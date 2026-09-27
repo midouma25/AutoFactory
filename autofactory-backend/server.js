@@ -1415,7 +1415,7 @@ const systemPrompt = `أنت مهندس برمجيات و Growth Hacker شرس �
         🚨 قواعد صارمة وغير قابلة للتفاوض (توزيع الشرائح):
         1. عدد الشرائح الكلي يجب أن يكون ${count} فقط.
         2. الشريحة 1 يجب أن تكون دائماً "hook" (الغلاف).
-        3. 🚨 الشريحة 2 يجب أن تكون دائماً "setup" (شريحة تمهيدية تشرح باختصار "ما هو هذا النظام وكيف يعمل؟" قبل البدء بالأدوات).
+        3. 🚨 الشريحة 2 يجب أن تكون دائماً "setup" (شريحة تمهيدية تشرح باختصار الفكرة الاستراتيجية).
         4. الشريحة رقم ${count} يجب أن تكون دائماً "cta" (الختام).
         5. باقي الشرائح في الوسط يجب أن تكون "step" (خطوات عملية).
         
@@ -1428,7 +1428,10 @@ const systemPrompt = `أنت مهندس برمجيات و Growth Hacker شرس �
 
         🚨 محتوى الشرائح الداخلية:
         - الشريحة الأولى (hook): حقل الوصف (explanation) يجب أن يكون جملة تشويقية سيكولوجية تضرب على الوتر الحساس للمطور.
-        - الشريحة الثانية (setup): حقل "toolName" اجعله دائماً عبارة عربية قوية (مثال: "المخطط السري 🗺️" أو "الفكرة باختصار 💡" أو "آلية الربح 💰"). يُمنع استخدام كلمات إنجليزية هنا. حقل "title" اجعله سؤالاً يثير الفضول (مثل: كيف تعمل هذه الآلة؟). حقل "explanation" شرح مبسط وجذاب جداً يمهد للمتابع فهم الفكرة التجارية قبل الخطوات.
+        - الشريحة الثانية (setup): 
+          * حقل "toolName": اجعله دائماً عبارة عربية قوية (مثال: "آلية الربح 💰" أو "المخطط السري 🗺️"). يُمنع استخدام كلمات إنجليزية هنا.
+          * 🚨 حقل "title": يجب أن يكون "جملة جوكر" (Universal Bridge) تناسب وترتبط منطقياً بجميع الخطافات الثلاثة السابقة مهما كان اختيار المستخدم. (أمثلة إجبارية للقياس عليها: "كيف نطبق هذا على أرض الواقع؟ 🎯", "التشريح الكامل لهذه الاستراتيجية 👇", "السر يكمن في هذه المنظومة ⚙️", "كيف نحول الفكرة إلى أرباح؟").
+          * حقل "explanation": شرح مبسط وجذاب جداً يمهد للمتابع فهم الفكرة التجارية قبل الخطوات.
         - شرائح الخطوات (step): حقل "toolName" يجب أن يكون كلمة إنجليزية واحدة فقط (اسم الأداة أو التقنية مثل Stripe, React). حقل "explanation" يجب أن يكون شرحاً عملياً لكيفية استخدام الأداة لجني المال.
 
         رد بصيغة JSON فقط بهذا الهيكل الدقيق:
@@ -1442,13 +1445,11 @@ const systemPrompt = `أنت مهندس برمجيات و Growth Hacker شرس �
           ],
           "slides": [
             { "slideNumber": 1, "type": "hook", "title": "سيتم تجاهل هذا الحقل وتعويضه برمجياً", "explanation": "جملة نفسية قصيرة تشوق لسحب الشاشة", "nextTeaser": "اكتشف الخريطة 👉" },
-            { "slideNumber": 2, "type": "setup", "title": "ما هو هذا النظام؟", "toolName": "Strategy", "toolDomain": "", "explanation": "شرح مبسط وجذاب جداً لفكرة المشروع وكيف سيطبع المال، لتهيئة عقل القارئ قبل الدخول في الخطوات التقنية.", "nextTeaser": "لنبدأ التنفيذ ⚡" },
+            { "slideNumber": 2, "type": "setup", "title": "جملة الجوكر هنا", "toolName": "آلية الربح 💰", "toolDomain": "", "explanation": "شرح مبسط وجذاب جداً لفكرة المشروع وكيف سيطبع المال، لتهيئة عقل القارئ قبل الدخول في الخطوات التقنية.", "nextTeaser": "لنبدأ التنفيذ ⚡" },
             { "slideNumber": 3, "type": "step", "title": "هندسة الدفع (مثال)", "toolName": "Stripe", "toolDomain": "stripe.com", "explanation": "شرح دسم يركز على التطبيق العملي للربح وبناء النظام.", "nextTeaser": "الخطوة التالية؟" },
             { "slideNumber": ${count}, "type": "cta", "title": "الختام", "toolName": "", "toolDomain": "", "explanation": "", "nextTeaser": "" }
           ]
         }`;
-
-
 
     const chatCompletion = await groq.chat.completions.create({
             messages: [
@@ -1546,6 +1547,96 @@ const batchId = Date.now();
     }
 });
 
+
+// ==========================================
+// 📖 مسار استوديو القصص المصورة (StoryLab)
+// ==========================================
+const drawStorySlide = require('./templates/drawStorySlide'); // سننشئ هذا الملف في الخطوة القادمة
+
+app.post('/api/generate-story', async (req, res) => {
+    const { topic, slideCount = 6 } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء تقديم موضوع للقصة.' });
+
+    try {
+        console.log(`\n📖 جاري تأليف سيناريو قصة مرئية لموضوع: ${topic}...`);
+
+        const systemPrompt = `أنت مخرج قصص مصورة (Storyboard Artist) تقني وخبير تسويق بأسلوب "رحلة البطل".
+        مهمتك تأليف سيناريو لكاروسيل تعليمي بأسلوب القصة البصرية (Visual Storytelling) يتكون من ${slideCount} شرائح.
+        الموضوع هو: "${topic}".
+
+        🚨 القواعد الإخراجية:
+        1. الشرائح من 1 إلى ${slideCount - 1} يجب أن تكون من نوع "split" (شاشة منقسمة).
+           - "topQuote": التساؤل، المشكلة، أو الفكرة (جملة قصيرة جداً بالعامية البيضاء أو فصحى مبسطة، بحد أقصى 5 كلمات).
+           - "bottomQuote": الحل، الإجراء، أو النتيجة (جملة قصيرة جداً، بحد أقصى 5 كلمات).
+           - "topScene" و "bottomScene": وصف دقيق باللغة الإنجليزية لما يحدث في المشهد ليتم رسمه بالذكاء الاصطناعي. (مثال: "looking confused at a laptop with messy code", "smiling confident while looking at clean server architecture").
+        2. الشريحة الأخيرة (رقم ${slideCount}) يجب أن تكون "cta" (شريحة كاملة).
+           - "ctaText1": العرض الرئيسي (مثال: "سجّل بكورس").
+           - "ctaText2": اسم الدورة أو الأداة (مثال: "Full Stack Web Development").
+           - "ctaText3": دعوة الإجراء (مثال: "اكتب WEB وسنرسل لك التفاصيل").
+           - "heroScene": وصف المشهد النهائي باللغة الإنجليزية (مثال: "standing proud in a high-tech server room looking at the camera").
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "caption": "اكتب الكابشن الجذاب هنا مع الهاشتاجات",
+          "slides": [
+            {
+              "slideNumber": 1,
+              "type": "split",
+              "topQuote": "عندك فكرة؟",
+              "bottomQuote": "حوّلها لـ Web App",
+              "topScene": "looking thoughtful at a blank notebook on a desk",
+              "bottomScene": "typing fast on a glowing keyboard with code on screen"
+            },
+            // ... أكمل باقي شرائح الـ split بنفس النمط
+            {
+              "slideNumber": ${slideCount},
+              "type": "cta",
+              "ctaText1": "سجل بكورس",
+              "ctaText2": "Python & AI Mastery",
+              "ctaText3": "علق بكلمة AI للتفاصيل",
+              "heroScene": "standing confidently in front of floating holographic screens"
+            }
+          ]
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `الموضوع: ${topic}` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.8,
+            response_format: { type: "json_object" }
+        });
+
+        // تنظيف وفك تشفير الـ JSON (استخدام نفس المغناطيس الذي برمجناه سابقاً)
+        const rawContent = chatCompletion.choices[0].message.content;
+        let storyData;
+        try {
+            const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i) || rawContent.match(/\{[\s\S]*\}/);
+            storyData = JSON.parse(jsonMatch ? (jsonMatch[1] ? jsonMatch[1] : jsonMatch[0]) : rawContent);
+        } catch (e) {
+            console.error('❌ خطأ في الـ JSON:', rawContent);
+            return res.status(500).json({ error: 'بيانات القصة غير صالحة.' });
+        }
+
+        const batchId = Date.now();
+        const generatedImages = [];
+
+        for (const slide of storyData.slides) {
+            const fileName = await drawStorySlide(slide, batchId);
+            generatedImages.push(fileName);
+        }
+
+        console.log(`✅ تم رسم قصة من ${generatedImages.length} شرائح بنجاح!`);
+        res.json({ success: true, caption: storyData.caption, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ في مسار القصص:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء رسم القصة.' });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
