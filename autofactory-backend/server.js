@@ -1406,37 +1406,57 @@ app.post('/api/generate-business-roadmap', async (req, res) => {
     try {
         console.log(`\n💼 جاري هندسة خريطة الأرباح لموضوع: ${topic}...`);
 
-const systemPrompt = `أنت مهندس برمجيات وخبير استراتيجي في بناء الـ SaaS وتحقيق الدخل السلبي لعام 2026.
+const systemPrompt = `أنت مهندس برمجيات و Growth Hacker شرس جداً في بناء الـ SaaS وتحقيق الدخل السلبي لعام 2026.
         مهمتك تحويل الفكرة التقنية التالية إلى خريطة طريق تجارية من ${count} شرائح بالضبط.
+    
+        🚨 قواعد صارمة لضمان سلامة البيانات (العدد الكبير):
+        بما أن المستخدم طلب عدداً كبيراً من الشرائح (${count} شريحة)، يجب عليك توليد جميع الشرائح المطلوبة بالكامل وعدم قطع الاستجابة أبداً. تأكد من إغلاق مصفوفة الشرائح "slides" والقوس النهائي للـ JSON بشكل صحيح.
+
+        🚨 قواعد صارمة وغير قابلة للتفاوض (توزيع الشرائح):
+        1. عدد الشرائح الكلي يجب أن يكون ${count} فقط.
+        2. الشريحة 1 يجب أن تكون دائماً "hook" (الغلاف).
+        3. 🚨 الشريحة 2 يجب أن تكون دائماً "setup" (شريحة تمهيدية تشرح باختصار "ما هو هذا النظام وكيف يعمل؟" قبل البدء بالأدوات).
+        4. الشريحة رقم ${count} يجب أن تكون دائماً "cta" (الختام).
+        5. باقي الشرائح في الوسط يجب أن تكون "step" (خطوات عملية).
         
-        🚨 قواعد صارمة وغير قابلة للتفاوض:
-        1. عدد الشرائح الكلي يجب أن يكون ${count} فقط. الشريحة رقم 1 هي "hook". الشريحة رقم ${count} هي "cta".
-        2. الشريحة الأولى (hook): 
-           - العنوان (title): يجب أن يكون شديد الجشع، يثير الفضول والطمع الإيجابي، ويحتوي على أرقام محددة بالدولار ($). يجب ألا يتجاوز 8 كلمات.
-           - ⚠️ قاموس الكلمات (هام جداً): يُمنع منعاً باتاً استخدام كلمات ركيكة مثل "در"، "لدر"، أو "إدرار". استخدم أفعالاً عربية قوية وطبيعية مثل: (كسب، جني، تحقيق، حصد، صناعة).
-             (أمثلة صحيحة: "كيف تبني SaaS وتكسب 2000$ شهرياً"، "وظف الـ AI لجني 500$ أسبوعياً"، "خطوات تحقيق 1000$ كدخل سلبي").
-           - الوصف (explanation): جملة تشويقية سيكولوجية تضرب على الوتر الحساس للمطور. (مثال: "توقف عن بيع وقتك، وابدأ ببيع الأصول الرقمية").
-        3. في شرائح "step": حقل "toolName" يجب أن يكون كلمة إنجليزية واحدة فقط (مثال: Stripe, React, Node).
-        4. في شرائح "step": حقل "explanation" يجب أن يكون شرحاً دسماً وعملياً يركز على الجانب التجاري وكيف تساهم هذه الأداة في جني المال، وأن يكون خالياً من الترقيم والأقواس الغريبة.
+        🚨 هندسة العناوين الفيروسية للغلاف (The 3 Viral Hooks - A/B/C Testing):
+           بدلاً من العناوين التقليدية المملة، يجب أن تولد 3 خيارات "شرسة" وجذابة جداً توقف التمرير فوراً (بحد أقصى 8 كلمات للعنوان):
+           - الخيار 1 (الخريطة المكشوفة / شفرة الغش): يركز على إعطاء "نظام حرفي" يطبع المال. (أمثلة: "الخريطة الحرفية لبناء SaaS يطبع 5000$ شهرياً"، "شفرة الـ SaaS: نظام منسوخ يدر دخلاً سلبياً").
+           - الخيار 2 (العدو المشترك / التمرد): يهاجم الألم (العمل الحر، بيع الوقت للعملاء) ويقدم الفكرة كمنقذ. (أمثلة: "العمل الحر مات! ابنِ هذا النظام واضمن حريتك"، "توقف عن كتابة الأكواد للآخرين.. افعل هذا!").
+           - الخيار 3 (السر القذر / الميزة الخفية): يثير فضولاً قاتلاً حول سر يحتكره كبار السوق. (أمثلة: "السر القذر لصناع الـ SaaS (وكيف يكتسحون السوق)"، "ما لا يخبرك به الخبراء عن الدخل السلبي").
+           - ⚠️ قاموس الكلمات: استخدم مصطلحات هجومية وقوية (سيطرة، يكتسح، ثروة، يطبع، شفرة، حرفياً، منسوخ).
+
+        🚨 محتوى الشرائح الداخلية:
+        - الشريحة الأولى (hook): حقل الوصف (explanation) يجب أن يكون جملة تشويقية سيكولوجية تضرب على الوتر الحساس للمطور.
+        - الشريحة الثانية (setup): حقل "toolName" اجعله دائماً عبارة عربية قوية (مثال: "المخطط السري 🗺️" أو "الفكرة باختصار 💡" أو "آلية الربح 💰"). يُمنع استخدام كلمات إنجليزية هنا. حقل "title" اجعله سؤالاً يثير الفضول (مثل: كيف تعمل هذه الآلة؟). حقل "explanation" شرح مبسط وجذاب جداً يمهد للمتابع فهم الفكرة التجارية قبل الخطوات.
+        - شرائح الخطوات (step): حقل "toolName" يجب أن يكون كلمة إنجليزية واحدة فقط (اسم الأداة أو التقنية مثل Stripe, React). حقل "explanation" يجب أن يكون شرحاً عملياً لكيفية استخدام الأداة لجني المال.
 
         رد بصيغة JSON فقط بهذا الهيكل الدقيق:
         {
           "igCaption": "كابشن إنستغرام بأسلوب تسويقي يحفز على الحفظ والتعليق بكلمة 'أرباح' + 6 هاشتاجات",
           "fbCaption": "كابشن فيسبوك يبدأ بسؤال يثير النقاش حول بناء الدخل السلبي + 4 هاشتاجات",
+          "hooks": [
+            "العنوان الأول (الخريطة المكشوفة)",
+            "العنوان الثاني (العدو المشترك)",
+            "العنوان الثالث (السر القذر)"
+          ],
           "slides": [
-            { "slideNumber": 1, "type": "hook", "title": "عنوان جشع يحتوي على أرقام ($)", "explanation": "جملة نفسية قصيرة", "nextTeaser": "اكتشف خريطة الأرباح 👉" },
-            { "slideNumber": 2, "type": "step", "title": "عنوان المرحلة (مثال: أتمتة الدفع)", "toolName": "Stripe", "toolDomain": "stripe.com", "explanation": "شرح دسم يركز على التطبيق العملي للربح وبناء الـ SaaS." },
+            { "slideNumber": 1, "type": "hook", "title": "سيتم تجاهل هذا الحقل وتعويضه برمجياً", "explanation": "جملة نفسية قصيرة تشوق لسحب الشاشة", "nextTeaser": "اكتشف الخريطة 👉" },
+            { "slideNumber": 2, "type": "setup", "title": "ما هو هذا النظام؟", "toolName": "Strategy", "toolDomain": "", "explanation": "شرح مبسط وجذاب جداً لفكرة المشروع وكيف سيطبع المال، لتهيئة عقل القارئ قبل الدخول في الخطوات التقنية.", "nextTeaser": "لنبدأ التنفيذ ⚡" },
+            { "slideNumber": 3, "type": "step", "title": "هندسة الدفع (مثال)", "toolName": "Stripe", "toolDomain": "stripe.com", "explanation": "شرح دسم يركز على التطبيق العملي للربح وبناء النظام.", "nextTeaser": "الخطوة التالية؟" },
             { "slideNumber": ${count}, "type": "cta", "title": "الختام", "toolName": "", "toolDomain": "", "explanation": "", "nextTeaser": "" }
           ]
         }`;
 
-const chatCompletion = await groq.chat.completions.create({
+
+
+    const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `الموضوع التجاري: ${topic}` }
             ],
             model: 'qwen/qwen3.8-27b',
-            max_tokens: 6000, // 👈 هذا هو السطر السحري لاستيعاب 17 شريحة دون انقطاع
+            max_tokens: 8000, // 👈 هذا هو السطر السحري لاستيعاب 17 شريحة دون انقطاع
             temperature: 0.85,
             response_format: { type: "json_object" }
         });
@@ -1475,19 +1495,50 @@ const chatCompletion = await groq.chat.completions.create({
         const lastIndex = lessonData.slides.length - 1;
         lessonData.slides[lastIndex].type = 'cta';
 
-        const batchId = Date.now(); 
+const batchId = Date.now(); 
         const generatedImages = { instagram: [], facebook: [] };
+        // مصفوفة جديدة لحفظ خيارات الغلاف للمنصة المختارة لتسهيل الاختيار في الواجهة
+        const coverOptions = []; 
         const targetPlatforms = platform === 'both' ? ['instagram', 'facebook'] : [platform];
 
         for (const currentPlatform of targetPlatforms) {
-            for (const slide of lessonData.slides) {
-                // استدعاء ملف الرسام الخاص بالبيزنس
-                const fileName = await drawBusinessRoadmapSlide(slide, count, batchId, currentPlatform, topic);
-                generatedImages[currentPlatform].push(fileName);
+            for (let i = 0; i < lessonData.slides.length; i++) {
+                let slide = { ...lessonData.slides[i] };
+                
+                // إذا كنا في الشريحة الأولى (الخطاف)
+                if (slide.slideNumber === 1 && lessonData.hooks && lessonData.hooks.length === 3) {
+                    // رسم 3 خيارات للغلاف
+                    for (let h = 0; h < 3; h++) {
+                        let hookSlide = { ...slide, title: lessonData.hooks[h] };
+                        const fileName = await drawBusinessRoadmapSlide(hookSlide, count, `${batchId}_hook${h}`, currentPlatform, topic);
+                        
+                        // نضيف الصورة الأولى الافتراضية إلى المصفوفة الرئيسية
+                        if (h === 0) {
+                           generatedImages[currentPlatform].push(fileName);
+                        }
+                        
+                        // نحفظ الخيارات الثلاثة في مصفوفة منفصلة لإرسالها للواجهة (فقط للإنستغرام كممثل للخيارات)
+                        if (currentPlatform === 'instagram' || (currentPlatform === 'facebook' && platform === 'facebook')) {
+                            coverOptions.push(fileName);
+                        }
+                    }
+                } else {
+                    // رسم باقي الشرائح بشكل طبيعي
+                    const fileName = await drawBusinessRoadmapSlide(slide, count, batchId, currentPlatform, topic);
+                    generatedImages[currentPlatform].push(fileName);
+                }
             }
         }
 
-        res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, images: generatedImages });
+        // إرسال البيانات للواجهة متضمنة خيارات الغلاف
+        res.json({ 
+            success: true, 
+            igCaption: lessonData.igCaption, 
+            fbCaption: lessonData.fbCaption, 
+            images: generatedImages,
+            coverOptions: coverOptions.slice(0,3) // نرسل الخيارات الثلاثة الأولى فقط
+        });
+
 
     } catch (error) {
         console.error('❌ خطأ في مسار البيزنس:', error);

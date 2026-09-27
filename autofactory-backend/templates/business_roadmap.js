@@ -18,11 +18,8 @@ try {
 // الدوال المساعدة (نفس دوالك القوية السابقة)
 // ==========================================
 
-// دالة تكسير النصوص (تدعم اللغتين وتعيد الارتفاع الكلي)
 function wrapText(ctx, text, x, y, maxWidth, lineHeight, draw = true) {
     if (!text) return y;
-    // دعم تلوين الكلمات الإنجليزية بالذهبي (اختياري، مأخوذ من كودك السابق)
-    const isEnglish = (word) => /^[a-zA-Z0-9\-\.\,\/\:]+$/.test(word);
     
     const paragraphs = text.split('\n');
     let currentY = y;
@@ -34,16 +31,13 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, draw = true) {
         
         for (let n = 0; n < words.length; n++) {
             const word = words[n];
-            const testWidth = ctx.measureText(word + ' ').width;
+            // نضيف مسافة تجريبية لقياس عرض الكلمة
+            const testWidth = ctx.measureText(word + ' ').width; 
             
             if (lineWidth + testWidth > maxWidth && lineWords.length > 0) {
-                // رسم السطر
                 if (draw) {
-                    let cx = x + (ctx.textAlign === 'center' ? (maxWidth - lineWidth)/2 : 0) - (maxWidth/2); // للتبسيط نعتمد على محاذاة الكانفاس
-                    ctx.fillText(lineWords.join(' '), x, currentY);
-                    
-                    // (ملاحظة: يمكنك الاحتفاظ بكود التلوين الذهبي المعقد الخاص بك هنا إذا كنت تستخدمه، 
-                    // هذه النسخة المبسطة ترسم السطر العادي فقط لضمان عمل حساب الارتفاع بدقة)
+                    // نستخدم الدالة الذكية لرسم السطر المدمج
+                    fillMixedText(ctx, lineWords.join(' '), x, currentY, maxWidth);
                 }
                 currentY += lineHeight;
                 lineWords = [word];
@@ -54,35 +48,54 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, draw = true) {
             }
         }
         if (lineWords.length > 0) {
-            if (draw) ctx.fillText(lineWords.join(' '), x, currentY);
+            if (draw) {
+                fillMixedText(ctx, lineWords.join(' '), x, currentY, maxWidth);
+            }
             currentY += lineHeight;
         }
     }
-    return currentY; // نعيد الـ Y النهائي لنعرف الارتفاع الكلي للنص
+    return currentY;
 }
 
 function fillMixedText(ctx, text, x, y, maxWidth) {
-    ctx.save(); 
-    const parts = text.split(/([@.#$]*[a-zA-Z0-9]+[a-zA-Z0-9\-_.+#$]*)/);
+    ctx.save();
+    // هذه الصيغة تفصل الكلمات العربية عن الإنجليزية والأرقام والرموز بشكل أدق
+    const parts = text.split(/([a-zA-Z0-9$]+)/).filter(Boolean); 
+    
     let totalWidth = 0;
+    // حساب العرض الكلي للسطر لتوسيطه
     for (let i = 0; i < parts.length; i++) {
         totalWidth += ctx.measureText(parts[i]).width;
     }
+    
+    // بما أننا نبدأ الرسم من اليمين إلى اليسار، نحدد نقطة البداية لتتوسط الشاشة
     let currentX = x + (totalWidth / 2);
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
     for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        if (!part) continue;
-        const isEnglish = /[a-zA-Z0-9\-_]+/.test(part);
-        const partWidth = ctx.measureText(part).width;
-        ctx.save();
-        ctx.direction = isEnglish ? 'ltr' : 'rtl';
-        // 💰 تمييز الكلمات الإنجليزية (SaaS, AI, etc) باللون الذهبي تلقائياً
-        if(isEnglish) {
-            ctx.fillStyle = '#EAB308'; // Gold
+        if (!part.trim() && part !== ' ') {
+             currentX -= ctx.measureText(part).width;
+             continue; 
         }
+        
+        // التحقق إذا كان الجزء إنجليزي أو رقم/دولار
+        const isEnglishOrNumber = /^[a-zA-Z0-9$]+$/.test(part.trim());
+        const partWidth = ctx.measureText(part).width;
+        
+        ctx.save();
+        if(isEnglishOrNumber) {
+             ctx.fillStyle = '#EAB308'; // تلوين الكلمات الأجنبية والأرقام ($) بالذهبي
+             ctx.direction = 'ltr'; 
+        } else {
+             ctx.fillStyle = '#FFFFFF';
+             ctx.direction = 'rtl';
+        }
+        
         ctx.fillText(part, currentX, y);
         ctx.restore();
+        
         currentX -= partWidth;
     }
     ctx.restore(); 
@@ -163,12 +176,13 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
     // يتم التنفيذ فقط إذا لم نكن في الشريحة الأولى ولم نكن على فيسبوك
     if (platform !== 'facebook' && slide.slideNumber > 1) {
         
-        let dotSpacing = 50; 
-        if (totalSlides >= 10) dotSpacing = 35; 
-        if (totalSlides >= 14) dotSpacing = 26; 
+    let dotSpacing = 50; 
+        if (totalSlides >= 9) dotSpacing = 38; 
+        if (totalSlides >= 13) dotSpacing = 28; 
+        if (totalSlides >= 16) dotSpacing = 22; // 👈 تم الضبط لاستيعاب 17 نقطة بأناقة وبدون الخروج من الشاشة
 
         const dotRadius = 8;
-        const dotsY = 70; 
+        const dotsY = 70;
         const totalDotsWidth = (totalSlides - 1) * dotSpacing;
         const startCX = (width - totalDotsWidth) / 2;
         
@@ -254,13 +268,36 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
         ctx.fillText(valueBadgeText, width / 2, badgeY + (badgeHeight / 2) + 2);
         ctx.restore();
         
-        // 5. العنوان العريض (الخطاف) بالخط الفخم الجديد
-        ctx.font = '900 85px "AlexandriaHack"'; // 👈 خط الإسكندرية العملاق
+
+        // 5. العنوان العريض (مع خوارزمية التصغير التلقائي للعناوين الطويلة)
+        // ==========================================
         ctx.fillStyle = '#FFFFFF';
         ctx.textAlign = 'center'; 
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'; ctx.shadowBlur = 15;
-        let textY = 850; 
-        textY = wrapText(ctx, slide.title, width/2, textY, 950, 110); 
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'; 
+        ctx.shadowBlur = 15;
+        
+        let titleText = slide.title;
+        let fontSize = 85; 
+        let lineHeight = 110;
+        let textY = 810; // رفعنا نقطة البداية الأساسية للأعلى لتوفير مساحة
+
+        // 🧠 خوارزمية التصغير: تقييم طول النص وتعديل الحجم ليتسع بأناقة
+        if (titleText.length > 70) {
+            fontSize = 55;
+            lineHeight = 75;
+            textY = 840; // ننزله قليلاً لأن الحجم صغير
+        } else if (titleText.length > 45) {
+            fontSize = 65;
+            lineHeight = 85;
+            textY = 830;
+        } else if (titleText.length > 30) {
+            fontSize = 75;
+            lineHeight = 95;
+            textY = 820;
+        }
+
+        ctx.font = `900 ${fontSize}px "AlexandriaHack"`; 
+        wrapText(ctx, titleText, width/2, textY, 950, lineHeight); 
         ctx.shadowColor = 'transparent';
 
         // 6. مؤشر الحركة (The Action Cue) الديناميكي الأخضر الزمردي
@@ -281,10 +318,10 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
         ctx.restore();
     }
     
+// ==========================================
+    // شريحة الخطوة (Step) أو التمهيد (Setup) - Dashboard Style
     // ==========================================
-    // شريحة الخطوة (Step) - Dashboard Style
-    // ==========================================
-    else if (slideType === 'step') {
+    else if (slideType === 'step' || slideType === 'setup') {
         
         // زر الحفظ
         ctx.save();
@@ -314,58 +351,85 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
         const numWidth = ctx.measureText(slide.slideNumber).width;
         ctx.restore();
 
-        // اللوجو (نفس كودك القوي)
         const toolStartX = 100 + numWidth + 40;
         const logoSize = 100;
-        let finalDomain = slide.toolDomain ? slide.toolDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : `${slide.toolName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+        let textStartX = toolStartX; // نقطة البداية الافتراضية للنص
         
-        let logoLoaded = false;
-        try {
-            const logo = await loadImage(`https://logo.clearbit.com/${finalDomain}`);
-            ctx.drawImage(logo, toolStartX, 180, logoSize, logoSize);
-            logoLoaded = true;
-        } catch (e) {
+        // ==========================================
+        // 5. رسم الشعار (يظهر فقط في شرائح الأدوات Step)
+        // ==========================================
+        if (slideType === 'step') {
+            let finalDomain = slide.toolDomain ? slide.toolDomain.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0] : `${slide.toolName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+            
+            let logoLoaded = false;
             try {
-                const logo = await loadImage(`https://www.google.com/s2/favicons?domain=${finalDomain}&sz=128`);
+                const logo = await loadImage(`https://logo.clearbit.com/${finalDomain}`);
                 ctx.drawImage(logo, toolStartX, 180, logoSize, logoSize);
                 logoLoaded = true;
-            } catch (err) {}
+            } catch (e) {
+                try {
+                    const logo = await loadImage(`https://www.google.com/s2/favicons?domain=${finalDomain}&sz=128`);
+                    ctx.drawImage(logo, toolStartX, 180, logoSize, logoSize);
+                    logoLoaded = true;
+                } catch (err) {}
+            }
+
+            if (!logoLoaded) {
+                drawRoundedRect(ctx, toolStartX, 180, logoSize, logoSize, 20, '#1E293B', false);
+                ctx.font = '50px "AlexandriaHack"'; ctx.fillStyle = '#EAB308'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(slide.toolName.charAt(0).toUpperCase(), toolStartX + logoSize/2, 180 + logoSize/2);
+            }
+            
+            // إزاحة النص لليمين ليترك مساحة للوجو
+            textStartX = toolStartX + logoSize + 30;
         }
 
-        if (!logoLoaded) {
-            drawRoundedRect(ctx, toolStartX, 180, logoSize, logoSize, 20, '#1E293B', false);
-            ctx.font = '50px "AlexandriaHack"'; ctx.fillStyle = '#EAB308'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(slide.toolName.charAt(0).toUpperCase(), toolStartX + logoSize/2, 180 + logoSize/2);
-        }
-
-        // اسم الأداة
         // ==========================================
-        // ✍️ اسم الأداة (مع التصغير الديناميكي المتناسق)
+        // ✍️ رسم العنوان أو اسم الأداة (مع التصغير الديناميكي المتناسق)
         // ==========================================
         ctx.save();
         ctx.direction = 'ltr'; 
-        ctx.fillStyle = '#FFFFFF'; 
         ctx.textAlign = 'left'; 
         ctx.textBaseline = 'middle';
         
-        const safeToolName = slide.toolName ? slide.toolName.split(' ')[0] : 'Tool';
-        
         let toolFontSize = 90; // الحجم الأساسي الفخم
-        ctx.font = `${toolFontSize}px "AlexandriaHack"`; 
         
-        const maxAllowedWidth = 550; // أقصى عرض مسموح للكلمة حتى لا تخرج من الشاشة
-        
-        // لوغاريتم التصغير التلقائي: يصغر الخط درجتين في كل دورة حتى تتسع الكلمة في المساحة
-        while (ctx.measureText(safeToolName).width > maxAllowedWidth && toolFontSize > 35) {
-            toolFontSize -= 2;
-            ctx.font = `${toolFontSize}px "AlexandriaHack"`;
+        if (slideType === 'setup') {
+            // 🌟 تنسيق الشريحة التمهيدية (بدون لوجو، لون ذهبي، عبارة عربية كاملة)
+            ctx.fillStyle = '#F59E0B'; // لون ذهبي/كهرماني للتميز
+            ctx.shadowColor = 'rgba(245, 158, 11, 0.4)';
+            ctx.shadowBlur = 15;
+            
+            const strategyName = slide.toolName ? slide.toolName : 'المخطط السري 🗺️';
+            const maxAllowedWidthSetup = 650; // مساحة أكبر لأن اللوجو غير موجود
+            
+            ctx.font = `${toolFontSize}px "AlexandriaHack"`; 
+            while (ctx.measureText(strategyName).width > maxAllowedWidthSetup && toolFontSize > 35) {
+                toolFontSize -= 2;
+                ctx.font = `${toolFontSize}px "AlexandriaHack"`;
+            }
+            ctx.fillText(strategyName, textStartX, 230);
+            
+        } else {
+            // 🔧 تنسيق شريحة الأداة (مع لوجو، لون أبيض، الكلمة الأولى فقط)
+            ctx.fillStyle = '#FFFFFF'; 
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.1)';
+            ctx.shadowBlur = 15;
+            
+            const safeToolName = slide.toolName ? slide.toolName.split(' ')[0] : 'Tool';
+            const maxAllowedWidthStep = 550; // مساحة أقل بسبب وجود اللوجو
+            
+            ctx.font = `${toolFontSize}px "AlexandriaHack"`; 
+            while (ctx.measureText(safeToolName).width > maxAllowedWidthStep && toolFontSize > 35) {
+                toolFontSize -= 2;
+                ctx.font = `${toolFontSize}px "AlexandriaHack"`;
+            }
+            ctx.fillText(safeToolName, textStartX, 230);
         }
-
-        // رسم الكلمة بالحجم الجديد (بدون استخدام معامل maxWidth القديم الذي يضغط الكلمة)
-        ctx.fillText(safeToolName, toolStartX + logoSize + 30, 230);
+        
         ctx.restore();
 
-        // عنوان الخطوة (الشارة)
+        // عنوان الخطوة (الشارة البرتقالية/الذهبية)
         ctx.save();
         ctx.direction = 'rtl'; ctx.font = '40px "TajawalHack"';
         const titleWidth = ctx.measureText(slide.title).width;
@@ -376,6 +440,8 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
         ctx.fillStyle = '#05070A'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(slide.title, width / 2, badgeYStep + (badgeHeightStep / 2));
         ctx.restore();
+
+        
 
         // نافذة الشرح (Dashboard)
 // ==========================================
@@ -391,7 +457,7 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
             ctx.direction = 'rtl'; 
             ctx.font = '38px "TajawalHack"';
             
-            // 1. حساب الارتفاع المطلوب (بدون رسم، draw = false)
+        // 1. حساب الارتفاع المطلوب (بدون رسم، draw = false)
             const textStartX = width / 2;
             const textStartY = windowY + 130;
             const textMaxWidth = windowW - 120;
@@ -401,7 +467,8 @@ async function drawBusinessRoadmapSlide(slide, totalSlides, batchId, platform = 
             const finalY = wrapText(ctx, slide.explanation, textStartX, textStartY, textMaxWidth, lineHeight, false);
             
             // 2. تحديث ارتفاع النافذة إذا كان النص طويلاً
-            const requiredHeight = (finalY - windowY) + 60; // 60 بكسل مسافة تنفس سفلية
+            // 👈 رفعنا مسافة التنفس السفلية من 60 لـ 120 بكسل لمنع خروج الأسطر السفلية تماماً
+            const requiredHeight = (finalY - windowY) + 120; 
             if (requiredHeight > windowH) {
                 windowH = requiredHeight;
             }
