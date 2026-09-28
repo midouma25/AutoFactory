@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' }); // مجلد مؤقت لحفظ الصور المرفوعة
+const stampStoryDesign = require('./templates/drawStorySlide'); // تأكد من مسار الملف الذي أنشأناه
 const { createCanvas, registerFont, loadImage } = require('canvas');
 const fs = require('fs');
 const path = require('path');
@@ -1635,6 +1638,219 @@ app.post('/api/generate-story', async (req, res) => {
     } catch (error) {
         console.error('❌ خطأ في مسار القصص:', error);
         res.status(500).json({ error: 'حدث خطأ أثناء رسم القصة.' });
+    }
+});
+
+
+
+// ==========================================
+// 🖨️ مسار مختبر القصص - المرحلة 2: طباعة التصميم (Stamping)
+// ==========================================
+app.post('/api/stamp-story-images', upload.any(), async (req, res) => {
+    try {
+        // req.files يحتوي على الصور المرفوعة، و req.body.slidesData يحتوي على نصوص الشريحة (Stringified JSON)
+        const slidesData = JSON.parse(req.body.slidesData);
+        const files = req.files;
+
+        if (!files || files.length !== slidesData.length) {
+            return res.status(400).json({ error: 'عدد الصور المرفوعة لا يتطابق مع عدد الشرائح.' });
+        }
+
+        console.log(`\n🖨️ جاري طباعة التصميم الزجاجي الفاخر على ${files.length} صور...`);
+        const batchId = Date.now();
+        const generatedImages = [];
+
+        // ترتيب الملفات لضمان تطابقها مع الشرائح
+        // نفترض أن الواجهة الأمامية سترسل الملفات بأسماء حقول مثل image_1, image_2 ...
+        
+        for (let i = 0; i < slidesData.length; i++) {
+            const slide = slidesData[i];
+            const file = files.find(f => f.fieldname === `image_${slide.slideNumber}`);
+            
+            if (file) {
+                // استدعاء دالة الرسم التي صممناها سابقاً وتمرير مسار الصورة المرفوعة
+                const fileName = await stampStoryDesign(slide, slidesData.length, file.path, batchId);
+                generatedImages.push(fileName);
+                
+                // تنظيف الملف المؤقت
+                fs.unlinkSync(file.path);
+            }
+        }
+
+        console.log(`✅ تمت الطباعة بنجاح!`);
+        res.json({ success: true, images: generatedImages });
+
+    } catch (error) {
+        console.error('❌ خطأ في عملية الطباعة:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء دمج التصميم.' });
+    }
+});
+
+// ==========================================
+// 💡 مسار 1: الإلهام الشخصي (Personal Arsenal) - النسخة الشاملة
+// ==========================================
+// ==========================================
+// 💡 مسار 1: الإلهام الشخصي (The "Pain & Grind" Arsenal)
+// ==========================================
+app.get('/api/suggest-story-personal', async (req, res) => {
+    try {
+        const randomSeed = Math.floor(Math.random() * 1000000);
+
+        const systemPrompt = `أنت العقل الاستراتيجي لصانع محتوى تقني حقيقي وشرس (المهندس غربي محمد الشريف).
+        مهمتك كتابة "فكرة/سيناريو لقصة إنستغرام" (بحد أقصى سطرين) تلامس قلوب المبرمجين وتجبرهم على التفاعل بشدة.
+        
+        🚨 القواعد الذهبية (مهم جداً):
+        1. حقيقي وقاسي: لا تكتب تنمية بشرية مبتذلة. المبرمجون يكرهون المثاليات. تحدث عن شرب القهوة الباردة، عيون مرهقة، كود لا يعمل، واحتراق وظيفي قاد للنجاح.
+        2. اختر "مجالاً واحداً فقط" في كل مرة (إياك أن تدمجها كلها في قصة واحدة):
+           - إما: المعاناة في بناء نظام (MERN/Electron) معقد (مثل POS أو ERP).
+           - أو: الخسارة في التداول، ثم بناء بوت (Python/Quant) يعتمد على الانضباط الصارم (SMC/ICT).
+           - أو: نقل عقلية "الألم والانضباط" من رياضة كمال الأجسام أو الملاكمة إلى الجلوس 14 ساعة لحل "Bug" في خوارزمية ذكاء اصطناعي (Computer Vision).
+           - أو: كيف ألهمتك عقلية "التطور المستمر" في (Solo Leveling / Blue Lock) لعدم الاستسلام وبناء Micro-SaaS للصوتيات.
+
+        يجب أن يكون النص المولد جاهزاً ليوضع كـ "وصف" في خانة (إدخال القصة)، ليقوم لاحقاً نظام آخر بتحويله لشرائح.
+        مثال للنتيجة المطلوبة: "قصة الليلة التي خسرت فيها أموالاً في التداول، وكيف دفعني الإحباط لغلق هاتفي لمدة شهر كامل لبناء بوت بايثون يعتمد على استراتيجية SMC وحقق لي أول نجاح مؤتمت."
+
+        رد بصيغة JSON فقط بهذا الهيكل: { "topic": "النص القوي هنا" }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt }, 
+                { role: 'user', content: `ابتكر لي فكرة قصة شخصية خام، فيها معاناة ثم انتصار. (Seed: ${randomSeed})` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.9, 
+            response_format: { type: "json_object" }
+        });
+
+        const parsedData = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: parsedData.topic });
+
+    } catch (error) {
+        console.error('❌ خطأ في الإلهام الشخصي:', error);
+        res.status(500).json({ success: false });
+    }
+});
+
+// ==========================================
+// 📈 مسار 2: الإلهام الترندي (The "FOMO & Greed" Viral Hooks)
+// ==========================================
+app.get('/api/suggest-story-viral', async (req, res) => {
+    try {
+        const randomSeed = Math.floor(Math.random() * 1000000);
+
+        const systemPrompt = `أنت خبير تسويق فيروسي (Growth Hacker) متخصص في المحتوى التقني لعام 2026.
+        مهمتك ابتكار "فكرة/سيناريو لقصة إنستغرام" (سطرين كحد أقصى) تستهدف "الطمع، الفضول، أو الخوف (FOMO)" لدى المبرمجين والمستقلين.
+        
+        🚨 القوالب الفيروسية (اختر واحداً فقط عشوائياً):
+        1. الكنز المخفي (The Secret Wealth): فكرة Micro-SaaS أو أداة AI يمكن برمجتها في نهاية الأسبوع وتدر دخلاً سلبياً.. والكل يتجاهلها.
+        2. الصدمة وهدم المعتقدات (Debunking): لماذا تعلم برمجة الواجهات (Front-end) بالشكل التقليدي في 2026 هو مضيعة للوقت.. وما هو البديل المربح (مثلاً: أتمتة الـ Backend أو الذكاء الاصطناعي).
+        3. الاختراق الزمني (The Time Hack): كيف استخدمت أداة محددة أو سكربت Python لاختصار عمل أسابيع في ساعة واحدة وحصلت على عميل أجنبي.
+
+        الأسلوب: جشع إيجابي، يثير الفضول بشكل مرعب، ويعطي وعداً بقيمة ضخمة. يجب أن يكون النص المولد جاهزاً ليوضع كـ "وصف" في خانة الإدخال.
+        مثال للنتيجة المطلوبة: "الصدمة: لماذا أتوقف عن قبول مشاريع الويب العادية، والسر وراء بناء Micro-SaaS يعتمد على واجهة AI بسيطة ويدر اشتراكات شهرية بدون تدخل مني."
+
+        رد بصيغة JSON فقط بهذا الهيكل: { "topic": "النص الفيروسي هنا" }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt }, 
+                { role: 'user', content: `ابتكر لي فكرة ترندية تصنع هوساً لدى المبرمجين اليوم. (Seed: ${randomSeed})` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.9, 
+            response_format: { type: "json_object" }
+        });
+
+        const parsedData = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: parsedData.topic });
+
+    } catch (error) {
+        console.error('❌ خطأ في الإلهام الترندي:', error);
+        res.status(500).json({ success: false });
+    }
+});
+
+// ==========================================
+// 🎬 مسار 3: استوديو المخرج الوثائقي (Hyper-Realistic Creator Edition)
+// ==========================================
+app.post('/api/generate-story-prompts', async (req, res) => {
+    const { topic, slideCount = 5 } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء تقديم فكرة القصة.' });
+
+    try {
+        console.log(`\n🎬 جاري إخراج السيناريو الوثائقي الفائق الواقعية لقصة: ${topic.substring(0, 30)}...`);
+
+        const systemPrompt = `أنت كاتب إعلانات محترف (Senior Copywriter) متخصص في السرد القصصي التقني المبسط للجمهور العام.
+        مهمتك تحويل الفكرة إلى قصة بصرية من ${slideCount} شرائح تعتمد على سرد "الرحلة العملية" (المشكلة -> التخطيط -> النتيجة).
+
+        🚨🚨 قواعد النصوص المعروضة للمتابع (حاسمة جداً):
+        1. حقل "mainTopicTitle":
+           - استخرج عنواناً رئيسياً مبسطاً وجذاباً (لا يتجاوز 5 كلمات) يفهمه *أي شخص عادي*. يمثل المشكلة أو الهدف الأساسي للقصة (مثال: "السر وراء أتمتة المبيعات"، "كيف تبدأ البرمجة من الصفر"، "بناء مصدر دخل تلقائي"). هذا العنوان سيطبع في أعلى كل صورة لربط القصة.
+        
+        2. حقل "title" (عنوان الشريحة):
+           - يجب أن يكون خطوة عملية (من كلمة إلى 3 كلمات). (أمثلة: "المشكلة"، "البحث عن حل"، "التنفيذ"، "النتيجة").
+        
+        3. حقل "text" (وصف الشريحة):
+           - نص يشرح "ماذا يحدث فعلياً" بأسلوب درامي-عملي جذاب ومباشر (من 6 إلى 12 كلمة). 
+           - 🚫 ممنوع نهائياً استخدام عبارات فلسفية، مبالغ فيها، أو أدبية معقدة. ابتعد عن كلمات مثل (الانهيار، العبء، الموت الرقمي، العزلة). اكتب وكأنك تروي مشكلة لزميل عمل.
+
+        🚨 هندسة برومبتات الصور (باللغة الإنجليزية حصراً - أقصى درجات الواقعية):
+        لكل شريحة، ابتكر خيارين للصور:
+        1. "vibePrompt": لقطة الأجواء (فوضى طبيعية، مكاتب، شاشات، بدون إظهار الوجه).
+        2. "facePrompt": لقطة واقعية لوجه الشاب (26yo Arab man, light beard).
+
+        ⚠️ قاعدة التأطير والأبعاد الإلزامية (أضفها في نهاية كل برومبت):
+        "MANDATORY: VERTICAL PORTRAIT ORIENTATION ONLY (Aspect Ratio 4:5 or 9:16). Do NOT generate landscape images. Shot on Sony A7S III, 35mm. Frame the main subjects and action entirely in the TOP HALF of this vertical image. The BOTTOM HALF MUST be pure dark, negative space, or heavy bokeh for text overlay. No elements bleeding into the bottom half."
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "mainTopicTitle": "عنوان عام مبسط للجميع",
+          "slides": [
+            { 
+              "slideNumber": 1, 
+              "title": "عنوان الشريحة", 
+              "text": "وصف عملي مباشر...", 
+              "vibePrompt": "...",
+              "facePrompt": "..."
+            }
+          ]
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt }, 
+                { role: 'user', content: `أخرج لي هذه القصة مع نصوص عملية درامية (بدون تفلسف) في ${slideCount} شرائح: ${topic}` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.7, // حرارة معتدلة لضمان الاحترافية وعدم الهلوسة الفلسفية
+            response_format: { type: "json_object" }
+        });
+
+        const storyData = JSON.parse(chatCompletion.choices[0].message.content);
+        
+        if (storyData.slides && storyData.slides.length > slideCount) {
+            storyData.slides = storyData.slides.slice(0, slideCount);
+        }
+
+        // 🌟 السر هنا: حقن العنوان الرئيسي (mainTopicTitle) داخل كل شريحة 
+        // لكي يقرأه ملف drawStorySlide.js بسهولة ويطبعه في الأعلى
+        if (storyData.slides && storyData.mainTopicTitle) {
+            storyData.slides.forEach(slide => {
+                slide.mainTopicTitle = storyData.mainTopicTitle;
+            });
+        }
+
+        // إرسال البيانات كاملة للواجهة
+        res.json({ 
+            success: true, 
+            mainTopicTitle: storyData.mainTopicTitle, 
+            slides: storyData.slides 
+        });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد السيناريو:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء كتابة السيناريو.' });
     }
 });
 
