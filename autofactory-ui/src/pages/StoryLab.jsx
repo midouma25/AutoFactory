@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Copy, CheckCircle2, Upload, ImageIcon, Wand2, PenTool, Zap, TrendingUp, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle2, Upload, ImageIcon, Wand2, PenTool, Zap, TrendingUp, Loader2, Eye, RefreshCw } from 'lucide-react';
 
 const StoryLab = () => {
   const [topic, setTopic] = useState('');
+  const [slideCount, setSlideCount] = useState(8); // الافتراضي 8 شرائح
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   
   const [storySlides, setStorySlides] = useState([]);
   const [uploadedImages, setUploadedImages] = useState({});
+
+  const [imagePreviews, setImagePreviews] = useState({}); // 🌟 State جديد لحفظ صور المعاينة
   const [finalImages, setFinalImages] = useState([]);
   const [copiedIndex, setCopiedIndex] = useState(null);
 
@@ -19,7 +22,11 @@ const StoryLab = () => {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  // دالة الإلهام الشخصي (Personal Arsenal)
+  // ==========================================
+  // دوال الإلهام الاستراتيجي (The Growth Engine)
+  // ==========================================
+  
+  // 1. دالة الإلهام الشخصي (Personal Arsenal) - لبناء الثقة
   const handlePersonalInspiration = async () => {
     setIsSuggesting(true);
     try {
@@ -32,7 +39,7 @@ const StoryLab = () => {
     setIsSuggesting(false);
   };
 
-  // دالة الإلهام الترندي (Viral Trends)
+  // 2. دالة الإلهام الترندي (Viral Trends) - للانتشار
   const handleViralInspiration = async () => {
     setIsSuggesting(true);
     try {
@@ -45,10 +52,56 @@ const StoryLab = () => {
     setIsSuggesting(false);
   };
 
+  // 3. دالة خرائط الطريق (Roadmaps & Tools) - قنابل الحفظ
+  const handleRoadmapInspiration = async () => {
+    setIsSuggesting(true);
+    try {
+      // ⚠️ تأكد من إنشاء هذا المسار في server.js لاحقاً
+      const res = await axios.get('http://localhost:5000/api/suggest-story-roadmap');
+      if (res.data.success) setTopic(res.data.topic);
+    } catch (error) {
+      console.error(error);
+      alert('تحتاج إلى إنشاء مسار /api/suggest-story-roadmap في السيرفر.');
+    }
+    setIsSuggesting(false);
+  };
+
+  // 4. دالة إثارة الجدل (Controversial) - لزيادة التعليقات
+  const handleControversialInspiration = async () => {
+    setIsSuggesting(true);
+    try {
+      // ⚠️ تأكد من إنشاء هذا المسار في server.js لاحقاً
+      const res = await axios.get('http://localhost:5000/api/suggest-story-controversial');
+      if (res.data.success) setTopic(res.data.topic);
+    } catch (error) {
+      console.error(error);
+      alert('تحتاج إلى إنشاء مسار /api/suggest-story-controversial في السيرفر.');
+    }
+    setIsSuggesting(false);
+  };
+
+  // 5. دالة دراسات الحالة (Case Studies) - لصيد العملاء
+  const handleCaseStudyInspiration = async () => {
+    setIsSuggesting(true);
+    try {
+      // ⚠️ تأكد من إنشاء هذا المسار في server.js لاحقاً
+      const res = await axios.get('http://localhost:5000/api/suggest-story-casestudy');
+      if (res.data.success) setTopic(res.data.topic);
+    } catch (error) {
+      console.error(error);
+      alert('تحتاج إلى إنشاء مسار /api/suggest-story-casestudy في السيرفر.');
+    }
+    setIsSuggesting(false);
+  };
+
   const handleGeneratePrompts = async () => {
     setIsLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/generate-story-prompts', { topic });
+      // 🌟 التغيير هنا: نرسل topic و slideCount صراحةً
+      const res = await axios.post('http://localhost:5000/api/generate-story-prompts', { 
+        topic: topic, 
+        slideCount: slideCount 
+      });
       if (res.data.success) {
         setStorySlides(res.data.slides);
         setStep(2);
@@ -60,11 +113,22 @@ const StoryLab = () => {
     setIsLoading(false);
   };
 
+  // التعامل مع اختيار الصور من المستخدم وإنشاء معاينة
   const handleImageUpload = (slideNumber, file) => {
-    setUploadedImages(prev => ({
-      ...prev,
-      [`image_${slideNumber}`]: file
-    }));
+    if (file) {
+      // حفظ الملف الفعلي للإرسال للسيرفر
+      setUploadedImages(prev => ({
+        ...prev,
+        [`image_${slideNumber}`]: file
+      }));
+      
+      // إنشاء رابط معاينة فوري لعرضه في الواجهة
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreviews(prev => ({
+        ...prev,
+        [`image_${slideNumber}`]: previewUrl
+      }));
+    }
   };
 
   const handleStampImages = async () => {
@@ -112,33 +176,120 @@ const StoryLab = () => {
             <h3 className="text-2xl font-bold mb-6 text-slate-100 flex items-center gap-3">
               1. هندسة القصة والسيناريو
             </h3>
+
+            {/* ==========================================
+                لوحة التحكم الاستراتيجية (The Growth Engine)
+                ========================================== */}
+            <div className="mb-6">
+              <label className="text-slate-300 font-bold mb-3 flex items-center gap-2">
+                <Wand2 size={18} className="text-purple-400"/> اختر الاستراتيجية النفسية للمنشور:
+              </label>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                
+                {/* 1. بناء الثقة */}
+                <button 
+                  onClick={handlePersonalInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-purple-300 py-3 px-3 rounded-xl font-medium border border-purple-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
+                  title="يبني الثقة والولاء مع جمهورك عبر مشاركة تجاربك."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">تجارب شخصية</div>
+                    <div className="text-[10px] text-purple-400/70">لبناء الثقة والولاء</div>
+                  </div>
+                </button>
+
+                {/* 2. الانتشار السريع */}
+                <button 
+                  onClick={handleViralInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-emerald-300 py-3 px-3 rounded-xl font-medium border border-emerald-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
+                  title="يستغل المواضيع الرائجة لجلب مشاهدات سريعة."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">ترند وسوق</div>
+                    <div className="text-[10px] text-emerald-400/70">للانتشار السريع (Reach)</div>
+                  </div>
+                </button>
+
+                {/* 3. قنابل الحفظ */}
+                <button 
+                  onClick={handleRoadmapInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-amber-400 py-3 px-3 rounded-xl font-medium border border-amber-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
+                  title="يقدم قيمة مركزة تجبر المتابع على حفظ المنشور للعودة إليه."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-lg">🗺️</span>}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">خرائط وأدوات</div>
+                    <div className="text-[10px] text-amber-400/70">لرفع نسبة الحفظ (Saves)</div>
+                  </div>
+                </button>
+
+                {/* 4. إثارة الجدل */}
+                <button 
+                  onClick={handleControversialInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-rose-400 py-3 px-3 rounded-xl font-medium border border-rose-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
+                  title="يهاجم فكرة شائعة لإشعال خانة التعليقات."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-lg">🔥</span>}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">كسر المسلمات</div>
+                    <div className="text-[10px] text-rose-400/70">لزيادة التعليقات (Comments)</div>
+                  </div>
+                </button>
+
+                {/* 5. صائد العملاء */}
+                <button 
+                  onClick={handleCaseStudyInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-blue-400 py-3 px-3 rounded-xl font-medium border border-blue-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50 md:col-span-2 lg:col-span-1"
+                  title="يعرض أرقاماً ونتائج حقيقية لجذب العملاء المحتملين."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-lg">📊</span>}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">دراسات حالة وأرقام</div>
+                    <div className="text-[10px] text-blue-400/70">لجذب العملاء (Leads)</div>
+                  </div>
+                </button>
+
+              </div>
+            </div>
             
             <textarea 
-              placeholder="عن ماذا تتحدث القصة؟ (مثال: قصة كفاحي في تعلم بايثون وبناء أول بوت تداول...)" 
+              placeholder="اكتب فكرتك هنا أو اضغط على أحد الأزرار العلوية لجلب فكرة استراتيجية..." 
               className="w-full p-5 bg-[#020408] border border-slate-700 rounded-xl text-white outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder:text-slate-600 resize-none h-32 text-lg mb-6 shadow-inner"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
             />
 
-            {/* أزرار الإلهام الجديدة */}
-            <div className="flex gap-4 mb-8">
-              <button 
-                onClick={handlePersonalInspiration} 
-                disabled={isSuggesting}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-purple-300 py-3 px-4 rounded-xl font-medium border border-purple-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isSuggesting ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} />}
-                قصص من مجالاتي (تجربة شخصية)
-              </button>
-
-              <button 
-                onClick={handleViralInspiration} 
-                disabled={isSuggesting}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 py-3 px-4 rounded-xl font-medium border border-emerald-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isSuggesting ? <Loader2 size={18} className="animate-spin" /> : <TrendingUp size={18} />}
-                قصص الترند والسوق (فيروسي)
-              </button>
+            {/* 🌟 شريط التحكم بعدد الشرائح */}
+            <div className="mb-8 bg-slate-800/50 p-5 rounded-2xl border border-slate-700">
+              <div className="flex justify-between items-center mb-4">
+                <label className="text-slate-200 font-bold flex items-center gap-2">
+                  <PenTool size={18} className="text-purple-400"/> اختر عدد شرائح القصة:
+                </label>
+                <span className="bg-purple-600 text-white font-bold px-3 py-1 rounded-lg">
+                  {slideCount} شرائح
+                </span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="10"
+                value={slideCount}
+                onChange={(e) => setSlideCount(parseInt(e.target.value))}
+                className="w-full accent-purple-500 cursor-pointer h-2 bg-slate-700 rounded-lg appearance-none"
+              />
+              <div className="flex justify-between text-xs text-slate-500 mt-2 font-bold">
+                <span>5 (قصير)</span>
+                <span>8 (فيروسي مثالي)</span>
+                <span>10 (دسم جداً)</span>
+              </div>
             </div>
 
             <button 
@@ -152,8 +303,7 @@ const StoryLab = () => {
         </div>
       )}
 
-      {/* باقي الكود للمرحلتين 2 و 3 كما هو بدون تغيير في المنطق، فقط تحديثات جمالية لتناسب الثيم الداكن */}
-{/* ==========================================
+      {/* ==========================================
           المرحلة 2: استوديو الإخراج (اختيار البرومبت ورفع الصور)
           ========================================== */}
       {step === 2 && (
@@ -180,7 +330,6 @@ const StoryLab = () => {
                           </div>
 
                           {/* قسم اختيار البرومبت */}
-{/* قسم اختيار البرومبت */}
                           <div className="p-5 flex-1 flex flex-col gap-4">
                               <p className="text-sm font-bold text-slate-300">اختر أسلوب اللقطة لنسخه:</p>
                               
@@ -221,25 +370,55 @@ const StoryLab = () => {
                               </div>
                           </div>
 
-                          {/* قسم رفع الصورة المختارة */}
+                          {/* قسم رفع الصورة المختارة ومعاينتها */}
                           <div className="p-5 bg-slate-800/80 border-t border-slate-700 mt-auto">
-                              <label className="flex items-center justify-center gap-2 w-full cursor-pointer bg-slate-700/50 hover:bg-slate-600 transition-colors py-4 rounded-xl border-2 border-dashed border-slate-500 hover:border-slate-400">
-                                  {uploadedImages[`image_${slide.slideNumber}`] ? (
-                                      <span className="text-emerald-400 font-bold flex items-center gap-2 text-sm">
-                                          <CheckCircle2 size={20}/> تم رفع الصورة المُختارة
-                                      </span>
-                                  ) : (
+                              {imagePreviews[`image_${slide.slideNumber}`] ? (
+                                  // 🌟 حالة: تم رفع الصورة (عرض المعاينة)
+                                  <div className="flex flex-col gap-3 w-full">
+                                      <div className="relative group rounded-xl overflow-hidden border-2 border-emerald-500/50 shadow-lg">
+                                          <img 
+                                              src={imagePreviews[`image_${slide.slideNumber}`]} 
+                                              alt="Preview" 
+                                              className="w-full h-40 object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                          />
+                                          <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-md shadow-md">
+                                              تم الرفع ✅
+                                          </div>
+                                      </div>
+                                      
+                                      <div className="flex justify-between gap-3">
+                                          <button 
+                                              onClick={() => window.open(imagePreviews[`image_${slide.slideNumber}`], '_blank')}
+                                              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2.5 rounded-lg text-xs font-bold transition-all flex justify-center items-center gap-2"
+                                          >
+                                              <Eye size={16} /> تكبير
+                                          </button>
+                                          
+                                          <label className="flex-1 cursor-pointer bg-slate-700 hover:bg-slate-600 text-white py-2.5 rounded-lg text-xs font-bold transition-all flex justify-center items-center gap-2">
+                                              <RefreshCw size={16} /> تغيير
+                                              <input 
+                                                  type="file" 
+                                                  accept="image/*" 
+                                                  className="hidden"
+                                                  onChange={(e) => handleImageUpload(slide.slideNumber, e.target.files[0])}
+                                              />
+                                          </label>
+                                      </div>
+                                  </div>
+                              ) : (
+                                  // 🌟 حالة: لم يتم رفع الصورة بعد (زر الرفع العادي)
+                                  <label className="flex items-center justify-center gap-2 w-full cursor-pointer bg-slate-700/50 hover:bg-slate-600 transition-colors py-4 rounded-xl border-2 border-dashed border-slate-500 hover:border-slate-400">
                                       <span className="text-slate-300 flex items-center gap-2 text-sm font-medium">
                                           <Upload size={20}/> ارفع الصورة التي ولدتها هنا
                                       </span>
-                                  )}
-                                  <input 
-                                      type="file" 
-                                      accept="image/*" 
-                                      className="hidden"
-                                      onChange={(e) => handleImageUpload(slide.slideNumber, e.target.files[0])}
-                                  />
-                              </label>
+                                      <input 
+                                          type="file" 
+                                          accept="image/*" 
+                                          className="hidden"
+                                          onChange={(e) => handleImageUpload(slide.slideNumber, e.target.files[0])}
+                                      />
+                                  </label>
+                              )}
                           </div>
                       </div>
                   ))}

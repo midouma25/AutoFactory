@@ -1771,77 +1771,89 @@ app.get('/api/suggest-story-viral', async (req, res) => {
 });
 
 // ==========================================
-// 🎬 مسار 3: استوديو المخرج الوثائقي (Hyper-Realistic Creator Edition)
+// 🎬 مسار 3: استوديو المخرج الوثائقي (The Viral 8-Slide Architecture)
 // ==========================================
 app.post('/api/generate-story-prompts', async (req, res) => {
-    const { topic, slideCount = 5 } = req.body;
+    // 🌟 جعلنا العدد الافتراضي 8 شرائح 
+    const { topic, slideCount = 8 } = req.body;
 
     if (!topic) return res.status(400).json({ error: 'الرجاء تقديم فكرة القصة.' });
 
     try {
-        console.log(`\n🎬 جاري إخراج السيناريو الوثائقي الفائق الواقعية لقصة: ${topic.substring(0, 30)}...`);
+        console.log(`\n🎬 جاري إخراج الكاروسيل الفيروسي المكون من ${slideCount} شرائح لقصة: ${topic.substring(0, 30)}...`);
 
-        const systemPrompt = `أنت كاتب إعلانات محترف (Senior Copywriter) متخصص في السرد القصصي التقني المبسط للجمهور العام.
-        مهمتك تحويل الفكرة إلى قصة بصرية من ${slideCount} شرائح تعتمد على سرد "الرحلة العملية" (المشكلة -> التخطيط -> النتيجة).
+        const systemPrompt = `أنت كاتب إعلانات محترف (Senior Copywriter) و Growth Hacker خبير في إنستغرام.
+        مهمتك تحويل الفكرة إلى "كاروسيل" (Carousel) فيروسي يتكون من ${slideCount} شرائح بالضبط. 
+        🚨 تحذير حرج: إياك أن تولد أقل من ${slideCount} شرائح! يجب أن تحتوي المصفوفة على ${slideCount} عناصر تماماً.
 
-        🚨🚨 قواعد النصوص المعروضة للمتابع (حاسمة جداً):
-        1. حقل "mainTopicTitle":
-           - استخرج عنواناً رئيسياً مبسطاً وجذاباً (لا يتجاوز 5 كلمات) يفهمه *أي شخص عادي*. يمثل المشكلة أو الهدف الأساسي للقصة (مثال: "السر وراء أتمتة المبيعات"، "كيف تبدأ البرمجة من الصفر"، "بناء مصدر دخل تلقائي"). هذا العنوان سيطبع في أعلى كل صورة لربط القصة.
+        🚨🚨 الهيكل النفسي الإلزامي للـ ${slideCount} شرائح (استراتيجية الساندويتش):
         
-        2. حقل "title" (عنوان الشريحة):
-           - يجب أن يكون خطوة عملية (من كلمة إلى 3 كلمات). (أمثلة: "المشكلة"، "البحث عن حل"، "التنفيذ"، "النتيجة").
+        - الشريحة رقم 1 (الخطاف المغناطيسي - The Viral Hook): 
+          * العنوان: صادم جداً، يكسر المعتقدات أو يثير فضولاً شديداً.
+          * النص التوضيحي: يجب أن يشرح بوضوح ما سيجده المتابع في الشرائح القادمة ويحفزه على سحب الشاشة. (مثال: "في هذا الكاروسيل، سأكشف لك الخطة الكاملة.. اسحب لليسار").
         
-        3. حقل "text" (وصف الشريحة):
-           - نص يشرح "ماذا يحدث فعلياً" بأسلوب درامي-عملي جذاب ومباشر (من 6 إلى 12 كلمة). 
-           - 🚫 ممنوع نهائياً استخدام عبارات فلسفية، مبالغ فيها، أو أدبية معقدة. ابتعد عن كلمات مثل (الانهيار، العبء، الموت الرقمي، العزلة). اكتب وكأنك تروي مشكلة لزميل عمل.
+        - الشرائح من 2 إلى ${slideCount - 1} (الرحلة العملية - The Journey): 
+          * قم بتقسيم (المشكلة، الفجوة، التخطيط، التنفيذ، النتيجة) على هذه الشرائح بنصوص عملية ومباشرة.
+        
+        - الشريحة رقم ${slideCount} (آلة التفاعل - The Automation CTA): 
+          * العنوان: تحفيزي (مثال: "استلم خطتك الآن"، "هديتك جاهزة").
+          * النص التوضيحي: يجب أن تطلب من المتابع التعليق بكلمة مفتاحية محددة (من اختيارك وتناسب الموضوع)، 🚨 ويجب إجبارياً وضع هذه الكلمة بين علامتي تنصيص مزدوجتين "". (مثال: علق بكلمة "مسار" وسأرسل لك الرابط في الخاص فوراً!). لا تنسَ علامات التنصيص المزدوجة أبداً!
 
-        🚨 هندسة برومبتات الصور (باللغة الإنجليزية حصراً - أقصى درجات الواقعية):
-        لكل شريحة، ابتكر خيارين للصور:
-        1. "vibePrompt": لقطة الأجواء (فوضى طبيعية، مكاتب، شاشات، بدون إظهار الوجه).
-        2. "facePrompt": لقطة واقعية لوجه الشاب (26yo Arab man, light beard).
+    🚨 قواعد النصوص:
+        1. "mainTopicTitle": عنوان عام مبسط ومغناطيسي (أقل من 5 كلمات) يُطبع في أعلى كل الشرائح لربط القصة.
+        2. "title": عنوان الشريحة (كلمة إلى 3 كلمات).
+        3. "text": نص عملي مباشر، 🚨 وقصير جداً جداً (من 6 إلى 15 كلمة كحد أقصى). ممنوع كتابة فقرات طويلة نهائياً! الشريحة الأولى يجب أن تكون جملة واحدة سريعة وخاطفة (Punchline).
+        4. "تلوين الكلمات": في حقل "text" أو "title"، ضع أهم كلمة أو رقم بين نجمتين *مثل هذا* ليتم تلوينها في التصميم وإبرازها.
 
-        ⚠️ قاعدة التأطير والأبعاد الإلزامية (أضفها في نهاية كل برومبت):
+        🚨 هندسة برومبتات الصور (باللغة الإنجليزية حصراً - واقعية مفرطة - Hyper-Realistic):
+        لكل شريحة ابتكر خيارين للصورة (vibePrompt و facePrompt):
+        - للشريحة 1 (الخطاف): "Highly engaging hook thumbnail, mysterious tech vibe, cinematic dark lighting, neon accents, evoking intense curiosity, POV perspective or over the shoulder showing a shocking result on screen."
+        - للشرائح من 2 إلى ${slideCount - 1}: "Natural working environment, deep focus, tech setup, coding, dynamic office lighting."
+        - للشريحة ${slideCount} (الخاتمة - CTA): "Direct eye contact, confident 26yo Arab man, premium lifestyle/business aesthetic, pointing slightly down towards the comments section, inviting and trustworthy expression."
+
+        ⚠️ قاعدة التأطير والأبعاد الإلزامية (أضفها في نهاية كل برومبت حرفياً):
         "MANDATORY: VERTICAL PORTRAIT ORIENTATION ONLY (Aspect Ratio 4:5 or 9:16). Do NOT generate landscape images. Shot on Sony A7S III, 35mm. Frame the main subjects and action entirely in the TOP HALF of this vertical image. The BOTTOM HALF MUST be pure dark, negative space, or heavy bokeh for text overlay. No elements bleeding into the bottom half."
 
         رد بصيغة JSON فقط بهذا الهيكل:
         {
-          "mainTopicTitle": "عنوان عام مبسط للجميع",
+          "mainTopicTitle": "عنوان المغناطيس العام",
           "slides": [
             { 
               "slideNumber": 1, 
-              "title": "عنوان الشريحة", 
-              "text": "وصف عملي مباشر...", 
+              "title": "...", 
+              "text": "...", 
               "vibePrompt": "...",
               "facePrompt": "..."
             }
+            // 🚨 يجب أن تستمر بإنشاء العناصر هنا حتى تصل إلى slideNumber: ${slideCount}
           ]
         }`;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt }, 
-                { role: 'user', content: `أخرج لي هذه القصة مع نصوص عملية درامية (بدون تفلسف) في ${slideCount} شرائح: ${topic}` }
+                { role: 'user', content: `أخرج لي هذا الكاروسيل الفيروسي بالتفصيل الممل في ${slideCount} شرائح كاملة (خطاف ساحب + رحلة دسمة + خاتمة تطلب التعليق بكلمة مفتاحية): ${topic}` }
             ],
             model: 'qwen/qwen3.8-27b', 
-            temperature: 0.7, // حرارة معتدلة لضمان الاحترافية وعدم الهلوسة الفلسفية
-            response_format: { type: "json_object" }
+            temperature: 0.65, 
+            response_format: { type: "json_object" },
+            max_tokens: 6000, 
         });
 
         const storyData = JSON.parse(chatCompletion.choices[0].message.content);
         
+        // التحقق من العدد وقصه إذا زاد عن المطلوب، ولكن لن ينقص بإذن الله
         if (storyData.slides && storyData.slides.length > slideCount) {
             storyData.slides = storyData.slides.slice(0, slideCount);
         }
 
-        // 🌟 السر هنا: حقن العنوان الرئيسي (mainTopicTitle) داخل كل شريحة 
-        // لكي يقرأه ملف drawStorySlide.js بسهولة ويطبعه في الأعلى
+        // حقن العنوان الرئيسي لجميع الشرائح
         if (storyData.slides && storyData.mainTopicTitle) {
             storyData.slides.forEach(slide => {
                 slide.mainTopicTitle = storyData.mainTopicTitle;
             });
         }
 
-        // إرسال البيانات كاملة للواجهة
         res.json({ 
             success: true, 
             mainTopicTitle: storyData.mainTopicTitle, 
@@ -1853,6 +1865,7 @@ app.post('/api/generate-story-prompts', async (req, res) => {
         res.status(500).json({ error: 'حدث خطأ أثناء كتابة السيناريو.' });
     }
 });
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
