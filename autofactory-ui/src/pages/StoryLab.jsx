@@ -113,6 +113,21 @@ const StoryLab = () => {
     setIsLoading(false);
   };
 
+
+  // 6. دالة كفاح وإنتاجية (Hero's Journey) - لربط الجمهور عاطفياً
+  const handleJourneyInspiration = async () => {
+    setIsSuggesting(true);
+    try {
+      const res = await axios.get('http://localhost:5000/api/suggest-story-journey');
+      if (res.data.success) setTopic(res.data.topic);
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء جلب الفكرة.');
+    }
+    setIsSuggesting(false);
+  };
+
+  
   // التعامل مع اختيار الصور من المستخدم وإنشاء معاينة
   const handleImageUpload = (slideNumber, file) => {
     if (file) {
@@ -180,11 +195,15 @@ const StoryLab = () => {
             {/* ==========================================
                 لوحة التحكم الاستراتيجية (The Growth Engine)
                 ========================================== */}
+ {/* ==========================================
+                لوحة التحكم الاستراتيجية (The Growth Engine)
+                ========================================== */}
             <div className="mb-6">
               <label className="text-slate-300 font-bold mb-3 flex items-center gap-2">
                 <Wand2 size={18} className="text-purple-400"/> اختر الاستراتيجية النفسية للمنشور:
               </label>
               
+              {/* شبكة متوازنة من 6 أزرار (3 أعمدة) */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                 
                 {/* 1. بناء الثقة */}
@@ -247,13 +266,27 @@ const StoryLab = () => {
                 <button 
                   onClick={handleCaseStudyInspiration} 
                   disabled={isSuggesting}
-                  className="bg-slate-800/80 hover:bg-slate-700 text-blue-400 py-3 px-3 rounded-xl font-medium border border-blue-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50 md:col-span-2 lg:col-span-1"
+                  className="bg-slate-800/80 hover:bg-slate-700 text-blue-400 py-3 px-3 rounded-xl font-medium border border-blue-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
                   title="يعرض أرقاماً ونتائج حقيقية لجذب العملاء المحتملين."
                 >
                   {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-lg">📊</span>}
                   <div className="text-right">
-                    <div className="text-sm font-bold">دراسات حالة وأرقام</div>
+                    <div className="text-sm font-bold">دراسات حالة</div>
                     <div className="text-[10px] text-blue-400/70">لجذب العملاء (Leads)</div>
+                  </div>
+                </button>
+
+                {/* 🌟 6. الزر الجديد: كفاح وإنتاجية (Hero's Journey) */}
+                <button 
+                  onClick={handleJourneyInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-slate-800/80 hover:bg-slate-700 text-indigo-400 py-3 px-3 rounded-xl font-medium border border-indigo-500/30 transition-all flex items-center justify-start gap-2 disabled:opacity-50"
+                  title="يشارك كواليس تعلمك، تقسيم وقتك، وكيفية إنجاز المشاريع لربط المتابع بك عاطفياً."
+                >
+                  {isSuggesting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-lg">⏳</span>}
+                  <div className="text-right">
+                    <div className="text-sm font-bold">كفاح وإنتاجية</div>
+                    <div className="text-[10px] text-indigo-400/70">لصناعة جمهور وفي (Super Fans)</div>
                   </div>
                 </button>
 

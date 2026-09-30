@@ -1866,6 +1866,124 @@ app.post('/api/generate-story-prompts', async (req, res) => {
     }
 });
 
+// ==========================================
+// 🚀 محرك النمو الاستراتيجي (The Growth Engine Routes)
+// ==========================================
+
+// 1. مسار خرائط الطريق والأدوات (الهدف: رفع نسبة الحفظ Saves 🗺️)
+app.get('/api/suggest-story-roadmap', async (req, res) => {
+    try {
+        const systemPrompt = `أنت خبير Growth Hacking في إنستغرام. 
+        أعطني فكرة واحدة (Topic) لكاروسيل إنستغرام في مجال (أتمتة الأعمال، Python، MERN Stack، أو الذكاء الاصطناعي).
+        🚨 الهدف من هذه الفكرة: إجبار المتابع على الضغط على زر "حفظ" (Save).
+        يجب أن تكون الفكرة عبارة عن: "خريطة طريق خطوة بخطوة"، أو "قائمة أدوات قوية وسرية"، أو "دليل شامل".
+        مثال: "خريطة طريق 2026: كيف تبني نظام أتمتة كامل من الصفر في 5 أيام".
+        رد بصيغة JSON فقط: {"topic": "اكتب الفكرة الجذابة هنا"}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'اقترح علي فكرة قوية عبارة عن خريطة طريق أو قائمة أدوات تجبر المتابع على حفظ المنشور.' } // 🌟 التعديل هنا: أضفنا طلب المستخدم
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.8,
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: data.topic });
+    } catch (error) {
+        console.error('Error suggesting roadmap topic:', error);
+        res.status(500).json({ error: 'حدث خطأ في توليد فكرة خريطة الطريق.' });
+    }
+});
+
+// 2. مسار إثارة الجدل وكسر المسلمات (الهدف: زيادة التعليقات Comments 🔥)
+app.get('/api/suggest-story-controversial', async (req, res) => {
+    try {
+        const systemPrompt = `أنت خبير Growth Hacking في إنستغرام. 
+        أعطني فكرة واحدة (Topic) لكاروسيل إنستغرام في مجال (البرمجة، الأتمتة، أو العمل الحر).
+        🚨 الهدف من هذه الفكرة: استفزاز المتابعين بشكل إيجابي لدفعهم للتعليق والنقاش (Comments).
+        يجب أن تهاجم الفكرة "معتقداً شائعاً"، أو "تقنية قديمة"، أو "نصيحة مبتذلة" وتطرح بديلاً ذكياً.
+        مثال: "لماذا يعتبر تعلم HTML و CSS في 2026 أسوأ قرار مهني؟ (وماذا تفعل بدلاً من ذلك)".
+        رد بصيغة JSON فقط: {"topic": "اكتب الفكرة المستفزة والذكية هنا"}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'اقترح علي فكرة تكسر المسلمات وتهاجم معتقداً شائعاً في البرمجة لإشعال خانة التعليقات.' } // 🌟 التعديل هنا
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9, 
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: data.topic });
+    } catch (error) {
+        console.error('Error suggesting controversial topic:', error);
+        res.status(500).json({ error: 'حدث خطأ في توليد الفكرة الجدلية.' });
+    }
+});
+
+// 3. مسار دراسات الحالة والأرقام (الهدف: جلب عملاء Leads & Sales 📊)
+app.get('/api/suggest-story-casestudy', async (req, res) => {
+    try {
+        const systemPrompt = `أنت خبير مبيعات (Sales Copywriter) لمشاريع B2B. 
+        أعطني فكرة واحدة (Topic) لكاروسيل إنستغرام لاستهداف "أصحاب الأعمال والشركات".
+        🚨 الهدف من هذه الفكرة: إثبات خبرتك بالأرقام لجلب عملاء يطلبون خدماتك (Leads).
+        يجب أن تكون الفكرة عبارة عن "دراسة حالة (Case Study)" توضح كيف قمت بحل مشكلة معقدة، توفير المال، أو تسريع العمل باستخدام (Python Automation, AI, Web Apps).
+        مثال: "كيف وفرنا 40 ساعة عمل أسبوعياً لشركة شحن باستخدام سكربت بايثون بسيط".
+        رد بصيغة JSON فقط: {"topic": "اكتب دراسة الحالة الجذابة هنا"}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'اقترح علي فكرة عبارة عن دراسة حالة مدعمة بالأرقام لاصطياد أصحاب الأعمال كعملاء.' } // 🌟 التعديل هنا
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.7, 
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: data.topic });
+    } catch (error) {
+        console.error('Error suggesting case study topic:', error);
+        res.status(500).json({ error: 'حدث خطأ في توليد فكرة دراسة الحالة.' });
+    }
+});
+
+// 4. مسار كواليس الكفاح والإنتاجية (الهدف: صناعة جمهور وفي وبناء ارتباط عاطفي ⏳)
+app.get('/api/suggest-story-journey', async (req, res) => {
+    try {
+        const systemPrompt = `أنت خبير Growth Hacking ومدرب إنتاجية (Productivity Coach) للمبرمجين ورواد الأعمال.
+        أعطني فكرة واحدة (Topic) لكاروسيل إنستغرام.
+        🚨 الهدف من هذه الفكرة: إظهار الجانب الإنساني (The Hero's Journey)، ومشاركة كواليس المعاناة والنجاح لبناء ارتباط عاطفي قوي مع المتابعين.
+        يجب أن تتمحور الفكرة حول موضوع من هذه المواضيع:
+        - رحلة تعلم لغة برمجة معينة من الصفر (مثل Python أو MERN).
+        - كيفية تقسيم الوقت بذكاء (Time Management/Time Boxing) لإنجاز مشروع Full-Stack في مدة قصيرة.
+        - كيف تتغلب على احتراق المبرمجين (Burnout) والمثابرة في التعلم الذاتي.
+        مثال: "كيف قسمت وقتي لأبني تطبيق MERN Stack كامل في 14 يوماً فقط رغم انشغالي".
+        رد بصيغة JSON فقط: {"topic": "اكتب فكرة الكفاح والإنتاجية هنا"}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'اقترح علي فكرة قصة كفاح واقعية أو طريقة عبقرية لتقسيم الوقت لإنجاز مشروع برمجي، لكي ألهم المتابعين.' }
+            ],
+            model: 'qwen/qwen3.8-27b', // نستخدم الموديل المستقر
+            temperature: 0.85, 
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: data.topic });
+    } catch (error) {
+        console.error('Error suggesting journey topic:', error);
+        res.status(500).json({ error: 'حدث خطأ في توليد فكرة الكفاح والإنتاجية.' });
+    }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
