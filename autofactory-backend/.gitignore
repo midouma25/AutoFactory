@@ -9,6 +9,7 @@ lerna-debug.log*
 *ttf
 **png
 **jpg
+uploads
 node_modules
 dist
 dist-ssr
