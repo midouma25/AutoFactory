@@ -1883,9 +1883,11 @@ const userRequest = `أخرج لي هذا الكاروسيل الفيروسي ف
             "gemini-3.8-flash", 
             "gemini-3.5-flash", 
             "gemini-flash-latest",
-            "gemini-pro" // الجندي المجهول (بطيء قليلاً لكنه نادراً ما يزدحم)
+            "gemini-2.5-flash", // الخيار الأول: سريع ومستقر جداً
+            "gemini-2.5-pro",   // الخيار الثاني: دقة متناهية وقدرة استيعاب هائلة
+            "gemma-4-31b-it",   // الخيار الثالث: نموذج منفصل تماماً نادراً ما يزدحم
+            "gemini-pro-latest"
         ];
-
         let storyData = null;
         let successModel = "";
 
@@ -2129,7 +2131,7 @@ app.post('/api/generate-cinematic-prompts', async (req, res) => {
     }
 
     try {
-        const systemPrompt = `أنت مخرج سينمائي (Cinematographer) ومدير فني عبقري.
+const systemPrompt = `أنت مخرج سينمائي (Cinematographer) ومدير فني عبقري.
         سأعطيك مصفوفة تحتوي على نص شريحة أو شرائح كاروسيل إنستغرام (بالعربية).
         مهمتك هي تخيل 5 زوايا تصوير مختلفة لكل شريحة، وكتابة الـ Prompts الخاصة بها باللغة الإنجليزية لتوليدها عبر Midjourney أو أدوات الذكاء الاصطناعي للصور.
         
@@ -2139,6 +2141,12 @@ app.post('/api/generate-cinematic-prompts', async (req, res) => {
         3. "povPrompt": لقطة إثبات (POV). منظور الشخص الأول، تركيز مكبر (Macro) على شاشة هاتف، حاسوب، أو إشعارات نجاح.
         4. "emotionPrompt": لقطة مشاعر. تركز على لغة الجسد الدرامية (إرهاق، احتراق وظيفي، شرب قهوة بتعب، أو صدمة إيجابية).
         5. "technicalPrompt": لقطة الشرح العميق (The Masterclass). تركيز مكبر (Macro) على شاشة حاسوب تعرض كوداً حقيقياً يخص الموضوع، أو سبورة زجاجية (Glass Whiteboard) عليها مخططات. 🚨 شرط صارم: خالية تماماً من أي تواجد بشري (No humans, empty room).
+
+        🚨 تحذير برمجي صارم جداً (CRITICAL):
+        يجب أن يكون ردك عبارة عن كود JSON صالح 100% فقط.
+        ممنوع منعاً باتاً كتابة أي كلمة خارج الـ JSON.
+        لا تشرح أفكارك (No Chain of Thought)، لا تقل "Let's break down"، ولا تقل "Here is the JSON".
+        يجب أن يبدأ الرد بالحرف { وينتهي بالحرف } فقط!
 
         رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
         {
@@ -2160,11 +2168,13 @@ app.post('/api/generate-cinematic-prompts', async (req, res) => {
         // ==============================================================
         // 🛡️ نظام الطوارئ: قائمة النماذج المتاحة من الأقوى إلى الأكثر استقراراً
         // ==============================================================
-        const fallbackModels = [
+    const fallbackModels = [
             "gemini-3.8-flash", 
-            "gemini-3.5-flash", 
             "gemini-flash-latest",
-            "gemini-pro"
+            "gemini-flash-lite-latest", // نموذج خفيف وسريع جداً لتفادي الزحام
+            "gemini-3.1-flash-lite", 
+            "gemma-4-31b-it", 
+            "gemini-pro-latest"
         ];
 
         let cinematicData = null;
