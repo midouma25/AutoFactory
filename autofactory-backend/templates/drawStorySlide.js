@@ -37,6 +37,7 @@ function drawBookmark(ctx, x, y) {
 }
 
 function cleanArabicText(text) {
+    // إزالة النجمات والنقاط للتأكد من نظافة النص في الحسابات العادية
     return text ? text.replace(/\*/g, '').replace(/\.$/, '').trim() : '';
 }
 
@@ -58,6 +59,7 @@ function getLinesCount(ctx, text, maxWidth) {
     return count;
 }
 
+// الدالة الكلاسيكية للوصف الطويل (آمنة)
 function wrapTextDynamic(ctx, text, x, y, maxWidth, lineHeight) {
     if (!text) return y;
     const words = text.split(' ');
@@ -78,6 +80,75 @@ function wrapTextDynamic(ctx, text, x, y, maxWidth, lineHeight) {
     }
     ctx.fillText(line.trim(), x, currentY);
     return currentY + lineHeight; 
+}
+
+// 🧠 الاختراع الجديد: دالة تلوين العناوين مع الهندسة العكسية للاتجاه (RTL)
+// 🧠 الاختراع الجديد: دالة تلوين العناوين مع الهندسة العكسية للاتجاه (RTL) المضادة للأخطاء
+function drawHighlightedTitleRTL(ctx, text, centerX, y, maxWidth, lineHeight, baseColor, highlightColor) {
+    if (!text) return y;
+    const words = text.split(' ');
+    let currentLine = [];
+    let currentY = y;
+
+    ctx.textAlign = 'right';
+
+    const drawLine = (wordsArray, yPos) => {
+        let lineWidth = 0;
+        const spaceWidth = ctx.measureText(' ').width;
+        
+        wordsArray.forEach((w, index) => {
+            const cleanW = w.replace(/\*/g, '');
+            lineWidth += ctx.measureText(cleanW).width;
+            if (index < wordsArray.length - 1) lineWidth += spaceWidth;
+        });
+
+        let currentX = centerX + (lineWidth / 2);
+
+        wordsArray.forEach((word) => {
+            // 🌟 التحديث هنا: نستخدم includes لكي نلون الكلمة حتى لو كان معها علامة استفهام أو تعجب
+            const isHighlight = word.includes('*'); 
+            const cleanWord = word.replace(/\*/g, '');
+            const wordWidth = ctx.measureText(cleanWord).width;
+
+            ctx.fillStyle = isHighlight ? highlightColor : baseColor;
+            
+            if (isHighlight) {
+                ctx.shadowColor = highlightColor;
+                ctx.shadowBlur = 25;
+            } else {
+                ctx.shadowColor = 'rgba(16, 185, 129, 0.2)';
+                ctx.shadowBlur = 10;
+            }
+
+            ctx.fillText(cleanWord, currentX, yPos);
+            currentX -= (wordWidth + spaceWidth); 
+        });
+    };
+
+    let testLineWidth = 0;
+    const spaceWidth = ctx.measureText(' ').width;
+
+    for (let n = 0; n < words.length; n++) {
+        const word = words[n];
+        const cleanWord = word.replace(/\*/g, '');
+        const wordWidth = ctx.measureText(cleanWord).width;
+
+        if (testLineWidth + wordWidth > maxWidth && currentLine.length > 0) {
+            drawLine(currentLine, currentY);
+            currentLine = [word];
+            testLineWidth = wordWidth + spaceWidth;
+            currentY += lineHeight;
+        } else {
+            currentLine.push(word);
+            testLineWidth += wordWidth + spaceWidth;
+        }
+    }
+
+    if (currentLine.length > 0) {
+        drawLine(currentLine, currentY);
+    }
+
+    return currentY + lineHeight;
 }
 
 async function stampStoryDesign(slideData, totalSlides, uploadedImagePath, batchId) {
@@ -134,13 +205,14 @@ async function stampStoryDesign(slideData, totalSlides, uploadedImagePath, batch
     const footerY = height - 150; 
     ctx.direction = 'rtl'; 
 
-    const cleanTitle = cleanArabicText(slideData.title);
+    // حساب الارتفاع باستخدام النص النظيف خالي من النجمات
+    const cleanTitleForCount = cleanArabicText(slideData.title);
     const rawTextForCalc = cleanArabicText(slideData.text);
     
     const isCTA = rawTextForCalc.includes('علق') || rawTextForCalc.includes('احفظ') || rawTextForCalc.includes('تابعني');
 
     ctx.font = '900 100px "Alexandria", sans-serif';
-    const titleLines = getLinesCount(ctx, cleanTitle, width * 0.9);
+    const titleLines = getLinesCount(ctx, cleanTitleForCount, width * 0.9);
 
     ctx.font = isCTA ? 'bold 46px "Cairo", sans-serif' : '600 42px "Cairo", sans-serif';
     const textLines = getLinesCount(ctx, rawTextForCalc, width * 0.85);
@@ -154,6 +226,7 @@ async function stampStoryDesign(slideData, totalSlides, uploadedImagePath, batch
 
     let currentY = footerY - totalTextHeight - 40;
 
+    // 1. رسم الكبسولة
     if (slideData.mainTopicTitle) {
         ctx.font = 'bold 28px "Tajawal", sans-serif';
         const topicWidth = ctx.measureText(slideData.mainTopicTitle).width + 80;
@@ -169,32 +242,47 @@ async function stampStoryDesign(slideData, totalSlides, uploadedImagePath, batch
         currentY += 20;
     }
 
-    // رسم العنوان الرئيسي ككتلة واحدة آمنة باللون الأبيض
+    // ==========================================
+    // 🎨 2. رسم العنوان الرئيسي الملون
+    // ==========================================
     ctx.font = '900 100px "Alexandria", sans-serif';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(16, 185, 129, 0.4)';
-    ctx.shadowBlur = 20;
-    currentY = wrapTextDynamic(ctx, cleanTitle, centerX, currentY, width * 0.9, 125);
-    ctx.shadowBlur = 0;
+    
+    // نمرر العنوان الأصلي (الذي يحتوي على النجمات) لدالة التلوين المخصصة
+    currentY = drawHighlightedTitleRTL(
+        ctx, 
+        slideData.title, 
+        centerX, 
+        currentY, 
+        width * 0.9, 
+        125, 
+        '#FFFFFF', // اللون الأبيض للكلمات العادية
+        '#10B981'  // اللون الزمردي للكلمة المظللة بين النجمتين
+    );
 
+    ctx.shadowBlur = 0; // إعادة ضبط الظلال
     currentY += gapBetween; 
 
-    // رسم النص التوضيحي
+    // ==========================================
+    // 📝 3. رسم النص التوضيحي 
+    // ==========================================
     if (isCTA || slideData.slideNumber === totalSlides) {
         ctx.font = 'bold 46px "Cairo", sans-serif';
-        ctx.fillStyle = '#FBBF24'; 
+        ctx.fillStyle = '#FBBF24'; // ذهبي
         ctx.shadowColor = 'rgba(251, 191, 36, 0.4)';
         ctx.shadowBlur = 15;
     } else {
         ctx.font = '600 42px "Cairo", sans-serif';
-        ctx.fillStyle = '#E2E8F0'; 
+        ctx.fillStyle = '#E2E8F0'; // رمادي أنيق
         ctx.shadowBlur = 0;
     }
 
+    ctx.textAlign = 'center'; // إعادة الإعدادات العادية
     wrapTextDynamic(ctx, rawTextForCalc, centerX, currentY, width * 0.85, 65);
     ctx.shadowBlur = 0;
 
+    // ==========================================
+    // 👤 4. الفوتر
+    // ==========================================
     ctx.direction = 'ltr'; 
 
     try {

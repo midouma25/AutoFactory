@@ -15,7 +15,103 @@ const StoryLab = () => {
   const [imagePreviews, setImagePreviews] = useState({}); // 🌟 State جديد لحفظ صور المعاينة
   const [finalImages, setFinalImages] = useState([]);
   const [copiedIndex, setCopiedIndex] = useState(null);
+// --- States للتحرير اليدوي وإعادة الصياغة ---
+  const [editingSlideIndex, setEditingSlideIndex] = useState(null); // من هي الشريحة المفتوحة للتحرير؟
+  const [editForm, setEditForm] = useState({ title: '', text: '' }); // بيانات النموذج المؤقتة
+  const [isRewriting, setIsRewriting] = useState(false);
+// تتبع أي شريحة يتم تحديث صورها حالياً لإظهار أيقونة التحميل
+  const [regeneratingPromptsIndex, setRegeneratingPromptsIndex] = useState(null);
 
+  // 🔄 دالة تحديث اللقطات لشريحة محددة
+  const handleRegenerateSinglePrompts = async (slideIndex) => {
+    setRegeneratingPromptsIndex(slideIndex);
+    try {
+      const slide = storySlides[slideIndex];
+      const res = await axios.post('http://localhost:5000/api/regenerate-single-prompts', { 
+        slideTitle: slide.title,
+        slideText: slide.text
+      });
+      
+      if (res.data.success) {
+        const updatedSlides = [...storySlides];
+        updatedSlides[slideIndex] = { 
+            ...updatedSlides[slideIndex], 
+            vibePrompt: res.data.prompts.vibePrompt,
+            facePrompt: res.data.prompts.facePrompt,
+            povPrompt: res.data.prompts.povPrompt,
+            emotionPrompt: res.data.prompts.emotionPrompt,
+            technicalPrompt: res.data.prompts.technicalPrompt
+        };
+        setStorySlides(updatedSlides);
+        
+        // مسح نصيحة المستشار القديمة لأنها لم تعد صالحة للبرومبتات الجديدة
+        const updatedAdvice = { ...expertAdvice };
+        delete updatedAdvice[slide.slideNumber];
+        setExpertAdvice(updatedAdvice);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء تحديث اللقطات. حاول مجدداً.');
+    }
+    setRegeneratingPromptsIndex(null);
+  };
+  // فتح وضع التحرير
+  const handleEditClick = (slideIndex, slide) => {
+    setEditingSlideIndex(slideIndex);
+    setEditForm({ title: slide.title, text: slide.text });
+  };
+
+  // إغلاق وضع التحرير بدون حفظ
+  const handleCancelEdit = () => {
+    setEditingSlideIndex(null);
+  };
+
+  // حفظ التعديلات اليدوية
+  const handleSaveEdit = (slideIndex) => {
+    const updatedSlides = [...storySlides];
+    updatedSlides[slideIndex] = { 
+        ...updatedSlides[slideIndex], 
+        title: editForm.title, 
+        text: editForm.text 
+    };
+    setStorySlides(updatedSlides);
+    setEditingSlideIndex(null);
+  };
+
+  // 🪄 زر السحر الاصطناعي لإعادة الصياغة
+  const handleAiRewrite = async (slideIndex) => {
+    setIsRewriting(true);
+    try {
+      const slideToRewrite = storySlides[slideIndex];
+      const res = await axios.post('http://localhost:5000/api/rewrite-slide', { 
+        slideTitle: slideToRewrite.title,
+        slideText: slideToRewrite.text,
+        slideType: slideIndex === 0 ? 'hook' : (slideIndex === storySlides.length - 1 ? 'cta' : 'content')
+      });
+      
+      if (res.data.success) {
+        // تحديث الـ Form المؤقت لكي ترى النتيجة فوراً
+        setEditForm({ title: res.data.newTitle, text: res.data.newText });
+        
+        // أو حفظها مباشرة في الـ State الرئيسي
+        const updatedSlides = [...storySlides];
+        updatedSlides[slideIndex] = { 
+            ...updatedSlides[slideIndex], 
+            title: res.data.newTitle, 
+            text: res.data.newText 
+        };
+        setStorySlides(updatedSlides);
+        // نغلق وضع التحرير بعد نجاح السحر
+        setEditingSlideIndex(null);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء إعادة الصياغة بالذكاء الاصطناعي.');
+    }
+    setIsRewriting(false);
+  };
+
+  
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
@@ -128,6 +224,46 @@ const StoryLab = () => {
   };
 
   
+// 7. دالة خرائط الإتقان (Zero to Hero)
+  const handleMasteryInspiration = async () => {
+    setIsSuggesting(true);
+    try {
+      const res = await axios.get('http://localhost:5000/api/suggest-story-mastery');
+      if (res.data.success) setTopic(res.data.topic);
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء جلب الفكرة.');
+    }
+    setIsSuggesting(false);
+  };
+
+  const [expertAdvice, setExpertAdvice] = useState({});
+  const [isConsulting, setIsConsulting] = useState(false);
+
+  // دالة طلب نصيحة المستشار
+  const handleGetExpertAdvice = async () => {
+    setIsConsulting(true);
+    try {
+      const res = await axios.post('http://localhost:5000/api/suggest-best-shots', { 
+        slides: storySlides 
+      });
+      
+      if (res.data.success) {
+        // تحويل المصفوفة إلى كائن (Object) يسهل الوصول إليه عبر رقم الشريحة
+        const adviceObj = {};
+        res.data.expert_advice.forEach(item => {
+          adviceObj[item.slideNumber] = item;
+        });
+        setExpertAdvice(adviceObj);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء استشارة الخبير.');
+    }
+    setIsConsulting(false);
+  };
+
+
   // التعامل مع اختيار الصور من المستخدم وإنشاء معاينة
   const handleImageUpload = (slideNumber, file) => {
     if (file) {
@@ -145,6 +281,47 @@ const StoryLab = () => {
       }));
     }
   };
+
+  const [isGeneratingCinematics, setIsGeneratingCinematics] = useState(false);
+// دالة مساعدة لإنشاء تأخير زمني (Sleep)
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 🎬 دالة طلب اللقطات السينمائية (تعمل الآن عبر Gemini لجميع الشرائح دفعة واحدة)
+  const handleGenerateCinematics = async () => {
+    setIsGeneratingCinematics(true);
+    try {
+      // إرسال المصفوفة كاملة للسيرفر بدون أي تأخير زمني
+      const res = await axios.post('http://localhost:5000/api/generate-cinematic-prompts', { 
+        slides: storySlides 
+      });
+      
+      if (res.data.success) {
+        const cinematicData = res.data.cinematic_slides;
+        const updatedSlides = storySlides.map(slide => {
+          const matchingCinematic = cinematicData.find(c => c.slideNumber === slide.slideNumber);
+          if (matchingCinematic) {
+             return { 
+                 ...slide, 
+                 vibePrompt: matchingCinematic.vibePrompt,
+                 facePrompt: matchingCinematic.facePrompt,
+                 povPrompt: matchingCinematic.povPrompt,
+                 emotionPrompt: matchingCinematic.emotionPrompt,
+                 technicalPrompt: matchingCinematic.technicalPrompt
+             };
+          }
+          return slide;
+        });
+        
+        setStorySlides(updatedSlides);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('حدث خطأ أثناء توليد اللقطات السينمائية.');
+    }
+    setIsGeneratingCinematics(false);
+  };
+
+
 
   const handleStampImages = async () => {
     if (Object.keys(uploadedImages).length !== storySlides.length) {
@@ -289,6 +466,25 @@ const StoryLab = () => {
                     <div className="text-[10px] text-indigo-400/70">لصناعة جمهور وفي (Super Fans)</div>
                   </div>
                 </button>
+{/* 🌟 7. الزر المَلَكي: خرائط الإتقان من الصفر للاحتراف */}
+                <button 
+                  onClick={handleMasteryInspiration} 
+                  disabled={isSuggesting}
+                  className="bg-gradient-to-r from-indigo-900/80 to-purple-900/80 hover:from-indigo-800 hover:to-purple-800 text-white py-4 px-6 rounded-xl font-medium border border-indigo-500/50 transition-all flex items-center justify-between gap-4 disabled:opacity-50 md:col-span-2 lg:col-span-3 shadow-[0_0_20px_rgba(79,70,229,0.2)] mt-2"
+                  title="خلاصات مكثفة وخطوات عملية لتعلم مهاراتك التقنية المعقدة في وقت قياسي."
+                >
+                  <div className="flex items-center gap-3">
+                    {isSuggesting ? <Loader2 size={24} className="animate-spin text-indigo-300" /> : <span className="text-2xl">🚀</span>}
+                    <div className="text-right">
+                      <div className="text-base font-bold text-indigo-100">خرائط الإتقان (Zero to Hero)</div>
+                      <div className="text-xs text-indigo-300/80">خطوات عملية لتعلم (Full-Stack, AI, Trading) في وقت قياسي</div>
+                    </div>
+                  </div>
+                  <span className="hidden md:inline-block bg-indigo-500/30 text-indigo-200 text-xs px-3 py-1 rounded-full border border-indigo-500/50">
+                    الأكثر طلباً 🔥
+                  </span>
+                </button>
+
 
               </div>
             </div>
@@ -350,58 +546,189 @@ const StoryLab = () => {
                       </p>
                   </div>
               </div>
-
+{/* قسم أزرار الذكاء الاصطناعي والصور */}
+              <div className="mb-8 p-6 bg-slate-900/60 border border-slate-700 rounded-2xl flex flex-col md:flex-row items-center gap-4">
+                  
+                  {!storySlides[0]?.technicalPrompt ? (
+                      // زر التوليد السينمائي يظهر أولاً
+                      <div className="flex-1 flex items-center justify-between w-full">
+                          <div>
+                              <h4 className="text-xl font-bold text-indigo-300">النصوص جاهزة!</h4>
+                              <p className="text-sm text-indigo-200/70">اضغط لتوليد 5 زوايا إخراجية لكل شريحة.</p>
+                          </div>
+                          <button onClick={handleGenerateCinematics} disabled={isGeneratingCinematics} className="bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-bold text-white transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.4)]">
+                              {isGeneratingCinematics ? <Loader2 size={20} className="animate-spin" /> : <span className="text-xl">🎬</span>}
+                              توليد اللقطات السينمائية
+                          </button>
+                      </div>
+                  ) : (
+                      // زر المستشار يظهر بعد توليد اللقطات
+                      <div className="flex-1 flex items-center justify-between w-full">
+                          <div>
+                              <h4 className="text-xl font-bold text-amber-400">حائر بين اللقطات؟ 👑</h4>
+                              <p className="text-sm text-amber-200/70">اسمح لمستشار Growth Hacking باختيار اللقطة الفيروسية الأفضل لك.</p>
+                          </div>
+                          <button onClick={handleGetExpertAdvice} disabled={isConsulting} className="bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 px-6 py-3 rounded-xl font-bold text-white transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                              {isConsulting ? <Loader2 size={20} className="animate-spin" /> : <span className="text-xl">🧠</span>}
+                              استشارة الخبير الاستراتيجي
+                          </button>
+                      </div>
+                  )}
+              </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                   {storySlides.map((slide, idx) => (
                       <div key={idx} className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden flex flex-col shadow-2xl relative">
                           
-                          {/* الهيدر (ما سيظهر للمتابع) */}
-                          <div className="bg-slate-900 p-5 border-b border-slate-700">
-                              <span className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block">الشريحة {slide.slideNumber}</span>
-                              <h4 className="text-white text-xl font-bold mb-2">{slide.title}</h4>
-                              <p className="text-slate-400 text-sm">"{slide.text}"</p>
+{/* الهيدر (العنوان والنص - مع ميزة التحرير) */}
+                          <div className="bg-slate-900 p-5 border-b border-slate-700 relative">
+                              <div className="flex justify-between items-start mb-3">
+                                <span className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-3 py-1 rounded-full inline-block">
+                                    الشريحة {slide.slideNumber}
+                                </span>
+                                
+                                {/* زر القلم لفتح وضع التحرير */}
+                                {editingSlideIndex !== idx && (
+                                    <button 
+                                        onClick={() => handleEditClick(idx, slide)}
+                                        className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold"
+                                    >
+                                        <PenTool size={14} /> تعديل النصوص
+                                    </button>
+                                )}
+                              </div>
+
+                              {/* وضع القراءة (العادي) */}
+                              {editingSlideIndex !== idx ? (
+                                  <>
+                                      <h4 className="text-white text-xl font-bold mb-2">{slide.title}</h4>
+                                      <p className="text-slate-400 text-sm">"{slide.text}"</p>
+                                  </>
+                              ) : (
+                                  <div className="flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200">
+                                      {/* 🌟 وضع التحرير (Edit Mode) */}
+                                      {/* حقل العنوان */}
+                                      <div className="relative">
+                                          <label className="text-[10px] text-slate-500 absolute -top-2.5 right-3 bg-slate-900 px-1 font-bold">العنوان (لا تنسَ النجمتين * *)</label>
+                                          <input 
+                                              type="text" 
+                                              value={editForm.title}
+                                              onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                                              className="w-full bg-slate-800 border border-indigo-500/50 text-white rounded-lg p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                          />
+                                      </div>
+                                      
+                                      {/* حقل النص */}
+                                      <div className="relative">
+                                          <label className="text-[10px] text-slate-500 absolute -top-2.5 right-3 bg-slate-900 px-1 font-bold">النص التوضيحي (قصير ومباشر)</label>
+                                          <textarea 
+                                              value={editForm.text}
+                                              onChange={(e) => setEditForm({...editForm, text: e.target.value})}
+                                              className="w-full bg-slate-800 border border-indigo-500/50 text-slate-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-20 resize-none"
+                                          />
+                                      </div>
+
+                                      {/* أزرار التحكم في وضع التحرير */}
+                                      <div className="flex gap-2 justify-end mt-2">
+                                          <button 
+                                              onClick={handleCancelEdit}
+                                              className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                                          >
+                                              إلغاء
+                                          </button>
+                                          
+                                          {/* زر السحر الاصطناعي (AI Rewrite) */}
+                                          <button 
+                                              onClick={() => handleAiRewrite(idx)}
+                                              disabled={isRewriting}
+                                              className="px-4 py-2 text-xs font-bold text-amber-900 bg-amber-500 hover:bg-amber-400 rounded-lg transition-colors flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.3)] disabled:opacity-50"
+                                          >
+                                              {isRewriting ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                                              صياغة سحرية أقوى
+                                          </button>
+
+                                          {/* زر الحفظ اليدوي */}
+                                          <button 
+                                              onClick={() => handleSaveEdit(idx)}
+                                              className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                                          >
+                                              <CheckCircle2 size={14} /> حفظ التعديل
+                                          </button>
+                                      </div>
+                                  </div>
+                              )}
                           </div>
 
-                          {/* قسم اختيار البرومبت */}
+{/* 🌟 قسم اختيار البرومبت (الزوايا الخمس) */}
                           <div className="p-5 flex-1 flex flex-col gap-4">
-                              <p className="text-sm font-bold text-slate-300">اختر أسلوب اللقطة لنسخه:</p>
-                              
-                              {/* خيار 1: الأجواء (بدون وجه) */}
-                              <div className="group relative bg-slate-900/50 hover:bg-slate-900 transition-colors p-4 rounded-xl border border-slate-700 hover:border-purple-500/50">
-                                  <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs font-bold text-purple-400 flex items-center gap-2">
-                                          🌌 لقطة الأجواء (Aesthetic / B-Roll)
-                                      </span>
-                                      <button 
-                                          onClick={() => handleCopy(slide.vibePrompt || slide.geminiPrompt || "حدث خطأ في التوليد، حاول مرة أخرى", `vibe_${idx}`)}
-                                          className="text-slate-400 hover:text-white bg-slate-800 hover:bg-purple-600 p-1.5 rounded-md transition-all"
-                                      >
-                                          {copiedIndex === `vibe_${idx}` ? <CheckCircle2 size={16} className="text-white"/> : <Copy size={16} />}
-                                      </button>
-                                  </div>
-                                  <p className="text-xs text-slate-400 font-mono leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all">
-                                      {slide.vibePrompt || slide.geminiPrompt || "⚠️ فشل الذكاء الاصطناعي في توليد هذا الخيار."}
-                                  </p>
-                              </div>
+{/* رأس قسم اللقطات مع زر التحديث */}
+                              <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-3">
+                                    <p className="text-sm font-bold text-slate-300">اختر زاوية الإخراج السينمائي:</p>
+                                    
+                                    {/* 🔄 زر تحديث اللقطات لهذه الشريحة فقط */}
+                                    <button 
+                                        onClick={() => handleRegenerateSinglePrompts(idx)}
+                                        disabled={regeneratingPromptsIndex === idx}
+                                        className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 border border-indigo-500/30 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                        title="توليد لقطات جديدة تتناسب مع النص الحالي"
+                                    >
+                                        {regeneratingPromptsIndex === idx ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                        تحديث اللقطات
+                                    </button>
+                                </div>
 
-                              {/* خيار 2: الواقعية (مع الوجه) */}
-                              <div className="group relative bg-slate-900/50 hover:bg-slate-900 transition-colors p-4 rounded-xl border border-slate-700 hover:border-emerald-500/50">
-                                  <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-2">
-                                          👤 لقطة واقعية (تظهر أنت فيها)
-                                      </span>
-                                      <button 
-                                          onClick={() => handleCopy(slide.facePrompt || slide.geminiPrompt || "حدث خطأ في التوليد، حاول مرة أخرى", `face_${idx}`)}
-                                          className="text-slate-400 hover:text-white bg-slate-800 hover:bg-emerald-600 p-1.5 rounded-md transition-all"
-                                      >
-                                          {copiedIndex === `face_${idx}` ? <CheckCircle2 size={16} className="text-white"/> : <Copy size={16} />}
-                                      </button>
-                                  </div>
-                                  <p className="text-xs text-slate-400 font-mono leading-relaxed line-clamp-2 group-hover:line-clamp-none transition-all">
-                                      {slide.facePrompt || "⚠️ قم بتوليد السيناريو مرة أخرى للحصول على هذا الخيار المخصص."}
-                                  </p>
+                                {expertAdvice[slide.slideNumber] && (
+                                    <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded border border-amber-500/30 animate-pulse">
+                                        تم تحديد الخيار الأمثل 👑
+                                    </span>
+                                )}
                               </div>
+                              
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                  {/* دالة مساعدة لتحديد ستايل اللقطة الفائزة */}
+                                  {['vibePrompt', 'facePrompt', 'povPrompt', 'emotionPrompt', 'technicalPrompt'].map((promptKey, pIdx) => {
+                                      const isWinner = expertAdvice[slide.slideNumber]?.bestShotKey === promptKey;
+                                      const promptTitles = {
+                                          vibePrompt: "🌌 لقطة أجواء (B-Roll)",
+                                          facePrompt: "👤 لقطة الهوية (وجهك)",
+                                          povPrompt: "📱 الإثبات (شاشة/POV)",
+                                          emotionPrompt: "🎭 المشاعر (دراما/إرهاق)",
+                                          technicalPrompt: "📝 الشرح التقني (شاشة كود/سبورة)"
+                                      };
+
+                                      return (
+                                          <div key={pIdx} className={`group relative p-3 rounded-xl border transition-all ${
+                                              isWinner 
+                                              ? 'bg-amber-900/20 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-[1.02]' 
+                                              : 'bg-slate-900/50 hover:bg-slate-900 border-slate-700'
+                                          } ${promptKey === 'technicalPrompt' ? 'lg:col-span-2' : ''}`}>
+                                              
+                                              <div className="flex justify-between items-center mb-2">
+                                                  <span className={`text-[11px] font-bold ${isWinner ? 'text-amber-400' : 'text-slate-400'}`}>
+                                                      {promptTitles[promptKey]} {isWinner && '👑'}
+                                                  </span>
+                                                  <button onClick={() => handleCopy(slide[promptKey], `${promptKey}_${idx}`)} className={`p-1.5 rounded transition-colors disabled:opacity-50 ${isWinner ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`} disabled={!slide[promptKey]}>
+                                                      {copiedIndex === `${promptKey}_${idx}` ? <CheckCircle2 size={14} className="text-white"/> : <Copy size={14} />}
+                                                  </button>
+                                              </div>
+                                              
+                                              <p className={`text-[10px] font-mono line-clamp-2 group-hover:line-clamp-none ${isWinner ? 'text-amber-100' : 'text-slate-400'}`}>
+                                                  {slide[promptKey] || "اضغط لتوليد الإخراج..."}
+                                              </p>
+
+                                              {/* عرض تعليق المستشار أسفل اللقطة الفائزة */}
+                                              {isWinner && (
+                                                  <div className="mt-3 pt-3 border-t border-amber-500/30 text-[11px] text-amber-200 leading-relaxed font-bold bg-amber-900/40 p-2 rounded-lg">
+                                                      💡 <strong>رأي المستشار:</strong> {expertAdvice[slide.slideNumber].reasoning}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          
                           </div>
+                          
 
                           {/* قسم رفع الصورة المختارة ومعاينتها */}
                           <div className="p-5 bg-slate-800/80 border-t border-slate-700 mt-auto">

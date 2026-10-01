@@ -12,6 +12,26 @@ const axios = require('axios'); // إضافة
 const cloudinary = require('cloudinary').v2; // إضافة
 const cron = require('node-cron');
 const drawTerminalSlide = require('./templates/terminal');
+// ... (الاستدعاءات القديمة مثل express و groq-sdk)
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+// 🌟 تشغيل محرك Gemini الثقيل (نستدعيه فقط عند الحاجة)
+// ==========================================
+// 🔄 موزع الحمل الذكي لمفاتيح Google Gemini
+// ==========================================
+const geminiKeys = [
+    process.env.GEMINI_API_KEY_1,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_4,
+    process.env.GEMINI_API_KEY_5
+].filter(Boolean);
+
+const getGeminiClient = () => {
+    // اختيار مفتاح عشوائي لتوزيع الضغط على حساباتك الخمسة
+    const randomKey = geminiKeys[Math.floor(Math.random() * geminiKeys.length)];
+    return new GoogleGenerativeAI(randomKey);
+};
+
 const app = express();
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
@@ -54,7 +74,32 @@ try {
 } catch (error) {
     console.log('⚠️ تحذير: فشل تحميل الخطوط. تأكد من أسماء الملفات.');
 }
+// جلب كل المفاتيح وتجاهل الفارغ منها بذكاء
+const groqKeys = [
+    process.env.GROQ_API_KEY_1,
+    process.env.GROQ_API_KEY_2,
+    process.env.GROQ_API_KEY_3
+].filter(Boolean);
 
+if (groqKeys.length === 0) {
+    console.error("🚨 خطأ قاتل: لم يتم العثور على أي مفتاح Groq في ملف .env");
+}
+
+// إنشاء نسخة Groq لكل مفتاح
+const groqClients = groqKeys.map(key => new Groq({ apiKey: key }));
+let currentClientIndex = 0;
+
+// هذه الدالة السحرية ستعطيك مفتاحاً مختلفاً في كل مرة يتم استدعاؤها!
+const getGroqClient = () => {
+    const client = groqClients[currentClientIndex];
+    const usedKeyNumber = currentClientIndex + 1;
+    
+    // الانتقال للمفتاح التالي، وإذا وصلنا للأخير نعود للأول
+    currentClientIndex = (currentClientIndex + 1) % groqClients.length;
+    
+    console.log(`[Load Balancer] 🔄 جاري إرسال الطلب باستخدام المفتاح رقم: ${usedKeyNumber}`);
+    return client;
+};
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     if (!text) return y;
     // فصل النص بناءً على الأسطر الجديدة التي يرسلها الذكاء الاصطناعي
@@ -1828,26 +1873,74 @@ app.post('/api/generate-story-prompts', async (req, res) => {
             // 🚨 يجب أن تستمر بإنشاء العناصر هنا حتى تصل إلى slideNumber: ${slideCount}
           ]
         }`;
+const userRequest = `أخرج لي هذا الكاروسيل الفيروسي في ${slideCount} شرائح كاملة: ${topic}`;
+        const finalPrompt = systemPrompt + "\n\nالطلب:\n" + userRequest;
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: systemPrompt }, 
-                { role: 'user', content: `أخرج لي هذا الكاروسيل الفيروسي بالتفصيل الممل في ${slideCount} شرائح كاملة (خطاف ساحب + رحلة دسمة + خاتمة تطلب التعليق بكلمة مفتاحية): ${topic}` }
-            ],
-            model: 'qwen/qwen3.8-27b', 
-            temperature: 0.65, 
-            response_format: { type: "json_object" },
-            max_tokens: 6000, 
-        });
+        // ==============================================================
+        // 🛡️ نظام الطوارئ: قائمة النماذج المتاحة من الأقوى إلى الأكثر استقراراً
+        // ==============================================================
+        const fallbackModels = [
+            "gemini-3.8-flash", 
+            "gemini-3.5-flash", 
+            "gemini-flash-latest",
+            "gemini-pro" // الجندي المجهول (بطيء قليلاً لكنه نادراً ما يزدحم)
+        ];
 
-        const storyData = JSON.parse(chatCompletion.choices[0].message.content);
-        
-        // التحقق من العدد وقصه إذا زاد عن المطلوب، ولكن لن ينقص بإذن الله
+        let storyData = null;
+        let successModel = "";
+
+        // المحاولة الذكية: المرور على النماذج واحداً تلو الآخر
+        for (const modelName of fallbackModels) {
+            try {
+                console.log(`⏳ جاري المحاولة باستخدام السيرفر: ${modelName}...`);
+                const genAI = getGeminiClient();
+                const model = genAI.getGenerativeModel({ 
+                    model: modelName, 
+                    generationConfig: { responseMimeType: "application/json" } 
+                });
+
+                const result = await model.generateContent(finalPrompt);
+                storyData = JSON.parse(result.response.text());
+                successModel = modelName;
+                
+                console.log(`✅ [نجاح] تم التوليد بنجاح عبر السيرفر: ${successModel}`);
+                break; // الخروج من الحلقة فور النجاح
+
+            } catch (error) {
+                if (error.status === 503 || error.status === 429) {
+                    console.log(`⚠️ السيرفر ${modelName} مزدحم حالياً (503/429). الانتقال للبديل...`);
+                    continue; // تخطي هذا النموذج وتجربة الذي يليه
+                }
+                throw error; // إذا كان الخطأ برمجياً وليس بسبب الازدحام، أوقف العملية
+            }
+        }
+
+        // إذا فشلت جميع النماذج في القائمة
+        if (!storyData) {
+            throw new Error("جميع سيرفرات Gemini تواجه ضغطاً هائلاً في هذه اللحظة. يرجى المحاولة بعد قليل.");
+        }
+        // ==============================================================
+
+        // 🌟 فرض التلوين الإجباري
+        if (storyData.slides) {
+            storyData.slides.forEach(slide => {
+                if (slide.title && !slide.title.includes('*')) {
+                    let words = slide.title.trim().split(' ');
+                    if (words.length > 1) {
+                        let lastWord = words.pop(); 
+                        words.push(`*${lastWord}*`); 
+                        slide.title = words.join(' ');
+                    } else if (words.length === 1) {
+                        slide.title = `*${slide.title}*`;
+                    }
+                }
+            });
+        }
+
         if (storyData.slides && storyData.slides.length > slideCount) {
             storyData.slides = storyData.slides.slice(0, slideCount);
         }
 
-        // حقن العنوان الرئيسي لجميع الشرائح
         if (storyData.slides && storyData.mainTopicTitle) {
             storyData.slides.forEach(slide => {
                 slide.mainTopicTitle = storyData.mainTopicTitle;
@@ -1861,8 +1954,8 @@ app.post('/api/generate-story-prompts', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ خطأ في توليد السيناريو:', error);
-        res.status(500).json({ error: 'حدث خطأ أثناء كتابة السيناريو.' });
+        console.error('❌ خطأ نهائي في توليد السيناريو:', error.message);
+        res.status(500).json({ error: 'الخوادم مزدحمة جداً. حاول مرة أخرى.' });
     }
 });
 
@@ -1982,6 +2075,308 @@ app.get('/api/suggest-story-journey', async (req, res) => {
     } catch (error) {
         console.error('Error suggesting journey topic:', error);
         res.status(500).json({ error: 'حدث خطأ في توليد فكرة الكفاح والإنتاجية.' });
+    }
+});
+
+// 5. مسار خرائط الإتقان (الهدف: جلب آلاف الحفظ والمشاركات بأن تكون المرجع الأول 🚀)
+app.get('/api/suggest-story-mastery', async (req, res) => {
+    try {
+        const systemPrompt = `أنت خبير تعليم تقني (Tech Educator) و Growth Hacker.
+        مهمتك ابتكار فكرة (Topic) واحدة لكاروسيل إنستغرام توضح خطة "من الصفر للاحتراف" (Zero to Hero).
+        
+        🚨 مهاراتي التي أريد التدريس عنها (اختر واحدة فقط عشوائياً في كل مرة):
+        [Full Stack MERN, Python, Machine Learning (ML), Deep Learning (DL), Django, Adobe Audition, Automation, Node.js, Web dev full stack, Desktop app dev full stack, AI MODELS, Voice ACTING, Audio editing, Saas dev, Video Montage/Editing, Algorithmic Trading, English Language Mastery].
+
+        🚨 الهدف من الفكرة: يجب أن تكون الفكرة قابلة للحفظ (Highly Savable). استخدم أسلوب:
+        - "خطة الـ X يوماً لتعلم..."
+        - "لا تشاهد كورسات، ابدأ ببناء هذه الـ 3 مشاريع في..."
+        - "المسار السري لإتقان [المهارة] لو عاد بي الزمن..."
+        
+        مثال: "خطة الـ 90 يوماً لإتقان التداول الخوارزمي (Algorithmic Trading) وبناء أول بوت لك".
+        مثال 2: "كيف تتقن MERN Stack عبر بناء 3 مشاريع حقيقية (تخلى عن الكورسات المملة)".
+
+        رد بصيغة JSON فقط: {"topic": "اكتب الفكرة الفيروسية لتعلم المهارة هنا"}`;
+
+// 🌟 1. استدعاء الموزع الذكي للانتقال للمفتاح التالي تلقائياً
+        const currentGroq = getGroqClient();
+
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'اقترح علي خطة تعلم فيروسية، مكثفة، وتعتمد على الوقت أو المشاريع لإحدى مهاراتي لكي ينبهر المتابعون ويحفظوا المنشور.' }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9, 
+            max_tokens: 400, // 🌟 2. حماية صارمة من الـ Rate Limit: لن يتجاوز الطلب 400 توكن أبداً
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, topic: data.topic });
+    } catch (error) {
+        console.error('Error suggesting mastery topic:', error);
+        res.status(500).json({ error: 'حدث خطأ في توليد فكرة خارطة الإتقان.' });
+    }
+});
+// ==========================================
+// 🎬 مسار الإخراج السينمائي (تم نقله إلى Gemini مع نظام الطوارئ 🚀)
+// ==========================================
+app.post('/api/generate-cinematic-prompts', async (req, res) => {
+    const { slides } = req.body;
+
+    if (!slides || !Array.isArray(slides)) {
+        return res.status(400).json({ error: 'الرجاء توفير بيانات الشرائح (slides).' });
+    }
+
+    try {
+        const systemPrompt = `أنت مخرج سينمائي (Cinematographer) ومدير فني عبقري.
+        سأعطيك مصفوفة تحتوي على نص شريحة أو شرائح كاروسيل إنستغرام (بالعربية).
+        مهمتك هي تخيل 5 زوايا تصوير مختلفة لكل شريحة، وكتابة الـ Prompts الخاصة بها باللغة الإنجليزية لتوليدها عبر Midjourney أو أدوات الذكاء الاصطناعي للصور.
+        
+        🚨 الزوايا الخمس المطلوبة لكل شريحة (Hyper-Realistic, 8k, Cinematic Lighting):
+        1. "vibePrompt": لقطة أجواء (B-Roll). مكتب تقني، إضاءة خافتة، أكواد (بدون إظهار وجه بشري كامل).
+        2. "facePrompt": لقطة هوية. شاب عربي بملامح جدية/واثقة يمثل شخصية الخبير التقني، ينظر للكاميرا أو يعمل بتركيز.
+        3. "povPrompt": لقطة إثبات (POV). منظور الشخص الأول، تركيز مكبر (Macro) على شاشة هاتف، حاسوب، أو إشعارات نجاح.
+        4. "emotionPrompt": لقطة مشاعر. تركز على لغة الجسد الدرامية (إرهاق، احتراق وظيفي، شرب قهوة بتعب، أو صدمة إيجابية).
+        5. "technicalPrompt": لقطة الشرح العميق (The Masterclass). تركيز مكبر (Macro) على شاشة حاسوب تعرض كوداً حقيقياً يخص الموضوع، أو سبورة زجاجية (Glass Whiteboard) عليها مخططات. 🚨 شرط صارم: خالية تماماً من أي تواجد بشري (No humans, empty room).
+
+        رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
+        {
+          "cinematic_slides": [
+            {
+              "slideNumber": 1,
+              "vibePrompt": "...",
+              "facePrompt": "...",
+              "povPrompt": "...",
+              "emotionPrompt": "...",
+              "technicalPrompt": "..."
+            }
+          ]
+        }`;
+
+        const userRequest = `إليك نصوص الشرائح، قم بتوليد اللقطات الخمس لكل منها دفعة واحدة:\n${JSON.stringify(slides)}`;
+        const finalPrompt = systemPrompt + "\n\nالطلب:\n" + userRequest;
+
+        // ==============================================================
+        // 🛡️ نظام الطوارئ: قائمة النماذج المتاحة من الأقوى إلى الأكثر استقراراً
+        // ==============================================================
+        const fallbackModels = [
+            "gemini-3.8-flash", 
+            "gemini-3.5-flash", 
+            "gemini-flash-latest",
+            "gemini-pro"
+        ];
+
+        let cinematicData = null;
+        let successModel = "";
+
+        // المحاولة الذكية: المرور على النماذج واحداً تلو الآخر
+        for (const modelName of fallbackModels) {
+            try {
+                console.log(`⏳ [الإخراج السينمائي] جاري المحاولة عبر سيرفر: ${modelName}...`);
+                
+                const genAI = getGeminiClient();
+                const model = genAI.getGenerativeModel({ 
+                    model: modelName, 
+                    generationConfig: { responseMimeType: "application/json" } 
+                });
+
+                const result = await model.generateContent(finalPrompt);
+                cinematicData = JSON.parse(result.response.text());
+                successModel = modelName;
+                
+                console.log(`✅ [نجاح] تم توليد 40 لقطة سينمائية بنجاح عبر: ${successModel}`);
+                break; // الخروج من الحلقة فور النجاح
+
+            } catch (error) {
+                if (error.status === 503 || error.status === 429) {
+                    console.log(`⚠️ السيرفر ${modelName} مزدحم حالياً (503). الانتقال للبديل...`);
+                    continue; // تخطي هذا النموذج وتجربة الذي يليه
+                }
+                throw error; // إذا كان الخطأ برمجياً (مثل JSON غير صالح)، أوقف العملية
+            }
+        }
+
+        // إذا فشلت جميع النماذج في القائمة
+        if (!cinematicData) {
+            throw new Error("جميع سيرفرات Gemini تواجه ضغطاً هائلاً في هذه اللحظة. يرجى المحاولة بعد قليل.");
+        }
+        // ==============================================================
+
+        res.json({ success: true, cinematic_slides: cinematicData.cinematic_slides });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد اللقطات السينمائية:', error.message);
+        res.status(500).json({ error: 'حدث خطأ في توليد اللقطات السينمائية.' });
+    }
+});
+// ==========================================
+// 👑 مسار المستشار الخبير (The Ultimate Director's Cut)
+// ==========================================
+app.post('/api/suggest-best-shots', async (req, res) => {
+    const { slides } = req.body;
+
+    if (!slides || !Array.isArray(slides)) {
+        return res.status(400).json({ error: 'الرجاء توفير بيانات الشرائح.' });
+    }
+
+    try {
+        const systemPrompt = `أنت أفضل مستشار Growth Hacking ومخرج إبداعي (Creative Director) في العالم.
+        أمامك مصفوفة لشرائح كاروسيل إنستغرام، كل شريحة تحتوي على نص، و 5 خيارات لزوايا التصوير:
+        (vibePrompt, facePrompt, povPrompt, emotionPrompt, technicalPrompt).
+        
+        مهمتك: اختر اللقطة *الأكثر فيروسية* (The Viral Choice) لكل شريحة والتي ستكسر ملل المتابع (Pattern Interrupt) وترفع التفاعل.
+        🚨 القواعد الاستراتيجية لاختيارك:
+        - الشريحة الأولى (الخطاف): تحتاج دائماً إلى صدمة بصرية (povPrompt أو emotionPrompt).
+        - شرائح الشرح في المنتصف: تحتاج إلى إثبات (technicalPrompt) أو أجواء (vibePrompt).
+        - الشريحة الأخيرة (الدعوة للإجراء): تحتاج دائماً إلى بناء ثقة شخصية (facePrompt).
+        
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "expert_advice": [
+            {
+              "slideNumber": 1,
+              "bestShotKey": "povPrompt", // اكتب اسم المفتاح الفائز هنا بالضبط
+              "reasoning": "سبب اختيارك التسويقي هنا (مثال: لأن لقطة الشاشة من منظور الشخص الأول ستجعل المتابع يتوقف عن التمرير فوراً ليرى النتيجة...)"
+            }
+          ]
+        }`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `بصفتك الخبير الأول، حلل هذه الشرائح واختر اللقطة الفيروسية الأفضل لكل شريحة مع ذكر الدليل التسويقي القاطع: ${JSON.stringify(slides)}` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.6, // حرارة منخفضة ليكون التحليل منطقياً واستراتيجياً
+            max_tokens: 6000,
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, expert_advice: data.expert_advice });
+    } catch (error) {
+        console.error('Error suggesting best shots:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء تحليل المستشار الخبير.' });
+    }
+});
+
+
+// ==========================================
+// ✍️ مسار إعادة الصياغة السحرية للشريحة (AI Slide Rewrite)
+// ==========================================
+app.post('/api/rewrite-slide', async (req, res) => {
+    const { slideTitle, slideText, slideType } = req.body;
+
+    if (!slideTitle || !slideText) {
+        return res.status(400).json({ error: 'الرجاء توفير النص الحالي للشريحة.' });
+    }
+
+    try {
+        const systemPrompt = `أنت أفضل Copywriter و Growth Hacker في العالم.
+        مهمتك إعادة صياغة (العنوان والنص) لشريحة إنستغرام ليكون أقوى، أكثر صدمة، وأكثر فيروسية (Viral).
+        
+        🚨 قواعد إعادة الصياغة:
+        1. العنوان (title): قصير جداً (1 إلى 3 كلمات كحد أقصى). صادم. 🚨 ضع أهم كلمة بين نجمتين *هكذا* لتلوينها.
+        2. النص (text): 🚨 قصير جداً ومباشر (من 6 إلى 15 كلمة كحد أقصى). لا تكتب فقرات أبداً!
+        3. الأسلوب: ${slideType === 'hook' ? 'صادم ويثير الفضول لدرجة التوقف عن التمرير.' : (slideType === 'cta' ? 'يخلق إلحاحاً شديداً (FOMO) للتعليق.' : 'عملي، مباشر، ويكشف سراً صغيراً.')}
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "newTitle": "العنوان *الجديد*",
+          "newText": "النص الجديد القوي هنا."
+        }`;
+
+        const currentGroq = getGroqClient(); 
+
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `أعد صياغة هذا ليكون ترندياً وقوياً:\nالعنوان الحالي: ${slideTitle}\nالنص الحالي: ${slideText}` }
+            ],
+            model: 'qwen/qwen3.8-27b', // نستخدم qwen للسرعة
+            temperature: 0.8, // حرارة مرتفعة قليلاً للإبداع
+            max_tokens: 300, 
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        
+        // 🌟 تطبيق التلوين الإجباري إذا نسي الذكاء الاصطناعي النجمات
+        if (data.newTitle && !data.newTitle.includes('*')) {
+            let words = data.newTitle.trim().split(' ');
+            if (words.length > 1) {
+                let lastWord = words.pop();
+                words.push(`*${lastWord}*`);
+                data.newTitle = words.join(' ');
+            } else if (words.length === 1) {
+                data.newTitle = `*${data.newTitle}*`;
+            }
+        }
+
+        res.json({ success: true, newTitle: data.newTitle, newText: data.newText });
+    } catch (error) {
+        console.error('Error rewriting slide:', error);
+        res.status(500).json({ error: 'حدث خطأ في إعادة الصياغة السحرية.' });
+    }
+});
+
+// ==========================================
+// 🔄 مسار تحديث زوايا الإخراج لشريحة واحدة (Single Slide Prompts)
+// ==========================================
+app.post('/api/regenerate-single-prompts', async (req, res) => {
+    const { slideTitle, slideText } = req.body;
+
+    if (!slideTitle) {
+        return res.status(400).json({ error: 'الرجاء توفير بيانات الشريحة.' });
+    }
+
+    try {
+        const systemPrompt = `أنت مخرج سينمائي. لديك الآن نص شريحة واحدة فقط تم تعديلها.
+        مهمتك توليد 5 زوايا تصوير (Midjourney Prompts) تتناسب حصرياً مع هذا النص الجديد.
+        
+        🚨 قوانين صارمة:
+        - اجعل كل برومبت واضحاً ومفصلاً (25-35 كلمة) مع وصف دقيق للموضوع، المكان، الإضاءة، الألوان، التكوين، زاوية الكاميرا، نوع اللقطة، وعمق المجال.
+        - ابدأ دائماً بـ: Hyper-realistic 8k cinematic.
+        - استخدم أوصافاً بصرية محددة وتجنب الكلمات العامة أو المجردة، وأضف تفاصيل واقعية تساعد على إنتاج صورة حادة وواضحة.
+        - اذكر العناصر الرئيسية في المقدمة، واجعل الخلفية بسيطة وغير مشتتة، مع الحفاظ على تناسق جميع التفاصيل مع نص الشريحة.
+        
+        الزوايا:
+        1. vibePrompt: أجواء (B-Roll) بدون وجوه، مع تحديد المكان والعناصر والإضاءة والتكوين السينمائي.
+        2. facePrompt: لقطة هوية لشاب عربي خبير، مع وصف العمر التقريبي، الملابس، تعبير الوجه، الإضاءة، والخلفية.
+        3. povPrompt: منظور الشخص الأول (شاشة هاتف/حاسوب)، مع وصف ما يظهر على الشاشة واليدين والبيئة المحيطة.
+        4. emotionPrompt: لغة جسد ومشاعر درامية، مع وصف الوضعية، تعبير الوجه، الإضاءة، والأجواء العاطفية.
+        5. technicalPrompt: شاشة كود أو سبورة زجاجية (بدون بشر تماماً)، مع نص تقني مقروء وتكوين منظم وإضاءة واضحة.
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "prompts": {
+            "vibePrompt": "...",
+            "facePrompt": "...",
+            "povPrompt": "...",
+            "emotionPrompt": "...",
+            "technicalPrompt": "..."
+          }
+        }`;
+
+        const currentGroq = getGroqClient(); 
+
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `استلهم اللقطات من هذا النص الجديد:\nالعنوان: ${slideTitle}\nالنص: ${slideText}` }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.7, 
+            max_tokens: 500, // سعة صغيرة جداً تكفي لشريحة واحدة وتتفادى حدود السيرفر
+            response_format: { type: "json_object" }
+        });
+        
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, prompts: data.prompts });
+    } catch (error) {
+        console.error('Error regenerating single prompts:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء تحديث زوايا الإخراج.' });
     }
 });
 
