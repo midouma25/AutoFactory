@@ -11,10 +11,12 @@ lerna-debug.log*
 **jpg
 uploads
 node_modules
+videos
 dist
 dist-ssr
 *.local
 .env
+get_token.py
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

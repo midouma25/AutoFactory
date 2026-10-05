@@ -12,6 +12,14 @@ const axios = require('axios'); // إضافة
 const cloudinary = require('cloudinary').v2; // إضافة
 const cron = require('node-cron');
 const drawTerminalSlide = require('./templates/terminal');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const ffmpeg = require('fluent-ffmpeg');
+const Lead = require('./Lead');
+const Campaign = require('./models/Campaign'); // 👈 أضف هذا
+const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
 // ... (الاستدعاءات القديمة مثل express و groq-sdk)
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 // 🌟 تشغيل محرك Gemini الثقيل (نستدعيه فقط عند الحاجة)
@@ -2389,6 +2397,831 @@ app.post('/api/regenerate-single-prompts', async (req, res) => {
         res.status(500).json({ error: 'حدث خطأ أثناء تحديث زوايا الإخراج.' });
     }
 });
+
+
+
+// ==========================================
+// 💡 مسار توليد إلهامات الريلز الفيروسية (نسخة الـ Growth Hacker V2.0)
+// ==========================================
+app.get('/api/suggest-reel-topics', async (req, res) => {
+    try {
+        console.log(`\n💡 جاري استدعاء العقل المدبر لابتكار أفكار ودروس فيروسية...`);
+
+        const systemPrompt = `أنت أدهى خبير (Growth Hacker)، وأعظم مخرج فيديوهات تعليمية قصيرة (Reels/TikTok) في العالم. 
+        مهمتك ليست مجرد رمي الأفكار، بل هندسة "دروس مصغرة فيروسية" (Micro-Learning) تجعل المشاهد يشعر بالغباء لأنه لم يعرف هذه المعلومة من قبل، وتجبره على الحفظ والمشاركة.
+
+        🚨 استهدف هذه المحاور الخمسة بذكاء شديد (نوّع بينها):
+        1. شروحات برمجية صادمة (MERN & Python): لا تشرح الدرس بالطريقة التقليدية. ابدأ بـ "خطأ يدمر تطبيقك" أو "شفرة غش في Node.js توفر عليك ساعات". قدم الكود أو الحل كأنه كنز سري.
+        2. بناء الأنظمة (الذكاء الاصطناعي والتداول): كيف تبني بوت تداول آلي (Algo-Trading) أو أداة ذكاء اصطناعي (SaaS). اشرح الهيكلية المعمارية (Architecture) في 30 ثانية لتجعل المشاهد ينبهر بالنتيجة ويريد التعلم.
+        3. اختراق العقل باللغات (The Linguistic Cheat Code): كيف أن إتقان الإنجليزية يضاعف الراتب، وكيف أن تعلم لغة معقدة (كاليابانية) يغير حرفياً مسارات الدماغ العصبية ويرفع الـ IQ.
+        4. الانضباط الوحشي (Monk Mode & Gym): دمج الانضباط الجسدي (كمال الأجسام، الكاليستنكس) مع الإنتاجية التقنية. كيف تبني جسمك وعقلك كآلة لا تقهر.
+        5. تدمير الخرافات (Debunking Myths): كشف حقيقة كورسات البرمجة الوهمية، أو خرافات التداول العاطفي، وتقديم "الكبسولة الحمراء" والواقع المر.
+
+        🚨 القواعد النفسية الصارمة (Psychological Triggers):
+        - استخدم "فجوة الفضول" (Curiosity Gap) لجعله يكمل الفيديو.
+        - في الدروس: استخدم قاعدة (المشكلة ⬅️ التخويف من عواقبها ⬅️ الحل السحري السريع).
+        - الكلمات الذهبية المحفزة: (السر المظلم، شفرة الغش، الكبسولة الحمراء، توقف عن فعل هذا فوراً، 99% من المبرمجين، اختراق الدماغ، هذا الكود).
+        - النبرة: حادة، واثقة، سلطوية، وتقدم (Tough Love).
+
+        رد بصيغة JSON نقي فقط بهذا الهيكل:
+        {
+          "inspirations": [
+            {
+              "id": 1,
+              "category": "نوع المحور (مثال: درس برمجي خاطف، انضباط نفسي، أتمتة وذكاء اصطناعي)",
+              "title": "عنوان ساحق (كلمتين أو 3)",
+              "emoji": "🔥",
+              "hook": "الخطاف (الـ 3 ثواني الأولى): الجملة الصادمة التي ستجمد المشاهد مكانه.",
+              "coreLesson": "جوهر الدرس: شرح الفكرة أو التقنية أو المعلومة في سطرين بطريقة سريعة وعبقرية.",
+              "cta": "الدعوة للإجراء: اطلب منه التعليق بكلمة محددة (مثل: كود، خطة، أتمتة) لإرسال الملف أو الشرح الكامل له."
+            }
+          ]
+        }`;
+
+        const userPrompt = "ادخل في وضع العبقرية التسويقية الآن. استخرج لي 4 أفكار (Hooks + Lessons) لدروس مصغرة وأفكار فيروسية جديدة كلياً وغير مكررة. أريدها أن تكون مغناطيسية وتجبر المشاهد على التعليق ومتابعتي فوراً.";
+
+        const currentGroq = getGroqClient(); // تأكد من دالة جلب العميل لديك
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            model: 'qwen/qwen3.8-27b', // أنصح بتحديث الموديل لنسخة أحدث إن أمكن أو إبقاء qwen2.5
+            temperature: 0.85, // تقليل بسيط لضمان دقة معلومات "الدروس"
+            max_tokens: 1500,
+            response_format: { type: "json_object" }
+        });
+
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, inspirations: data.inspirations });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد إلهامات الريلز:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء جلب الإلهامات.' });
+    }
+});
+
+// ==========================================
+// 🎬 Route 4: Short Video Engine (English Only, Video Prompts)
+// ==========================================
+app.post('/api/generate-reel-script', async (req, res) => {
+    const { topic } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'Topic is missing.' });
+
+    try {
+        console.log(`\n🎞️ Generating English script for: ${topic.substring(0, 30)}...`);
+
+        const systemPrompt = `You are a world-class documentary director and Growth Hacker.
+        Your task is to write a short video script in a "Raw Documentary" style.
+
+        🚨 STRICT RULE: THE ENTIRE OUTPUT MUST BE 100% IN ENGLISH. NO ARABIC WORDS ALLOWED AT ALL IN ANY FIELD. 🚨
+        
+        Voice-over & Emotion Directing:
+        - Use punctuation to engineer the voice: (...) for deep pauses, (!!!) for shock.
+        
+        Visual Rules (Veo / Motion Prompts):
+        - The footage must look 100% real, shot on a phone or documentary camera.
+        - NEVER use AI words (cyberpunk, 3d render, neon, hyper-cinematic).
+        - Use natural camera movements: "Handheld camera with slight shake, subtle breathing".
+        - DO NOT request audio or voice-over generation in the visual prompt.
+
+        Output ONLY pure JSON in this exact format:
+        {
+          "reelTitle": "Catchy title in English",
+          "caption": "Instagram caption with CTA in English",
+          "scenes": [
+            {
+              "sceneNumber": 1,
+              "durationHint": "0-3s",
+              "deliveryStyle": "Emotion/Style in English (e.g., Whispering and serious)",
+              "narration": "English voice-over text...",
+              "onScreenText": "Short catchy hook in English",
+              "videoPromptStandard": "Handheld camera footage with a slight shake. A man sitting at a desk... Raw footage, silent.",
+              "videoPromptPersona": "Handheld camera footage with a slight shake. A 25-year-old athletic Algerian man with sharp features sitting at a desk... Raw footage, silent."
+            }
+          ]
+        }`;
+
+        const geminiPrompt = systemPrompt + `\n\nRequest:\nCreate a viral, hard-hitting script about this topic: ${topic}`;
+
+        const fallbackModels = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-pro-latest"];
+        let reelData = null;
+
+        for (const modelName of fallbackModels) {
+            try {
+                const genAI = getGeminiClient(); 
+                const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+                const result = await model.generateContent(geminiPrompt);
+                let textResult = result.response.text();
+                const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+                reelData = JSON.parse(jsonMatch ? jsonMatch[0] : textResult);
+                break; 
+            } catch (error) {
+                continue;
+            }
+        }
+
+        if (!reelData || !reelData.scenes) return res.status(503).json({ error: 'Servers are busy.' });
+        res.json({ success: true, reel: reelData });
+
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+        res.status(500).json({ error: 'Failed to generate script.' });
+    }
+});
+
+// ==========================================
+// 🎙️ مسار 5: محرك الصوت اللانهائي والمجاني (Microsoft Edge TTS)
+// ==========================================
+app.post('/api/generate-voiceover', async (req, res) => {
+    // نستخدم صوت Christopher كافتراضي (صوت سينمائي فخم جداً)
+    const { text, voiceId = 'en-US-ChristopherNeural' } = req.body; 
+
+    if (!text) return res.status(400).json({ error: 'الرجاء توفير النص.' });
+
+    try {
+        console.log(`\n🎙️ جاري استدعاء محرك Edge TTS المجاني بصوت: ${voiceId}...`);
+
+        // مسار مؤقت لحفظ ملف الصوت على القرص E
+        const outputPath = path.join(__dirname, 'temp_audio.mp3');
+
+        // تنظيف النص من علامات الاقتباس لتجنب أخطاء سطر الأوامر
+        const cleanText = text.replace(/"/g, "'").replace(/\n/g, ' ');
+
+        // 🌟 الأمر البرمجي لتشغيل Edge-TTS
+        // 🌟 جعل الصوت أسرع قليلاً وأكثر وضوحاً مع الحفاظ على طابع سينمائي
+        // --rate=-10% (أسرع من الوضع الحالي لكنه لا يزال هادئاً)
+        // --pitch=-8Hz (أرق قليلاً من -12Hz مع بقاء الصوت عميقاً بشكل لطيف)
+        const command = `edge-tts --voice ${voiceId} --text "${cleanText}" --rate=-10% --pitch=-8Hz --write-media "${outputPath}"`;
+
+        // تنفيذ الأمر
+        await execPromise(command);
+
+        // قراءة الملف بعد توليده وتحويله إلى Base64 للواجهة
+        const audioBuffer = fs.readFileSync(outputPath);
+        const audioBase64 = audioBuffer.toString('base64');
+        const audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
+
+        // حذف الملف المؤقت للحفاظ على مساحة القرص
+        fs.unlinkSync(outputPath);
+
+        console.log(`✅ [نجاح] تم توليد الصوت مجاناً وبدون حدود!`);
+        res.json({ success: true, audioUrl: audioUrl });
+
+    } catch (error) {
+        console.error('❌ خطأ في محرك Edge TTS:', error.message);
+        res.status(500).json({ 
+            error: 'حدث خطأ. تأكد من تثبيت مكتبة edge-tts بكتابة: pip install edge-tts في الـ Terminal.' 
+        });
+    }
+});
+
+
+// ==========================================
+// 🎬 مسار 6: محرك المونتاج الخفي (FFmpeg + Edge TTS)
+// ==========================================
+
+// دالة لجلب مدة الملف الصوتي
+const getAudioDuration = (filePath) => {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err) reject(err);
+            else resolve(metadata.format.duration);
+        });
+    });
+};
+
+// دالة لإنشاء ملف الترجمة الاحترافي (ASS) للنص العربي
+const createAssFile = (text, duration, outputPath) => {
+    const formatTime = (seconds) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = (seconds % 60).toFixed(2);
+        return `${h}:${m.toString().padStart(2, '0')}:${s.padStart(5, '0')}`;
+    };
+
+    // إعدادات خط سينمائية: أصفر نيون، حواف سوداء، في منتصف الشاشة
+    const assContent = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,95,&H0000D7FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,4,2,10,10,960,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,${formatTime(duration)},Default,,0,0,0,,{\\b1}${text}`;
+    
+    fs.writeFileSync(outputPath, assContent, 'utf8');
+};
+
+app.post('/api/render-video', upload.any(), async (req, res) => {
+    console.log(`\n🎬 جاري بدء عملية المونتاج السينمائي الآلي...`);
+    
+    try {
+        const scenes = JSON.parse(req.body.scenes);
+        const voiceId = req.body.voiceId || 'en-US-ChristopherNeural';
+        const files = req.files;
+
+        // إنشاء مجلد temp إذا لم يكن موجوداً
+        const tempDir = path.join(__dirname, 'temp');
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+        let videoClips = [];
+
+        // معالجة كل مشهد على حدة
+        for (let i = 0; i < scenes.length; i++) {
+            console.log(`⏳ جاري معالجة المشهد رقم ${i + 1}...`);
+            const scene = scenes[i];
+            
+            // 1. العثور على الصورة المرفوعة لهذا المشهد
+            const imageFile = files.find(f => f.fieldname === `image_${i}`);
+            if (!imageFile) throw new Error(`الصورة مفقودة للمشهد رقم ${i + 1}`);
+            const imagePath = path.join(__dirname, imageFile.path);
+
+            // 2. توليد الصوت عبر Edge-TTS
+            const audioPath = path.join(tempDir, `audio_${i}.mp3`);
+            const cleanText = scene.narration.replace(/"/g, "'").replace(/\n/g, ' ');
+            // تضخيم وإبطاء الصوت لزيادة الفخامة والدراما
+            const ttsCommand = `edge-tts --voice ${voiceId} --text "${cleanText}" --rate=-15% --pitch=-10Hz --write-media "${audioPath}"`;
+            await execPromise(ttsCommand);
+
+            // 3. حساب مدة الصوت
+            const duration = await getAudioDuration(audioPath);
+
+            // 4. إنشاء ملف الترجمة العربي (ASS)
+            const assFileName = `sub_${i}.ass`; // نستخدم اسماً قصيراً لتجنب مشاكل المسارات في الويندوز
+            const assPath = path.join(__dirname, assFileName);
+            createAssFile(scene.onScreenText, duration, assPath);
+
+            // 5. دمج (صورة + صوت + نص) للمشهد
+            const sceneOutputPath = path.join(tempDir, `scene_${i}.mp4`);
+            await new Promise((resolve, reject) => {
+                ffmpeg()
+                    .input(imagePath)
+                    .loop(1) // تكرار الصورة الثابتة
+                    .input(audioPath)
+                    .outputOptions([
+                        '-c:v libx264',
+                        '-tune stillimage',
+                        '-c:a aac',
+                        '-b:a 192k',
+                        '-pix_fmt yuv420p',
+                        `-t ${duration}`,
+                        // اقتصاص الصورة لتلائم الهاتف (9:16) وطباعة النص العربي
+                        `-vf scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass=${assFileName}`
+                    ])
+                    .save(sceneOutputPath)
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
+
+            videoClips.push(sceneOutputPath);
+            
+            // تنظيف الملفات المؤقتة للمشهد
+            fs.unlinkSync(assPath);
+            fs.unlinkSync(imagePath);
+            fs.unlinkSync(audioPath);
+        }
+
+        console.log(`🎞️ جاري دمج كافة المشاهد في فيديو واحد نهائي...`);
+        
+        // 6. تجميع كل المشاهد في فيديو واحد
+        const finalOutputPath = path.join(__dirname, 'final_reel.mp4');
+        const listPath = path.join(tempDir, 'concat_list.txt');
+        const fileContent = videoClips.map(p => `file '${p.replace(/\\/g, '/')}'`).join('\n');
+        fs.writeFileSync(listPath, fileContent);
+
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(listPath)
+                .inputOptions(['-f concat', '-safe 0'])
+                .outputOptions(['-c copy']) // نسخ بدون إعادة ترميز (سريع جداً)
+                .save(finalOutputPath)
+                .on('end', resolve)
+                .on('error', reject);
+        });
+
+        // تنظيف الملفات المتبقية
+        fs.unlinkSync(listPath);
+        videoClips.forEach(clip => fs.unlinkSync(clip));
+
+        console.log(`✅ [نجاح] اكتمل تصدير الفيديو النهائي!`);
+        
+        // إرسال الفيديو كملف للتحميل
+        res.download(finalOutputPath, 'AutoFactory_Reel.mp4');
+
+    } catch (error) {
+        console.error('❌ خطأ في محرك المونتاج:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء رندرة الفيديو: ' + error.message });
+    }
+});
+
+// ==========================================
+// 🔐 مسار التحقق من Webhook (تطلبه Meta مرة واحدة)
+// ==========================================
+app.get('/webhook', (req, res) => {
+    const VERIFY_TOKEN = "cherif"; 
+
+    let mode = req.query['hub.mode'];
+    let token = req.query['hub.verify_token'];
+    let challenge = req.query['hub.challenge'];
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('✅ تم التحقق من Webhook بنجاح من قبل Meta!');
+            res.status(200).send(challenge); 
+        } else {
+            console.log('❌ فشل التحقق: الكلمة السرية غير متطابقة.');
+            res.sendStatus(403);
+        }
+    } else {
+        res.sendStatus(400);
+    }
+});
+
+
+
+// ==========================================
+// 🪝 مسار Webhook الذكي (الردود الديناميكية)
+// ==========================================
+app.post('/webhook', async (req, res) => {
+    let body = req.body;
+
+    if (body.object === 'instagram' || body.object === 'page') {
+        
+        body.entry.forEach(async function(entry) {
+            if (entry.changes && entry.changes.length > 0) {
+                let change = entry.changes[0].value;
+                let field = entry.changes[0].field;
+
+                if (field === 'comments' && change.text) {
+                    const commentText = change.text.trim();
+                    const commentId = change.id;
+                    const commenterUsername = change.from ? change.from.username : 'عميلنا العزيز';
+                    const commenterId = change.from ? change.from.id : 'unknown';
+
+                    // 1. حماية ضد الرد على النفس (لتجنب الحلقة المفرغة)
+                    if (commenterUsername === 'thegherbiai') {
+                        return; 
+                    }
+
+                    try {
+                        // 2. جلب جميع الحملات النشطة من قاعدة البيانات
+                        const activeCampaigns = await Campaign.find({ is_active: true });
+                        const lowerComment = commentText.toLowerCase();
+
+                        // 3. البحث عن تطابق مع أي كلمة مفتاحية لحملة نشطة
+                        let matchedCampaign = null;
+                        for (const campaign of activeCampaigns) {
+                            if (lowerComment.includes(campaign.keyword.toLowerCase())) {
+                                matchedCampaign = campaign;
+                                break; // نكتفي بأول تطابق نجده
+                            }
+                        }
+
+                        // إذا لم يتم العثور على كلمة مفتاحية تابعة لحملة، نتجاهل التعليق
+                        if (!matchedCampaign) {
+                            console.log(`🛡️ [فلترة] تعليق عادي من [@${commenterUsername}]: "${commentText}"`);
+                            return;
+                        }
+
+                        console.log(`\n🎯 [تم اصطياد العميل!] حملة: "${matchedCampaign.keyword}" | العميل: [@${commenterUsername}]`);
+
+                        // 4. تحديث أو إنشاء بيانات العميل (Lead)
+                        await Lead.findOneAndUpdate(
+                            { instagram_id: commenterId },
+                            { 
+                                $set: { 
+                                    username: commenterUsername, 
+                                    last_keyword: matchedCampaign.keyword, 
+                                    last_interaction: Date.now() 
+                                },
+                                $inc: { interaction_count: 1 }
+                            },
+                            { upsert: true, returnDocument: 'after' } // 👈 تم إصلاح التحذير القديم هنا
+                        );
+
+                        // 5. زيادة عداد استخدام الحملة برمجياً
+                        await Campaign.findByIdAndUpdate(matchedCampaign._id, { $inc: { usage_count: 1 } });
+                        console.log(`💾 تم حفظ العميل وتحديث إحصائيات الحملة.`);
+
+                        // 6. إرسال الرسالة المخصصة في الخاص (DM)
+                        // نستبدل كلمة {username} باسم العميل لنجعل الرسالة شخصية!
+                        const personalizedDm = matchedCampaign.dm_message.replace(/{username}/g, commenterUsername);
+                        const messageData = {
+                            recipient: { comment_id: commentId },
+                            message: { text: personalizedDm }
+                        };
+
+                        try {
+                            // نستخدم متغيرات VERSION و TOKEN الموجودة لديك في الأعلى
+                            await axios.post(
+                                `https://graph.facebook.com/${VERSION}/me/messages?access_token=${TOKEN}`,
+                                messageData
+                            );
+                            console.log("✅ [1] تم إرسال رسالة الخاص (DM) بنجاح!");
+                        } catch (error) {
+                            console.error("❌ فشل إرسال الـ DM:", error.response ? error.response.data : error.message);
+                        }
+
+                        // 7. الرد المخصص على التعليق العام
+                        const personalizedReply = matchedCampaign.public_reply.replace(/{username}/g, commenterUsername);
+                        const replyData = {
+                            message: personalizedReply
+                        };
+
+                        try {
+                            await axios.post(
+                                `https://graph.facebook.com/${VERSION}/${commentId}/replies?access_token=${TOKEN}`,
+                                replyData
+                            );
+                            console.log("✅ [2] تم الرد على التعليق العام بنجاح!");
+                        } catch (error) {
+                            console.error("❌ فشل الرد على التعليق:", error.response ? error.response.data : error.message);
+                        }
+
+                    } catch (dbError) {
+                        console.error("❌ خطأ داخلي في محرك الردود الذكي:", dbError);
+                    }
+                }
+            }
+        });
+        
+        res.status(200).send('EVENT_RECEIVED');
+    } else {
+        res.sendStatus(404);
+    }
+});
+
+
+// تغيير حالة الحملة (تشغيل/إيقاف)
+app.patch('/api/campaigns/:id/toggle', async (req, res) => {
+    try {
+        const campaign = await Campaign.findById(req.params.id);
+        campaign.is_active = !campaign.is_active;
+        await campaign.save();
+        res.json({ success: true, is_active: campaign.is_active });
+    } catch (error) {
+        res.status(500).json({ error: 'خطأ في تغيير حالة الحملة' });
+    }
+});
+
+
+
+// حذف الحملة
+app.delete('/api/campaigns/:id', async (req, res) => {
+    try {
+        await Campaign.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'خطأ في حذف الحملة' });
+    }
+});
+
+
+
+// ==========================================
+// 📊 مسار جلب بيانات العملاء (لعرضها في لوحة التحكم)
+// ==========================================
+app.get('/api/leads', async (req, res) => {
+    try {
+        // جلب كل العملاء من الأحدث للأقدم
+        const leads = await Lead.find().sort({ last_interaction: -1 }); 
+        res.json({ success: true, count: leads.length, data: leads });
+    } catch (error) {
+        console.error('❌ خطأ في جلب البيانات:', error);
+        res.status(500).json({ error: 'حدث خطأ في جلب البيانات' });
+    }
+});
+
+
+// ==========================================
+// 🗑️ مسار حذف عميل محدد من قاعدة البيانات
+// ==========================================
+app.delete('/api/leads/:id', async (req, res) => {
+    try {
+        const leadId = req.params.id;
+        await Lead.findByIdAndDelete(leadId);
+        console.log(`🗑️ تم حذف العميل (ID: ${leadId}) بنجاح.`);
+        res.json({ success: true, message: 'تم الحذف بنجاح' });
+    } catch (error) {
+        console.error('❌ خطأ في حذف العميل:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء الحذف' });
+    }
+});
+
+
+// ==========================================
+// 🗄️ مسار 6: الخزنة السرية (التقاط العملاء وإرسال الملفات)
+// ==========================================
+
+
+
+
+// إعداد مرسل الإيميلات (Transporter)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+app.post('/api/vault/submit', async (req, res) => {
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+        return res.status(400).json({ error: 'الاسم والبريد الإلكتروني مطلوبان.' });
+    }
+
+    try {
+        // 1. الحفظ في قاعدة البيانات السحابية
+        const newLead = new Lead({ name, email });
+        await newLead.save();
+        console.log(`\n🎯 عميل محتمل جديد: ${name} (${email})`);
+
+        // 2. إعداد وإرسال الإيميل
+        const mailOptions = {
+            from: `"المهندس محمد الشريف" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: '🚀 الكود المصدري: بوت التداول الخوارزمي (Python)',
+            html: `
+                <div dir="rtl" style="font-family: Arial, sans-serif; font-size: 16px; color: #333; line-height: 1.6;">
+                    <h2 style="color: #059669;">مرحباً ${name}!</h2>
+                    <p>أنت الآن تمتلك أفضلية تقنية. كما وعدتك، هذا هو السكربت الخاص ببوت التداول المبني بلغة Python.</p>
+                    <p>تأكد من تثبيت مكتبات <code>pandas</code> و <code>backtrader</code> قبل تشغيل الكود.</p>
+                    
+                    <div style="margin: 30px 0;">
+                        <a href="https://github.com/midouma25/your-repo-link" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">📥 تحميل السكربت الآن</a>
+                    </div>
+                    
+                    <p>إذا كنت ترغب في احتراف بناء أنظمة مماثلة، لا تنسَ إلقاء نظرة على معسكرات الأكاديمية.</p>
+                    <p>بالتوفيق،<br><strong>محمد الشريف</strong></p>
+                </div>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ تم إرسال السكربت بنجاح إلى: ${email}`);
+
+        res.status(200).json({ success: true, message: 'تم الإرسال بنجاح!' });
+    } catch (error) {
+        console.error('❌ خطأ في النظام:', error.message);
+        res.status(500).json({ error: 'فشلت عملية المعالجة.' });
+    }
+});
+// كود الاتصال بقاعدة البيانات
+console.log("⏳ جاري محاولة الاتصال بقاعدة البيانات..."); // أضفنا هذا السطر لنرى هل يصل الكود إلى هنا
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ Connected to MongoDB Atlas (Online)'))
+  .catch((err) => {
+      console.error('❌ MongoDB Connection Error:', err.message);
+  });
+
+
+
+
+  // ==========================================
+// 🎯 مسارات مدير الحملات (Campaigns API)
+// ==========================================
+app.get('/api/campaigns', async (req, res) => {
+    try {
+        const campaigns = await Campaign.find().sort({ created_at: -1 });
+        res.json({ success: true, data: campaigns });
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ في جلب الحملات' });
+    }
+});
+
+
+
+
+app.post('/api/campaigns', async (req, res) => {
+    try {
+        const newCampaign = new Campaign(req.body);
+        await newCampaign.save();
+        res.json({ success: true, message: 'تم إنشاء الحملة بنجاح' });
+    } catch (error) {
+        res.status(500).json({ error: 'خطأ في الحفظ (قد تكون الكلمة مكررة)' });
+    }
+});
+
+
+// ==========================================
+// 🎬 مسار 7: استوديو الإعلانات التجارية (CommercialLab Engine) - [النسخة الهجينة مع التشويق الفيروسي]
+// ==========================================
+app.post('/api/generate-commercial', async (req, res) => {
+    const { productIdea, targetAudience, adVibe, brandColors } = req.body;
+
+    if (!productIdea) {
+        return res.status(400).json({ error: 'الرجاء توفير فكرة المنتج أو الإعلان.' });
+    }
+
+    try {
+        console.log(`\n🎥 جاري إخراج إعلان تجاري سينمائي (عالي التشويق) لـ: ${productIdea.substring(0, 30)}...`);
+
+        const systemPrompt = `You are an elite Commercial Director and Madison Avenue Creative Director.
+        Your task is to create a top-tier, 20-25 second commercial script for a high-end product/service.
+        The ad must feel like an Apple, Nike, or Coca-Cola commercial: emotional, visually stunning, and highly engaging.
+
+        🚨 LANGUAGE RULES:
+        - The visual prompts (videoPrompt), camera movements, and shot types MUST be in pure English.
+        - The voice-over (narration), on-screen text (onScreenText), and general descriptions MUST be in Arabic.
+
+        🚨 PACING & STRUCTURE (Strictly 5 Scenes):
+        - Scene 1 (0-3s): The Suspense Hook (Pattern Interrupt). 🚨 CRITICAL: Start with a shocking visual, a mysterious action, or an extreme close-up that makes the viewer immediately ask "What is happening?". The narration MUST be a provocative question or a shocking statement to build instant suspense.
+        - Scene 2 (3-8s): The Problem/Desire (Emotional build-up, slow-motion to contrast the fast hook).
+        - Scene 3 (8-14s): The Reveal/Solution (Epic product appearance, perfect lighting, energetic).
+        - Scene 4 (14-19s): The Impact (People smiling, sleek UI, or satisfying usage).
+        - Scene 5 (19-22s): The CTA (Logo placement, strong final message).
+
+        🚨 VIDEO PROMPTS FOR AI (Runway/Veo/Sora):
+        Make the \`videoPrompt\` extremely detailed and technical. Use cinematic terms.
+        Example: "Shot on 35mm lens, Arri Alexa, cinematic lighting, volumetric fog, dynamic tracking shot, hyper-realistic, 8k resolution, ${brandColors ? `featuring ${brandColors} color palette accents` : 'moody color grading'}."
+        Never use words like "3d render", "cartoon", or "illustration". It must look like real life.
+
+        Output ONLY pure JSON in this exact format:
+        {
+          "adTitle": "اسم الإعلان التجاري (العنوان الجذاب)",
+          "marketingAngle": "الزاوية التسويقية المستخدمة",
+          "soundtrackVibe": "وصف دقيق للموسيقى والمؤثرات الصوتية المطلوبة (يجب أن تبدأ بصوت صادم أو صمت درامي للتشويق)",
+          "scenes": [
+            {
+              "sceneNumber": 1,
+              "duration": "0-3s",
+              "shotType": "Extreme Close-Up (ECU)",
+              "cameraMovement": "Fast Pan Right or Sudden Zoom",
+              "videoPrompt": "English prompt for AI video generation...",
+              "narration": "سؤال مستفز أو عبارة صادمة باللغة العربية هنا للتشويق...",
+              "onScreenText": "نص قصير يظهر على الشاشة (اختياري)",
+              "sfx": "وصف المؤثر الصوتي هنا (مثال: Whoosh قوي، دقات قلب سريعة، أو كسر صمت)"
+            }
+          ]
+        }`;
+
+        const userRequest = `Product/Idea: ${productIdea}\nTarget Audience: ${targetAudience || 'General Audience'}\nAd Vibe/Style: ${adVibe || 'Cinematic & Emotional'}`;
+        
+        let adData = null;
+        let successEngine = "";
+
+        // =========================================================
+        // 🛡️ المحرك الهجين المضاد للأعطال (Groq -> Llama -> Gemini)
+        // =========================================================
+        
+        // 1. المحاولة الأولى: سيرفرات Groq (صاروخية ومستقرة جداً)
+        try {
+            console.log(`⏳ جاري المحاولة عبر سيرفرات Groq (qwen/qwen3.8-27b)...`);
+            const currentGroq = getGroqClient(); 
+            const chatCompletion = await currentGroq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userRequest }
+                ],
+                model: 'qwen/qwen3.8-27b',
+                temperature: 0.85, // 👈 رفعنا الحرارة قليلاً لزيادة جرعة الإبداع والجنون في التشويق
+                max_tokens: 3000,
+                response_format: { type: "json_object" }
+            });
+            
+            const rawContent = chatCompletion.choices[0].message.content;
+            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+            adData = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+            successEngine = "Groq (Qwen)";
+            console.log(`✅ تم التوليد بنجاح عبر: ${successEngine}`);
+        } catch (groqError) {
+            console.log(`⚠️ سيرفرات Groq (Qwen) مشغولة. جاري الانتقال للخطة ب...`);
+        }
+
+        // 2. المحاولة الثانية: سيرفرات Groq (Llama-3.1 كبديل)
+        if (!adData || !adData.scenes) {
+            try {
+                console.log(`⏳ جاري المحاولة عبر سيرفرات Groq (llama-3.1-70b-versatile)...`);
+                const currentGroq = getGroqClient();
+                const chatCompletion = await currentGroq.chat.completions.create({
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userRequest }
+                    ],
+                    model: 'llama-3.1-70b-versatile',
+                    temperature: 0.85,
+                    max_tokens: 3000,
+                    response_format: { type: "json_object" }
+                });
+                
+                const rawContent = chatCompletion.choices[0].message.content;
+                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                adData = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+                successEngine = "Groq (Llama 3.1)";
+                console.log(`✅ تم التوليد بنجاح عبر: ${successEngine}`);
+            } catch (llamaError) {
+                console.log(`⚠ سيرفرات Llama مشغولة. جاري تفعيل بروتوكول Gemini...`);
+            }
+        }
+
+        // 3. المحاولة الثالثة: سيرفرات Gemini (الملاذ الأخير)
+        if (!adData || !adData.scenes) {
+            const geminiPrompt = systemPrompt + "\n\nRequest:\n" + userRequest;
+            const fallbackModels = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-pro-latest", "gemini-flash-latest"];
+            
+            for (const modelName of fallbackModels) {
+                try {
+                    console.log(`⏳ جاري المحاولة عبر سيرفر Gemini (${modelName})...`);
+                    const genAI = getGeminiClient(); 
+                    const model = genAI.getGenerativeModel({ model: modelName, generationConfig: { responseMimeType: "application/json" } });
+                    const result = await model.generateContent(geminiPrompt);
+                    let textResult = result.response.text();
+                    const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+                    adData = JSON.parse(jsonMatch ? jsonMatch[0] : textResult);
+                    
+                    if(adData && adData.scenes && adData.scenes.length > 0) {
+                         successEngine = `Gemini (${modelName})`;
+                         console.log(`✅ تم التوليد بنجاح عبر: ${successEngine}`);
+                         break; 
+                    }
+                } catch (error) {
+                    console.log(`⚠️️ محاولة السيرفر ${modelName} فشلت للانتقال للذي يليه.`);
+                    continue;
+                }
+            }
+        }
+
+        if (!adData || !adData.scenes) {
+             return res.status(503).json({ error: 'جميع السيرفرات (Groq و Gemini) مزدحمة حالياً. الرجاء المحاولة بعد قليل.' });
+        }
+        
+        res.json({ success: true, commercial: adData });
+
+    } catch (error) {
+        console.error('❌ خطأ في محرك الإعلانات:', error.message);
+        res.status(500).json({ error: 'فشل في بناء السيناريو الإعلاني.' });
+    }
+});
+
+// ==========================================
+// 💡 مسار: إلهام مشاريع وإعلانات السوق الجزائري (Algerian Market Ideas)
+// ==========================================
+app.post('/api/suggest-commercial-idea', async (req, res) => {
+    const { category } = req.body;
+
+    try {
+        console.log(`\n💡 جاري ابتكار فكرة مشروع وإعلان للسوق الجزائري في قطاع: ${category}...`);
+
+        const systemPrompt = `أنت مستشار أعمال (Business Developer) ومخرج إعلانات محترف.
+        نحن الآن في عام 2026. السوق المستهدف هو: "الجزائر" (Algeria).
+        مهمتك هي اقتراح فكرة مشروع تقني أو خدمة (SaaS، تطبيق، أتمتة) تحل مشكلة حقيقية في السوق الجزائري اليوم، بالإضافة إلى تحديد الجمهور المستهدف، ونمط الإعلان السينمائي الأنسب لبيع هذه الفكرة.
+
+        🚨 تجنب الأفكار غير القابلة للتطبيق في الجزائر (مثل التطبيقات التي تعتمد حصرياً على PayPal أو Stripe). ركز على الدفع عند الاستلام، بريدي موب، التوصيل (Yalidine ونحوها)، رقمنة القطاع الطبي، الإداري، أو التجارة المحلية (الحوانيت، الحرفيين، الوكالات).
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "productIdea": "شرح فكرة المشروع في سطرين (يجب أن تحل مشكلة جزائرية حقيقية)",
+          "targetAudience": "الجمهور الجزائري المستهدف بدقة (مثال: أطباء الأسنان، أصحاب المتاجر الإلكترونية، وكالات كراء السيارات)",
+          "adVibe": "اختر واحداً فقط من هذه الأنماط (Cinematic & Emotional, Fast Paced & Energetic, Tech Minimalist, Humorous & Relatable) واشرح بين قوسين لماذا يناسب العقلية الجزائرية"
+        }`;
+
+        let userPrompt = "";
+        switch (category) {
+            case 'local_business':
+                userPrompt = "اقترح فكرة تطبيق أو منصة SaaS لرقمنة المحلات التقليدية، الحرفيين، أو وكالات كراء السيارات في الجزائر.";
+                break;
+            case 'healthcare':
+                userPrompt = "اقترح فكرة منصة أو أتمتة لحل فوضى المواعيد أو إدارة العيادات (أطباء، صيادلة، مخابر) في الجزائر.";
+                break;
+            case 'ecommerce':
+                userPrompt = "اقترح فكرة أداة أو خدمة لحل مشاكل التجارة الإلكترونية في الجزائر (التوصيل، الروتور، تأكيد الطلبيات، أو التسويق).";
+                break;
+            case 'youth_edu':
+                userPrompt = "اقترح فكرة منصة للطلبة الجامعيين في الجزائر أو الشباب الباحثين عن عمل، عمل حر، أو تعلم مهارات حديثة.";
+                break;
+            default:
+                userPrompt = "اقترح فكرة مشروع تقني مربح جداً ومناسب للسوق الجزائري حالياً.";
+        }
+
+        const currentGroq = getGroqClient(); 
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.85,
+            response_format: { type: "json_object" }
+        });
+
+        const data = JSON.parse(chatCompletion.choices[0].message.content);
+        res.json({ success: true, ideaData: data });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب إلهام السوق الجزائري:', error.message);
+        res.status(500).json({ error: 'فشل في ابتكار الفكرة.' });
+    }
+});
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
