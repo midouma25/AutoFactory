@@ -22,6 +22,8 @@ const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 // ... (الاستدعاءات القديمة مثل express و groq-sdk)
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const CommercialAd = require('./models/CommercialAd');
+
 // 🌟 تشغيل محرك Gemini الثقيل (نستدعيه فقط عند الحاجة)
 // ==========================================
 // 🔄 موزع الحمل الذكي لمفاتيح Google Gemini
@@ -3013,7 +3015,7 @@ app.post('/api/campaigns', async (req, res) => {
 
 
 // ==========================================
-// 🎬 مسار 7: استوديو الإعلانات التجارية (CommercialLab Engine) - [النسخة الهجينة مع التشويق الفيروسي]
+// 🎬 مسار 7: استوديو الإعلانات التجارية (CommercialLab Engine) - [النسخة الهجينة مع سير عمل Image-to-Video]
 // ==========================================
 app.post('/api/generate-commercial', async (req, res) => {
     const { productIdea, targetAudience, adVibe, brandColors } = req.body;
@@ -3023,47 +3025,62 @@ app.post('/api/generate-commercial', async (req, res) => {
     }
 
     try {
-        console.log(`\n🎥 جاري إخراج إعلان تجاري سينمائي (عالي التشويق) لـ: ${productIdea.substring(0, 30)}...`);
+        console.log(`\n🎥 جاري إخراج إعلان تجاري (سير عمل احترافي) لـ: ${productIdea.substring(0, 30)}...`);
 
-        const systemPrompt = `You are an elite Commercial Director and Madison Avenue Creative Director.
+const systemPrompt = `You are an elite Commercial Director and Madison Avenue Creative Director.
         Your task is to create a top-tier, 20-25 second commercial script for a high-end product/service.
         The ad must feel like an Apple, Nike, or Coca-Cola commercial: emotional, visually stunning, and highly engaging.
 
         🚨 LANGUAGE RULES:
-        - The visual prompts (videoPrompt), camera movements, and shot types MUST be in pure English.
+        - The visual prompts (videoPrompt, imagePrompt, imageToVideoPrompt), camera movements, and shot types MUST be in pure English.
         - The voice-over (narration), on-screen text (onScreenText), and general descriptions MUST be in Arabic.
 
-        🚨 PACING & STRUCTURE (Strictly 5 Scenes):
-        - Scene 1 (0-3s): The Suspense Hook (Pattern Interrupt). 🚨 CRITICAL: Start with a shocking visual, a mysterious action, or an extreme close-up that makes the viewer immediately ask "What is happening?". The narration MUST be a provocative question or a shocking statement to build instant suspense.
-        - Scene 2 (3-8s): The Problem/Desire (Emotional build-up, slow-motion to contrast the fast hook).
-        - Scene 3 (8-14s): The Reveal/Solution (Epic product appearance, perfect lighting, energetic).
-        - Scene 4 (14-19s): The Impact (People smiling, sleek UI, or satisfying usage).
-        - Scene 5 (19-22s): The CTA (Logo placement, strong final message).
+        🚨 SPECIAL VIBE RULES:
+        - If the Vibe is "Personal Storytelling (Founder Story - Relatable POV)", the script MUST follow these exact rules:
+          1. THE PROTAGONIST: The main character is the CUSTOMER/USER experiencing the pain (e.g., the frustrated patient in a crowded clinic, the tired student, the stressed buyer). NOT the business owner or service provider.
+          2. THE IMAGE REFERENCE HOOK: You MUST start every \`videoPrompt\` and \`imagePrompt\` in this vibe with this exact bracketed phrase: "[Character Reference: Use the attached photo of the user as the main subject]. A hyper-realistic shot of THIS exact person..."
+          3. Scene 1 & 2: The user (main character) experiencing the daily relatable pain or frustration (e.g., headache, crowded waiting room).
+          4. Scene 3: The 'Aha!' moment. The user remembering or using the digital solution/app on their phone.
+          5. Scene 4: Instant relief. The user is happy, problem solved, interacting smoothly with the service provider (e.g., sitting comfortably with the doctor).
+          6. Scene 5: The CTA.
 
-        🚨 VIDEO PROMPTS FOR AI (Runway/Veo/Sora):
-        Make the \`videoPrompt\` extremely detailed and technical. Use cinematic terms.
-        Example: "Shot on 35mm lens, Arri Alexa, cinematic lighting, volumetric fog, dynamic tracking shot, hyper-realistic, 8k resolution, ${brandColors ? `featuring ${brandColors} color palette accents` : 'moody color grading'}."
-        Never use words like "3d render", "cartoon", or "illustration". It must look like real life.
+        🚨 PACING & STRUCTURE (Strictly 5 Scenes):
+        - Scene 1 (0-3s): The Suspense Hook (Pattern Interrupt).
+        - Scene 2 (3-8s): The Problem/Desire (Emotional build-up).
+        - Scene 3 (8-14s): The Reveal/Solution (The 'Aha!' moment).
+        - Scene 4 (14-19s): The Impact (Instant relief).
+        - Scene 5 (19-22s): The CTA.
+
+        🚨 THE 3 PROMPT SYSTEM (HYPER-REALISM IS MANDATORY):
+        For each scene, you must generate 3 distinct English prompts to optimize the AI generation workflow:
+        1. \`videoPrompt\`: A direct Text-to-Video prompt. Include hyper-realistic keywords, camera motion, and action.
+        2. \`imagePrompt\`: A prompt for Midjourney/Flux to generate the INITIAL STATIC FRAME. Focus ONLY on composition, hyper-realism, lighting, and subjects. DO NOT include camera movement here.
+        3. \`imageToVideoPrompt\`: A prompt for Luma/Runway I2V to ANIMATE the static image. Focus ONLY on motion.
+
+        Make sure ALL visual prompts explicitly enforce realism. NEVER use words like "3d render", "CGI", "cartoon", or "unreal engine". It MUST look indistinguishable from real life. Include ${brandColors ? `the color palette: ${brandColors}` : 'moody cinematic color grading'}.
 
         Output ONLY pure JSON in this exact format:
         {
           "adTitle": "اسم الإعلان التجاري (العنوان الجذاب)",
           "marketingAngle": "الزاوية التسويقية المستخدمة",
-          "soundtrackVibe": "وصف دقيق للموسيقى والمؤثرات الصوتية المطلوبة (يجب أن تبدأ بصوت صادم أو صمت درامي للتشويق)",
+          "soundtrackVibe": "وصف دقيق للموسيقى والمؤثرات الصوتية المطلوبة",
           "scenes": [
             {
               "sceneNumber": 1,
               "duration": "0-3s",
               "shotType": "Extreme Close-Up (ECU)",
               "cameraMovement": "Fast Pan Right or Sudden Zoom",
-              "videoPrompt": "English prompt for AI video generation...",
-              "narration": "سؤال مستفز أو عبارة صادمة باللغة العربية هنا للتشويق...",
+              "videoPrompt": "English prompt for direct Text-to-Video generation...",
+              "imagePrompt": "English prompt for Midjourney/Flux (Static hyper-realistic image)...",
+              "imageToVideoPrompt": "English prompt for Luma/Runway I2V (Motion instructions ONLY)...",
+              "narration": "التعليق الصوتي باللغة العربية هنا...",
               "onScreenText": "نص قصير يظهر على الشاشة (اختياري)",
-              "sfx": "وصف المؤثر الصوتي هنا (مثال: Whoosh قوي، دقات قلب سريعة، أو كسر صمت)"
+              "sfx": "وصف المؤثر الصوتي هنا"
             }
           ]
         }`;
 
+        
         const userRequest = `Product/Idea: ${productIdea}\nTarget Audience: ${targetAudience || 'General Audience'}\nAd Vibe/Style: ${adVibe || 'Cinematic & Emotional'}`;
         
         let adData = null;
@@ -3083,7 +3100,7 @@ app.post('/api/generate-commercial', async (req, res) => {
                     { role: 'user', content: userRequest }
                 ],
                 model: 'qwen/qwen3.8-27b',
-                temperature: 0.85, // 👈 رفعنا الحرارة قليلاً لزيادة جرعة الإبداع والجنون في التشويق
+                temperature: 0.85, 
                 max_tokens: 3000,
                 response_format: { type: "json_object" }
             });
@@ -3144,7 +3161,7 @@ app.post('/api/generate-commercial', async (req, res) => {
                          break; 
                     }
                 } catch (error) {
-                    console.log(`⚠️️ محاولة السيرفر ${modelName} فشلت للانتقال للذي يليه.`);
+                    console.log(`⚠ محاولة السيرفر ${modelName} فشلت للانتقال للذي يليه.`);
                     continue;
                 }
             }
@@ -3184,7 +3201,7 @@ app.post('/api/suggest-commercial-idea', async (req, res) => {
           "adVibe": "اختر واحداً فقط من هذه الأنماط (Cinematic & Emotional, Fast Paced & Energetic, Tech Minimalist, Humorous & Relatable) واشرح بين قوسين لماذا يناسب العقلية الجزائرية"
         }`;
 
-        let userPrompt = "";
+let userPrompt = "";
         switch (category) {
             case 'local_business':
                 userPrompt = "اقترح فكرة تطبيق أو منصة SaaS لرقمنة المحلات التقليدية، الحرفيين، أو وكالات كراء السيارات في الجزائر.";
@@ -3197,6 +3214,19 @@ app.post('/api/suggest-commercial-idea', async (req, res) => {
                 break;
             case 'youth_edu':
                 userPrompt = "اقترح فكرة منصة للطلبة الجامعيين في الجزائر أو الشباب الباحثين عن عمل، عمل حر، أو تعلم مهارات حديثة.";
+                break;
+            // 🚀 القطاعات الأربعة الجديدة للسوق الجزائري
+            case 'real_estate':
+                userPrompt = "اقترح فكرة منصة أو تطبيق لحل مشاكل العقارات، الكراء، أو رقمنة خدمات المقاولات والبحث عن الحرفيين (البناء، الترصيص) في الجزائر.";
+                break;
+            case 'logistics':
+                userPrompt = "اقترح فكرة تطبيق لحل مشاكل النقل السريع، التوصيل الثقيل بين الولايات، أو إدارة أساطيل سيارات الأجرة والنقل في الجزائر.";
+                break;
+            case 'agriculture':
+                userPrompt = "اقترح فكرة مشروع تقني أو منصة SaaS لقطاع الفلاحة، توزيع المنتجات الزراعية، أو دعم الفلاحين وتأجير العتاد في الجزائر.";
+                break;
+            case 'tourism_events':
+                userPrompt = "اقترح فكرة منصة لرقمنة قطاع السياحة الداخلية (الصحراء/السواحل)، حجوزات دور الضيافة، أو تنظيم الفعاليات والأعراس في الجزائر.";
                 break;
             default:
                 userPrompt = "اقترح فكرة مشروع تقني مربح جداً ومناسب للسوق الجزائري حالياً.";
@@ -3219,6 +3249,46 @@ app.post('/api/suggest-commercial-idea', async (req, res) => {
     } catch (error) {
         console.error('❌ خطأ في جلب إلهام السوق الجزائري:', error.message);
         res.status(500).json({ error: 'فشل في ابتكار الفكرة.' });
+    }
+});
+
+
+// ==========================================
+// 📚 مسارات أرشيف الإعلانات (Commercial Vault API)
+// ==========================================
+
+// 1. حفظ إعلان جديد في الأرشيف
+app.post('/api/commercial-ads/save', async (req, res) => {
+    try {
+        const adData = req.body;
+        const newAd = new CommercialAd(adData);
+        await newAd.save();
+        res.json({ success: true, message: 'تم حفظ الإعلان في الأرشيف بنجاح 📚' });
+    } catch (error) {
+        console.error('❌ خطأ في حفظ الإعلان:', error);
+        res.status(500).json({ error: 'فشل في حفظ الإعلان في قاعدة البيانات.' });
+    }
+});
+
+// 2. جلب جميع الإعلانات المحفوظة
+app.get('/api/commercial-ads', async (req, res) => {
+    try {
+        const ads = await CommercialAd.find().sort({ created_at: -1 });
+        res.json({ success: true, data: ads });
+    } catch (error) {
+        console.error('❌ خطأ في جلب الأرشيف:', error);
+        res.status(500).json({ error: 'فشل في جلب الأرشيف.' });
+    }
+});
+
+// 3. حذف إعلان من الأرشيف
+app.delete('/api/commercial-ads/:id', async (req, res) => {
+    try {
+        await CommercialAd.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'تم حذف الإعلان من الأرشيف' });
+    } catch (error) {
+        console.error('❌ خطأ في حذف الإعلان:', error);
+        res.status(500).json({ error: 'فشل في حذف الإعلان.' });
     }
 });
 
