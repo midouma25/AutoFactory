@@ -12,6 +12,7 @@ import LeadsDashboard from './pages/LeadsDashboard';
 // 👈 استيراد مدير الحملات الجديد
 import CampaignManager from './pages/CampaignManager'; 
 import CommercialLab from './pages/CommercialLab';
+import AcademyLab from './pages/AcademyLab';
 
 
 function App() {
@@ -42,7 +43,9 @@ function App() {
         return <CampaignManager setActiveTab={setActiveTab} />;
       case 'commercial-lab':
         return <CommercialLab setActiveTab={setActiveTab} />;
-        case 'history':
+      case 'academy-lab':
+        return <AcademyLab setActiveTab={setActiveTab} />;
+      case 'history':
       case 'dashboard':
       case 'settings':
         return <div className="text-gray-500 text-center mt-20 text-xl">جاري تطوير هذا القسم...</div>;

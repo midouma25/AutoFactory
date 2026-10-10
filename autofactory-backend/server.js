@@ -3028,36 +3028,29 @@ app.post('/api/generate-commercial', async (req, res) => {
         console.log(`\n🎥 جاري إخراج إعلان تجاري (سير عمل احترافي) لـ: ${productIdea.substring(0, 30)}...`);
 
 const systemPrompt = `You are an elite Commercial Director and Madison Avenue Creative Director.
-        Your task is to create a top-tier, 20-25 second commercial script for a high-end product/service.
-        The ad must feel like an Apple, Nike, or Coca-Cola commercial: emotional, visually stunning, and highly engaging.
+        Your task is to create a top-tier, hyper-engaging short-form commercial script (15-20 seconds max) for a high-end product/service.
 
         🚨 LANGUAGE RULES:
         - The visual prompts (videoPrompt, imagePrompt, imageToVideoPrompt), camera movements, and shot types MUST be in pure English.
         - The voice-over (narration), on-screen text (onScreenText), and general descriptions MUST be in Arabic.
 
         🚨 SPECIAL VIBE RULES:
-        - If the Vibe is "Personal Storytelling (Founder Story - Relatable POV)", the script MUST follow these exact rules:
-          1. THE PROTAGONIST: The main character is the CUSTOMER/USER experiencing the pain (e.g., the frustrated patient in a crowded clinic, the tired student, the stressed buyer). NOT the business owner or service provider.
-          2. THE IMAGE REFERENCE HOOK: You MUST start every \`videoPrompt\` and \`imagePrompt\` in this vibe with this exact bracketed phrase: "[Character Reference: Use the attached photo of the user as the main subject]. A hyper-realistic shot of THIS exact person..."
-          3. Scene 1 & 2: The user (main character) experiencing the daily relatable pain or frustration (e.g., headache, crowded waiting room).
-          4. Scene 3: The 'Aha!' moment. The user remembering or using the digital solution/app on their phone.
-          5. Scene 4: Instant relief. The user is happy, problem solved, interacting smoothly with the service provider (e.g., sitting comfortably with the doctor).
-          6. Scene 5: The CTA.
+        - If the Vibe is "Personal Storytelling (Founder Story - Relatable POV)", YOU MUST FOLLOW THIS FAST-PACED 4-SCENE STRUCTURE (Max 15 seconds total):
+          1. THE PROTAGONIST: The main character is the CUSTOMER/USER experiencing the pain. 
+          2. THE IMAGE REFERENCE HOOK: You MUST start every \`videoPrompt\` and \`imagePrompt\` in this vibe with this exact phrase: "[Character Reference: Use the attached photo of the user as the main subject]. A hyper-realistic shot of..."
+          3. Scene 1 (0-3s - The Pain): Protagonist suffering from the daily problem (e.g., headache, chaos, paperwork).
+          4. Scene 2 (3-6s - The Click): Fast match-cut to protagonist using the digital solution (e.g., WhatsApp booking) on their phone.
+          5. Scene 3 (6-10s - The Relief): Instant peace. Protagonist is relaxed and the environment is organized.
+          6. Scene 4 (10-15s - The B2B Pitch): The narration flips to target professionals/business owners. Example: "Want to avoid this chaos in your business? Get our system today."
 
-        🚨 PACING & STRUCTURE (Strictly 5 Scenes):
-        - Scene 1 (0-3s): The Suspense Hook (Pattern Interrupt).
-        - Scene 2 (3-8s): The Problem/Desire (Emotional build-up).
-        - Scene 3 (8-14s): The Reveal/Solution (The 'Aha!' moment).
-        - Scene 4 (14-19s): The Impact (Instant relief).
-        - Scene 5 (19-22s): The CTA.
-
+        🚨 PACING & STRUCTURE (For all other standard vibes, keep 5 scenes. If Founder Story, strictly 4 scenes):
+        - Make it extremely fast-paced. No slow boring transitions.
+        
         🚨 THE 3 PROMPT SYSTEM (HYPER-REALISM IS MANDATORY):
-        For each scene, you must generate 3 distinct English prompts to optimize the AI generation workflow:
-        1. \`videoPrompt\`: A direct Text-to-Video prompt. Include hyper-realistic keywords, camera motion, and action.
-        2. \`imagePrompt\`: A prompt for Midjourney/Flux to generate the INITIAL STATIC FRAME. Focus ONLY on composition, hyper-realism, lighting, and subjects. DO NOT include camera movement here.
-        3. \`imageToVideoPrompt\`: A prompt for Luma/Runway I2V to ANIMATE the static image. Focus ONLY on motion.
-
-        Make sure ALL visual prompts explicitly enforce realism. NEVER use words like "3d render", "CGI", "cartoon", or "unreal engine". It MUST look indistinguishable from real life. Include ${brandColors ? `the color palette: ${brandColors}` : 'moody cinematic color grading'}.
+        For each scene, you must generate 3 distinct English prompts to optimize the AI workflow:
+        1. \`videoPrompt\`: Direct Text-to-Video. Include hyper-realistic keywords (Arri Alexa, 8k, photorealistic).
+        2. \`imagePrompt\`: Static frame for Midjourney/Flux. ONLY composition, lighting, and subjects. No motion.
+        3. \`imageToVideoPrompt\`: Motion instructions ONLY for Luma/Runway I2V (e.g., "Camera fast zoom, subject smiles").
 
         Output ONLY pure JSON in this exact format:
         {
@@ -3070,17 +3063,17 @@ const systemPrompt = `You are an elite Commercial Director and Madison Avenue Cr
               "duration": "0-3s",
               "shotType": "Extreme Close-Up (ECU)",
               "cameraMovement": "Fast Pan Right or Sudden Zoom",
-              "videoPrompt": "English prompt for direct Text-to-Video generation...",
-              "imagePrompt": "English prompt for Midjourney/Flux (Static hyper-realistic image)...",
-              "imageToVideoPrompt": "English prompt for Luma/Runway I2V (Motion instructions ONLY)...",
-              "narration": "التعليق الصوتي باللغة العربية هنا...",
-              "onScreenText": "نص قصير يظهر على الشاشة (اختياري)",
-              "sfx": "وصف المؤثر الصوتي هنا"
+              "videoPrompt": "English prompt...",
+              "imagePrompt": "English prompt...",
+              "imageToVideoPrompt": "English prompt...",
+              "narration": "التعليق الصوتي باللغة العربية...",
+              "onScreenText": "نص قصير...",
+              "sfx": "المؤثر الصوتي..."
             }
           ]
         }`;
 
-        
+
         const userRequest = `Product/Idea: ${productIdea}\nTarget Audience: ${targetAudience || 'General Audience'}\nAd Vibe/Style: ${adVibe || 'Cinematic & Emotional'}`;
         
         let adData = null;
@@ -3178,6 +3171,77 @@ const systemPrompt = `You are an elite Commercial Director and Madison Avenue Cr
         res.status(500).json({ error: 'فشل في بناء السيناريو الإعلاني.' });
     }
 });
+
+// ==========================================
+// 🎬 مسار 8: محرك تعديل المشاهد (Director's Cut - Scene Enhancer)
+// ==========================================
+app.post('/api/enhance-scene', async (req, res) => {
+    const { originalScene, userInstruction, brandColors } = req.body;
+
+    if (!originalScene || !userInstruction) {
+        return res.status(400).json({ error: 'بيانات المشهد أو التعليمات مفقودة.' });
+    }
+
+    try {
+        console.log(`\n🎬 جاري تعديل المشهد رقم ${originalScene.sceneNumber} بناءً على توجيهات المخرج...`);
+
+        const systemPrompt = `You are a Hollywood Commercial Director assisting the lead human director.
+        The human director wants to change a specific scene in a commercial.
+        
+        Here is the ORIGINAL SCENE JSON:
+        ${JSON.stringify(originalScene)}
+
+        Here is the HUMAN DIRECTOR'S NEW INSTRUCTION (in Arabic or English):
+        "${userInstruction}"
+
+        YOUR MISSION:
+        1. Rewrite the scene to perfectly incorporate the human's instruction.
+        2. Keep the exactly same JSON structure.
+        3. 🚨 CRITICAL: The visual prompts MUST remain HYPER-REALISTIC (use keywords like: photorealistic, Arri Alexa 65, 8k, cinematic lighting). NEVER use CGI or cartoon terms.
+        4. If the vibe is a "Founder Story", ensure the prompt starts with: "[Character Reference: Use the attached photo of the user as the main subject]. A hyper-realistic shot of..."
+        5. Maintain the 3-prompt system: \`videoPrompt\` (Text-to-Video), \`imagePrompt\` (Static Midjourney), \`imageToVideoPrompt\` (Motion for Luma).
+        6. Update the Arabic \`narration\` and \`sfx\` to match the new action.
+
+        Output ONLY pure JSON for this SINGLE updated scene object.`;
+
+        let updatedScene = null;
+
+        // سنستخدم Groq (Qwen) لسرعته ومجانيته في التعديلات
+        try {
+            const currentGroq = getGroqClient(); 
+            const chatCompletion = await currentGroq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: "Update the scene and return ONLY the JSON object." }
+                ],
+                model: 'qwen/qwen3.8-27b',
+                temperature: 0.7,
+                max_tokens: 1500,
+                response_format: { type: "json_object" }
+            });
+            
+            const rawContent = chatCompletion.choices[0].message.content;
+            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+            updatedScene = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
+            console.log(`✅ تم تعديل المشهد بنجاح عبر Groq.`);
+        } catch (groqError) {
+            console.log(`⚠️ سيرفر Groq مشغول. سيتم استخدام Gemini للتعديل...`);
+            const genAI = getGeminiClient(); 
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", generationConfig: { responseMimeType: "application/json" } });
+            const result = await model.generateContent(systemPrompt);
+            let textResult = result.response.text();
+            const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+            updatedScene = JSON.parse(jsonMatch ? jsonMatch[0] : textResult);
+        }
+
+        res.json({ success: true, updatedScene });
+
+    } catch (error) {
+        console.error('❌ خطأ في تعديل المشهد:', error.message);
+        res.status(500).json({ error: 'فشل في تعديل المشهد.' });
+    }
+});
+
 
 // ==========================================
 // 💡 مسار: إلهام مشاريع وإعلانات السوق الجزائري (Algerian Market Ideas)
@@ -3289,6 +3353,307 @@ app.delete('/api/commercial-ads/:id', async (req, res) => {
     } catch (error) {
         console.error('❌ خطأ في حذف الإعلان:', error);
         res.status(500).json({ error: 'فشل في حذف الإعلان.' });
+    }
+});
+
+
+
+// ==========================================
+// 🧠 المحرك الذكي الموحد (Google First -> Groq Fallback)
+// ==========================================
+// ==========================================
+// 🧠 المحرك الذكي الموحد (Google First -> Groq Fallback)
+// ==========================================
+async function generateContentSmart(systemPrompt, userPrompt, temperature = 0.7, maxTokens = 15000) {
+    // 🛡️ ترسانة موديلات جوجل الشاملة (مرتبة لتناسب مفاتيحك الحالية وتسريع الاستجابة)
+    const geminiModels = [
+        "gemini-3.5-flash",       // النموذج المستقر والسريع جداً (Generally Available)
+        "gemini-3.5-flash-lite",  // نسخة خفيفة للطوارئ
+        "gemini-3.1-pro-preview", // الأذكى في التحليل العميق
+        "gemini-3-flash-preview",
+        "gemini-pro-latest",      
+        "gemini-flash-latest",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-omni-1.1-flash",
+        "gemma-4-31b-it",         // موديل قوي جداً ومنفصل
+        "gemma-4-26b-a4b-it",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-lite-latest"
+    ];
+
+    // 1. الهجوم عبر ترسانة Google Gemini أولاً
+    for (const modelName of geminiModels) {
+        try {
+            console.log(`[المدفع الذكي] 🚀 جاري إطلاق الطلب عبر Google: ${modelName}...`);
+            const genAI = getGeminiClient(); // تسحب مفتاح جوجل عشوائي
+            const model = genAI.getGenerativeModel({ 
+                model: modelName,
+                generationConfig: { 
+                    responseMimeType: "application/json",
+                    temperature: temperature,
+                    maxOutputTokens: maxTokens
+                } 
+            });
+
+            const result = await model.generateContent(`${systemPrompt}\n\nالطلب:\n${userPrompt}`);
+            const textResult = result.response.text();
+            
+            // تنظيف والتأكد من أنه JSON صالح
+            const jsonMatch = textResult.match(/\{[\s\S]*\}/);
+            const cleanJson = jsonMatch ? jsonMatch[0] : textResult;
+            JSON.parse(cleanJson); // اختبار التحويل
+
+            console.log(`[المدفع الذكي] ✅ إصابة الهدف بدقة عبر: ${modelName} 🎯`);
+            return cleanJson;
+
+        } catch (error) {
+            console.log(`[المدفع الذكي] ⚠️ السيرفر ${modelName} مشغول أو فشل. جاري التبديل للموديل التالي...`);
+        }
+    }
+
+    // 2. خطة الطوارئ: اللجوء إلى Groq إذا انهارت كل سيرفرات جوجل الـ 16
+    console.log(`[المدفع الذكي] 🔄 جميع سيرفرات جوجل الـ ${geminiModels.length} مشغولة! جاري تفعيل خطة الطوارئ عبر Groq...`);
+    try {
+        const currentGroq = getGroqClient(); // تسحب مفتاح Groq وتدوره
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            model: 'qwen/qwen3.8-27b', // استخدمنا qwen المستقر بدلاً من Llama المتوقف
+            temperature: temperature,
+            max_tokens: 6000, // سقف Groq الآمن
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        const cleanJson = jsonMatch ? jsonMatch[0] : rawContent;
+        
+        console.log(`[المدفع الذكي] ✅ تم الإنقاذ بنجاح عبر Groq (Qwen) 🛡️`);
+        return cleanJson;
+
+    } catch (groqError) {
+        console.error(`[المدفع الذكي] ❌ كارثة: جميع الخوادم (Google + Groq) منهارة تماماً!`);
+        throw new Error("فشل توليد المحتوى من جميع الخوادم المتاحة.");
+    }
+}
+
+
+
+// ==========================================
+// 🎓 مسارات مختبر الأكاديمية (AcademyLab - Course Generator)
+// ==========================================
+
+// 1. مسار توليد "هيكل المنهج" (Course Blueprint) - يعتمد على المدفع الذكي
+app.post('/api/academy/blueprint', async (req, res) => {
+    const { topic, difficulty } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
+
+    try {
+        console.log(`\n📐 جاري هندسة هيكل منهج أكاديمي لموضوع: ${topic}...`);
+
+        const isBootcamp = difficulty.includes('Bootcamp');
+        const architectureInstruction = isBootcamp 
+            ? `هذا الكورس عبارة عن 'معسكر برمجي شامل' (Bootcamp / Specialization). 
+               قم بتقسيمه إلى 4 أو 6 "وحدات ضخمة"، حيث تُعتبر كل وحدة بمثابة كورس مصغر يركز على تقنية محددة (مثل جزء مخصص بالكامل لـ MongoDB، وجزء لـ React).
+               يجب أن تُسمي الوحدات بطريقة توحي بأنها تمنح شهادة (مثال: "المسار الأول: إتقان MongoDB [شهادة فرعية]").
+               داخل كل مسار، ضع 4 إلى 6 دروس عميقة.`
+            : `قم بتقسيم الكورس إلى 3 أو 4 "وحدات رئيسية" (Sections) كحد أقصى، وداخل كل وحدة ضع من 3 إلى 5 "دروس" (Lessons).`;
+
+        const systemPrompt = `أنت مهندس برمجيات كبير (Senior Architect) ومصمم مناهج تعليمية محترف في أكاديمية تقنية متقدمة.
+        مهمتك هي بناء "هيكل منهج" (Syllabus) عملي، خالي من الحشو، ومتسلسل منطقياً حول موضوع: "${topic}".
+        مستوى الدورة المستهدف هو: "${difficulty || 'متوسط'}".
+        
+        🚨 قواعد بناء الهيكل:
+        1. ${architectureInstruction}
+        2. عناوين الدروس يجب أن تكون عملية وتوحي بالتطبيق المباشر (مثال: "بناء أول خادم باستخدام Express" بدلاً من "مقدمة عن Express").
+        3. لا تكتب أي شروحات، فقط قم بتوليد الهيكل المنظم.
+
+        رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "عنوان فخم وجذاب للدورة",
+          "courseDescription": "وصف تسويقي وتعليمي للكورس في 3 أسطر يشرح الفائدة النهائية والطريق نحو الاعتماد.",
+          "blueprint": [
+            {
+              "sectionName": "اسم الوحدة أو المسار الفرعي",
+              "lessons": [
+                { "title": "عنوان الدرس الأول" },
+                { "title": "عنوان الدرس الثاني" }
+              ]
+            }
+          ]
+        }`;
+
+        // 🚀 استخدام المدفع الذكي
+        const rawContent = await generateContentSmart(systemPrompt, "تفضل، قم بهندسة هذا المنهج الآن.", 0.7, 8000);
+        const blueprintData = JSON.parse(rawContent);
+
+        res.json({ success: true, data: blueprintData });
+
+    } catch (error) {
+        console.error('❌ خطأ في هندسة هيكل المنهج:', error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء بناء هيكل المنهج.' });
+    }
+});
+
+// 2. مسار "تأليف محتوى الدرس" التفصيلي (Lesson Content Forge) - يعتمد على المدفع الذكي
+app.post('/api/academy/forge-lesson', async (req, res) => {
+    const { courseTopic, sectionName, lessonTitle, difficulty } = req.body;
+
+    if (!lessonTitle) return res.status(400).json({ error: 'عنوان الدرس مفقود.' });
+
+    try {
+        console.log(`\n✍️ جاري صياغة المحتوى الدسم لدرس: "${lessonTitle}"...`);
+
+        const systemPrompt = `أنت أستاذ برمجة عبقري (Master Developer).
+        أنت الآن تقوم بكتابة محتوى درس واحد فقط من كورس تقني.
+        - موضوع الكورس العام: "${courseTopic}"
+        - الوحدة الحالية: "${sectionName}"
+        - 📌 الدرس المطلوب كتابته الآن: "${lessonTitle}"
+        - مستوى الطالب: "${difficulty || 'متوسط'}"
+
+        🚨 قواعد تأليف المحتوى الدسم (S-Rank Standard):
+        1. المحتوى النصي (content): يجب أن يكون الشرح دقيقاً، مباشراً، ومفصلاً جداً! استخدم تنسيق Markdown (عناوين فرعية ###، قوائم نقطية، ونصوص غامقة **).
+        2. الأكواد (codeSnippet): إذا كان الدرس برمجياً، أضف كوداً حقيقياً قابلاً للنسخ والعمل (احترافي وطويل). لا تكتب أكواداً وهمية. إذا لم يكن الدرس يحتاج كوداً، اتركه فارغاً "".
+        3. اختبار التقييم (quiz): قم بكتابة سؤال ذكي واحد (بمستوى صعوبة مناسب) لتقييم فهم الطالب لهذا الدرس تحديداً.
+
+        رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
+        {
+          "content": "شرح الدرس هنا بصيغة Markdown، يجب أن يكون الشرح دسماً وكافياً لدقائق من القراءة...",
+          "codeSnippet": "const app = express(); \\n// الكود الفعلي هنا (استخدم \\n لكسر الأسطر)",
+          "quiz": {
+            "question": "السؤال التقييمي الذكي هنا؟",
+            "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+            "correctAnswerIndex": 2 
+          }
+        }`;
+
+        // 🚀 استخدام المدفع الذكي بطاقة استيعابية ضخمة (15000 توكن) ليتمكن Gemini من التوسع في الشرح
+        const rawContent = await generateContentSmart(systemPrompt, "أكتب المحتوى الاحترافي والمطول لهذا الدرس الآن.", 0.8, 15000);
+        const lessonContentData = JSON.parse(rawContent);
+
+        res.json({ success: true, data: lessonContentData });
+
+    } catch (error) {
+        console.error(`❌ خطأ في صياغة درس (${lessonTitle}):`, error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء كتابة محتوى الدرس.' });
+    }
+});
+
+
+// ==========================================
+// 🎓 مسارات مختبر الأكاديمية (AcademyLab - Course Generator)
+// ==========================================
+
+// 1. مسار إلهام أفكار الكورسات (Academy Ideas Generator)
+app.post('/api/academy/suggest-topic', async (req, res) => {
+    const { type } = req.body;
+
+    try {
+        let promptInstruction = '';
+        if (type === 'crash') {
+            promptInstruction = 'أعطني عنواناً لـ "كراش كورس" (دورة مكثفة سريعة) في تقنية حديثة مطلوبة في سوق العمل (مثال: كراش كورس Next.js 14).';
+        } else if (type === 'money') {
+            promptInstruction = 'أعطني عنواناً لكورس يعلم مهارة برمجية تجلب المال المباشر أو كيفية بناء منتجات SaaS.';
+        } else if (type === 'bootcamp') {
+            // 🆕 المسار الجديد للمعسكرات الشاملة (Bootcamps)
+            promptInstruction = 'أعطني عنواناً لـ "تخصص متكامل أو معسكر برمجي" (Bootcamp) ضخم جداً على غرار كورسيرا. الكورس يغطي تقنيات متعددة (مثل MERN أو Data Science)، وكل تقنية تمثل جزءاً يمنح شهادة فرعية، وفي النهاية شهادة كبرى. العنوان يجب أن يوحي بالضخامة والاحترافية.';
+        } else {
+            promptInstruction = 'أعطني عنواناً لكورس تريند ومطلوب جداً في سوق العمل الحالي يدمج بين الذكاء الاصطناعي وتطوير الويب.';
+        }
+
+        const systemPrompt = `أنت مستشار تعليمي ومسوق تقني خبير.
+        المطلوب منك إعطاء "عنوان كورس" واحد فقط بناءً على طلب المستخدم.
+        لا تكتب أي مقدمات، لا تضع علامات تنصيص، ولا تشرح الفكرة. العنوان فقط.
+        
+        رد بصيغة JSON فقط بهذا الهيكل:
+        { "topic": "اكتب العنوان المثير والجذاب هنا" }`;
+
+        const currentGroq = getGroqClient(); 
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: promptInstruction }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9, 
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const data = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
+
+        res.json({ success: true, idea: data.topic });
+
+    } catch (error) {
+        res.status(500).json({ error: 'فشل في استلهام فكرة الكورس.' });
+    }
+});
+
+// 2. مسار توليد "هيكل المنهج" (Course Blueprint) - محدث ليدعم المعسكرات
+app.post('/api/academy/blueprint', async (req, res) => {
+    const { topic, difficulty } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
+
+    try {
+        console.log(`\n📐 جاري هندسة هيكل منهج أكاديمي لموضوع: ${topic}...`);
+
+        // 🆕 تعليمات ديناميكية تتغير إذا كان الكورس "معسكراً شاملاً"
+        const isBootcamp = difficulty.includes('Bootcamp');
+        const architectureInstruction = isBootcamp 
+            ? `هذا الكورس عبارة عن 'معسكر برمجي شامل' (Bootcamp / Specialization). 
+               قم بتقسيمه إلى 4 أو 6 "وحدات ضخمة"، حيث تُعتبر كل وحدة بمثابة كورس مصغر يركز على تقنية محددة (مثل جزء مخصص بالكامل لـ MongoDB، وجزء لـ React).
+               يجب أن تُسمي الوحدات بطريقة توحي بأنها تمنح شهادة (مثال: "المسار الأول: إتقان MongoDB [شهادة فرعية]").
+               داخل كل مسار، ضع 4 إلى 6 دروس عميقة.`
+            : `قم بتقسيم الكورس إلى 3 أو 4 "وحدات رئيسية" (Sections) كحد أقصى، وداخل كل وحدة ضع من 3 إلى 5 "دروس" (Lessons).`;
+
+        const systemPrompt = `أنت مهندس برمجيات كبير (Senior Architect) ومصمم مناهج تعليمية محترف في أكاديمية تقنية متقدمة.
+        مهمتك هي بناء "هيكل منهج" (Syllabus) عملي، خالي من الحشو، ومتسلسل منطقياً حول موضوع: "${topic}".
+        مستوى الدورة المستهدف هو: "${difficulty || 'متوسط'}".
+        
+        🚨 قواعد بناء الهيكل:
+        1. ${architectureInstruction}
+        2. عناوين الدروس يجب أن تكون عملية وتوحي بالتطبيق المباشر (مثال: "بناء أول خادم باستخدام Express" بدلاً من "مقدمة عن Express").
+        3. لا تكتب أي شروحات، فقط قم بتوليد الهيكل المنظم.
+
+        رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "عنوان فخم وجذاب للدورة",
+          "courseDescription": "وصف تسويقي وتعليمي للكورس في 3 أسطر يشرح الفائدة النهائية والطريق نحو الاعتماد.",
+          "blueprint": [
+            {
+              "sectionName": "اسم الوحدة أو المسار الفرعي",
+              "lessons": [
+                { "title": "عنوان الدرس الأول" },
+                { "title": "عنوان الدرس الثاني" }
+              ]
+            }
+          ]
+        }`;
+
+        const currentGroq = getGroqClient(); 
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: "تفضل، قم بهندسة هذا المنهج الآن." }
+            ],
+            model: 'qwen/qwen3.8-27b', 
+            temperature: 0.7, 
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const blueprintData = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
+
+        res.json({ success: true, data: blueprintData });
+
+    } catch (error) {
+        console.error('❌ خطأ في هندسة هيكل المنهج:', error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء بناء هيكل المنهج.' });
     }
 });
 

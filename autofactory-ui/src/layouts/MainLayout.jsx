@@ -13,6 +13,7 @@ const menuItems = [ //[cite: 2]
   { id: 'leads', name: 'قاعدة العملاء', icon: <Users size={20} /> },
   // داخل مصفوفة menuItems:
 { id: 'commercial-lab', name: 'استوديو الإعلانات', icon: <Video size={20} /> },
+{ id: 'academy-lab', name: 'استوديو الأكاديمية', icon: <BookOpen size={20} /> },
   // 👈 إضافة زر استوديو الفيديوهات الجديد
   { id: 'campaigns', name: 'مدير الحملات', icon: <Megaphone size={20} /> },
   { id: 'reel-lab', name: 'استوديو الفيديوهات', icon: <Clapperboard size={20} /> }, 
@@ -30,6 +31,7 @@ export default function MainLayout({ activeTab, setActiveTab, children }) { //[c
     // 👈 إضافة ستايل مميز لزر مدير الحملات
     if (id === 'campaigns') return 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-900/30';
     if (id === 'commercial-lab') return 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-lg shadow-red-900/30';
+    if (id === 'academy-lab') return 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-900/30';
     // 👈 إضافة ستايل مميز لزر قاعدة العملاء
     if (id === 'leads') return 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/30';
     return 'bg-blue-600 text-white shadow-lg'; //[cite: 2]

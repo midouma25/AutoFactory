@@ -22,7 +22,9 @@ import {
   Archive,
   Trash2,
   Eye,
-  X
+  X,
+  Edit3, Wand2
+
 } from 'lucide-react';
 
 const CommercialLab = () => {
@@ -44,6 +46,14 @@ const CommercialLab = () => {
   const [showArchive, setShowArchive] = useState(false);
   const [savedAds, setSavedAds] = useState([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
+  
+
+  // حالات تعديل المشاهد
+  const [editingSceneIndex, setEditingSceneIndex] = useState(null);
+  const [editInstruction, setEditInstruction] = useState('');
+  const [isEnhancingScene, setIsEnhancingScene] = useState(false);
+
+
 
   useEffect(() => {
     fetchSavedAds();
@@ -173,6 +183,38 @@ const CommercialLab = () => {
       alert('خطأ في الحذف');
     }
   };
+
+
+  const handleEnhanceScene = async (index) => {
+    if (!editInstruction.trim()) return;
+    setIsEnhancingScene(true);
+    
+    try {
+      const res = await axios.post('http://localhost:5000/api/enhance-scene', {
+        originalScene: adData.scenes[index],
+        userInstruction: editInstruction,
+        brandColors: brandColors
+      });
+
+      if (res.data.success) {
+        // تحديث المشهد المحدد فقط في الواجهة
+        const updatedScenes = [...adData.scenes];
+        updatedScenes[index] = res.data.updatedScene;
+        setAdData({ ...adData, scenes: updatedScenes });
+        
+        // إغلاق وضع التعديل
+        setEditingSceneIndex(null);
+        setEditInstruction('');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('حدث خطأ أثناء تطوير المشهد.');
+    } finally {
+      setIsEnhancingScene(false);
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen bg-[#05070A] text-gray-100 p-8 font-sans" dir="rtl">
@@ -337,9 +379,19 @@ const CommercialLab = () => {
               {adData.scenes.map((scene, index) => (
                 <div key={index} className="bg-gray-900 rounded-2xl p-6 border border-gray-800 hover:border-red-500/50 transition-all flex flex-col lg:flex-row gap-6">
                   
-                  <div className="flex-shrink-0 flex flex-col items-center justify-center bg-gray-950 w-24 h-24 rounded-xl border border-gray-800">
-                    <span className="text-3xl font-black text-gray-600">0{scene.sceneNumber}</span>
-                    <span className="text-xs font-bold text-red-500 mt-1 bg-red-900/30 px-2 py-1 rounded-md">{scene.duration}</span>
+<div className="flex-shrink-0 flex flex-col items-center gap-2">
+                    <div className="flex flex-col items-center justify-center bg-gray-950 w-24 h-24 rounded-xl border border-gray-800">
+                        <span className="text-3xl font-black text-gray-600">0{scene.sceneNumber}</span>
+                        <span className="text-xs font-bold text-red-500 mt-1 bg-red-900/30 px-2 py-1 rounded-md">{scene.duration}</span>
+                    </div>
+                    {/* زر فتح وضع التعديل */}
+                    <button 
+                        onClick={() => { setEditingSceneIndex(index); setEditInstruction(''); }}
+                        className="text-gray-400 hover:text-blue-400 bg-gray-800 p-2 rounded-lg w-full flex justify-center transition-all"
+                        title="تعديل هذا المشهد"
+                    >
+                        <Edit3 size={16} />
+                    </button>
                   </div>
                   
                   <div className="flex-grow space-y-4 w-full">
@@ -348,7 +400,31 @@ const CommercialLab = () => {
                         <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700 font-mono">🔄 {scene.cameraMovement}</span>
                         <span className="text-[11px] bg-indigo-900/30 text-indigo-300 px-2 py-1 rounded border border-indigo-700/50">🎧 SFX: {scene.sfx}</span>
                     </div>
-
+{/* واجهة تعديل المشهد (تظهر عند الضغط) */}
+                    {editingSceneIndex === index && (
+                        <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/50 mb-4 animate-in fade-in">
+                            <label className="text-blue-300 font-bold text-sm mb-2 flex items-center gap-2">
+                                <Wand2 size={16} /> تطوير هذا المشهد (أعطِ تعليماتك للمخرج):
+                            </label>
+                            <textarea
+                                className="w-full bg-gray-950 text-white p-3 rounded-lg border border-gray-700 focus:border-blue-500 outline-none resize-none text-sm mb-3"
+                                rows="2"
+                                placeholder="مثال: اجعل البطل يشرب القهوة وهو يبتسم بدلاً من الجلوس فقط..."
+                                value={editInstruction}
+                                onChange={(e) => setEditInstruction(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => setEditingSceneIndex(null)} className="text-gray-400 hover:text-white px-3 py-1.5 rounded-lg text-sm">إلغاء</button>
+                                <button 
+                                    onClick={() => handleEnhanceScene(index)} 
+                                    disabled={isEnhancingScene}
+                                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-1.5 rounded-lg text-sm flex items-center gap-2"
+                                >
+                                    {isEnhancingScene ? <Loader2 size={14} className="animate-spin"/> : 'تطوير المشهد ✨'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex flex-col gap-3">
                         <div className="bg-gray-950 p-4 rounded-xl border border-gray-800 relative group">
                             <span className="text-xs text-orange-400 font-bold uppercase flex items-center gap-2 mb-2"><Video size={14}/> نص-إلى-فيديو:</span>
