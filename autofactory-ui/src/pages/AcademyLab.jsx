@@ -88,13 +88,13 @@ try {
             difficulty: difficulty
           });
 
-          if (res.data.success) {
+        if (res.data.success) {
             updatedBlueprint.blueprint[sIdx].lessons[lIdx] = {
               ...lesson,
               content: res.data.data.content,
-              codeSnippet: res.data.data.codeSnippet || "", // حماية إضافية
-              // 🆕 وضعنا الـ quiz داخل مصفوفة [] لكي يتطابق مع منصتك!
-              quiz: res.data.data.quiz && res.data.data.quiz.question ? [res.data.data.quiz] : [], 
+              codeSnippet: res.data.data.codeSnippet || "",
+              // 🆕 استخدمنا الاسم الجديد dailyQuest بدلاً من quiz
+              dailyQuest: res.data.data.dailyQuest || null, 
               isForged: true
             };
             setBlueprint({...updatedBlueprint}); 
