@@ -48,7 +48,7 @@ try {
     if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة!');
     setLoadingBlueprint(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/academy/blueprint', { topic, difficulty });
+      const res = await axios.post('http://localhost:5000/api/academy/blueprint1', { topic, difficulty });
       if (res.data.success) {
         setBlueprint(res.data.data);
         setForgingStatus('idle'); // إعادة تعيين الحالة
@@ -64,11 +64,17 @@ try {
   // ==========================================
   // ✍️ 3. تأليف الكورس (The Forge)
   // ==========================================
+// ✍️ 3. تأليف الكورس (The Forge - مع نظام الزعماء)
   const handleForgeAllLessons = async () => {
     if (!blueprint) return;
     
+    // حساب إجمالي الدروس + دروس الزعماء الإضافية
     let totalLessons = 0;
-    blueprint.blueprint.forEach(sec => totalLessons += sec.lessons.length);
+    blueprint.blueprint.forEach(sec => {
+      totalLessons += sec.lessons.length;
+      // إضافة درس زعيم لكل درسين
+      totalLessons += Math.floor(sec.lessons.length / 2);
+    });
     
     setForgingStatus('forging');
     let completedCount = 0;
@@ -76,39 +82,79 @@ try {
 
     for (let sIdx = 0; sIdx < updatedBlueprint.blueprint.length; sIdx++) {
       const section = updatedBlueprint.blueprint[sIdx];
+      let newLessonsArray = []; // مصفوفة جديدة للدروس مع الزعماء
+      let lessonsSinceLastBoss = 0;
+
       for (let lIdx = 0; lIdx < section.lessons.length; lIdx++) {
         const lesson = section.lessons[lIdx];
         setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: lesson.title });
 
-        try {
-          const res = await axios.post('http://localhost:5000/api/academy/forge-lesson', {
+         try {
+          // 💡 تم التوجيه إلى مسار V2 المخصص لهذا الاستوديو
+          const res = await axios.post('http://localhost:5000/api/academy/forge-lesson-v2', {
             courseTopic: updatedBlueprint.courseTitle,
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
             difficulty: difficulty
           });
 
-        if (res.data.success) {
-            updatedBlueprint.blueprint[sIdx].lessons[lIdx] = {
+          if (res.data.success) {
+            newLessonsArray.push({
               ...lesson,
+              type: "video", // درس عادي
               content: res.data.data.content,
               codeSnippet: res.data.data.codeSnippet || "",
-              // 🆕 استخدمنا الاسم الجديد dailyQuest بدلاً من quiz
               dailyQuest: res.data.data.dailyQuest || null, 
               isForged: true
-            };
-            setBlueprint({...updatedBlueprint}); 
+            });
+            lessonsSinceLastBoss++;
+            completedCount++;
+            setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: lesson.title });
           }
+
+          // 2. التحقق مما إذا كان حان وقت الزعيم (بعد كل درسين)
+          if (lessonsSinceLastBoss === 2) {
+             setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: "تجهيز بوابة الزعيم..." });
+             
+             try {
+                // نطلب من السيرفر توليد اختبار الزعيم بناءً على محتوى الدرسين السابقين
+                const bossRes = await axios.post('http://localhost:5000/api/academy/forge-boss', {
+                  courseTopic: updatedBlueprint.courseTitle,
+                  lesson1Content: newLessonsArray[newLessonsArray.length - 2].content,
+                  lesson2Content: newLessonsArray[newLessonsArray.length - 1].content
+                });
+
+                if (bossRes.data.success) {
+                  newLessonsArray.push({
+                    title: "بوابة الزعيم (Boss Dungeon)",
+                    description: "اختبار شامل لكسر البوابة. يتطلب نسبة نجاح 70% للمرور.",
+                    type: "boss_quiz", // نوع الدرس: اختبار زعيم
+                    content: "", // لا يوجد محتوى نظري
+                    codeSnippet: "",
+                    bossQuiz: bossRes.data.data.bossQuiz || [], // 5 أسئلة
+                    isForged: true
+                  });
+                  lessonsSinceLastBoss = 0; // تصفير العداد
+                  completedCount++;
+                  setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: "تم كسر البوابة!" });
+                }
+             } catch(bossErr) {
+               console.error("خطأ في توليد الزعيم", bossErr);
+             }
+          }
+
         } catch (error) {
           console.error(`خطأ في تأليف درس: ${lesson.title}`);
         }
-        
-        completedCount++;
-        setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: lesson.title });
       }
+      
+      // تحديث القسم بالمصفوفة الجديدة (الدروس + الزعماء)
+      updatedBlueprint.blueprint[sIdx].lessons = newLessonsArray;
+      setBlueprint({...updatedBlueprint});
     }
+    
     setForgingStatus('complete');
-    alert('🎉 اكتمل تأليف الكورس بالكامل! يمكنك الآن مراجعته.');
+    alert('🎉 اكتمل تأليف الكورس وبوابات الزعماء بالكامل! يمكنك الآن مراجعته.');
   };
 
   // ==========================================
@@ -192,17 +238,20 @@ try {
             {/* أزرار الإلهام السريعة */}
 {/* أزرار الإلهام السريعة */}
             <div className="flex gap-2 mb-6 flex-wrap">
-              <button onClick={() => generateIdea('crash')} className="flex-1 bg-slate-800 hover:bg-yellow-900/30 border border-slate-700 hover:border-yellow-500/50 text-slate-400 hover:text-yellow-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
+              <button 
+                // 💡 التعديل هنا: عند الضغط، نغير مستوى الصعوبة تلقائياً للتبسيط المطلق
+                onClick={() => { generateIdea('crash'); setDifficulty('crash_eli5'); }} 
+                className="flex-1 bg-slate-800 hover:bg-yellow-900/30 border border-slate-700 hover:border-yellow-500/50 text-slate-400 hover:text-yellow-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1"
+              >
                 <Zap size={14}/> كراش كورس
               </button>
-              <button onClick={() => generateIdea('money')} className="flex-1 bg-slate-800 hover:bg-emerald-900/30 border border-slate-700 hover:border-emerald-500/50 text-slate-400 hover:text-emerald-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
+              <button onClick={() => { generateIdea('money'); setDifficulty('متوسط (B-Rank)'); }} className="flex-1 bg-slate-800 hover:bg-emerald-900/30 border border-slate-700 hover:border-emerald-500/50 text-slate-400 hover:text-emerald-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
                 <TrendingUp size={14}/> مهارة للربح
               </button>
-              <button onClick={() => generateIdea('trend')} className="flex-1 bg-slate-800 hover:bg-purple-900/30 border border-slate-700 hover:border-purple-500/50 text-slate-400 hover:text-purple-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
+              <button onClick={() => { generateIdea('trend'); setDifficulty('متوسط (B-Rank)'); }} className="flex-1 bg-slate-800 hover:bg-purple-900/30 border border-slate-700 hover:border-purple-500/50 text-slate-400 hover:text-purple-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
                 <Lightbulb size={14}/> تريند ومطلوب
               </button>
-              {/* 🆕 الزر الجديد للتخصصات الكبرى */}
-              <button onClick={() => generateIdea('bootcamp')} className="flex-1 bg-slate-800 hover:bg-rose-900/30 border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
+              <button onClick={() => { generateIdea('bootcamp'); setDifficulty('معسكر شامل (Bootcamp - شهادات مصغرة)'); }} className="flex-1 bg-slate-800 hover:bg-rose-900/30 border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
                 <GraduationCap size={14}/> معسكر شامل
               </button>
             </div>
@@ -212,13 +261,14 @@ try {
                 <label className="block text-sm font-bold text-slate-400 mb-2">الموضوع المراد تدريسه (اكتب أو اختر من الإلهامات)</label>
                 <input type="text" placeholder="مثال: احتراف بناء تطبيقات بـ Electron.js" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-blue-500 outline-none text-white transition-colors" value={topic} onChange={(e) => setTopic(e.target.value)} />
               </div>
-<div>
-                <label className="block text-sm font-bold text-slate-400 mb-2">مستوى الصعوبة المستهدف</label>
-                <select className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-blue-500 outline-none text-white appearance-none" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+              <div>
+                <label className="block text-sm font-bold text-slate-400 mb-2">مستوى الصعوبة وأسلوب الشرح</label>
+                <select className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-blue-500 outline-none text-white appearance-none cursor-pointer" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
+                  {/* 🆕 الخيار الجديد للتبسيط المطلق */}
+                  <option value="crash_eli5">كراش كورس (تبسيط مطلق - اشرح لي كأني طفل 👶)</option>
                   <option value="مبتدئ تماماً (E-Rank)">مبتدئ تماماً (E-Rank)</option>
                   <option value="متوسط (B-Rank)">متوسط (B-Rank)</option>
                   <option value="خبير متقدم (S-Rank)">خبير متقدم (S-Rank)</option>
-                  {/* 🆕 الخيار الخاص بالمعسكرات والشهادات المصغرة */}
                   <option value="معسكر شامل (Bootcamp - شهادات مصغرة)">معسكر شامل (Bootcamp - شهادات مصغرة)</option>
                 </select>
               </div>
@@ -355,7 +405,7 @@ try {
                   <><Server size={24} className="animate-pulse" /> مزامنة لـ CherifPlatform</>
                 )}
               </button>
-
+ 
             </div>
           )}
 

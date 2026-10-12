@@ -13,6 +13,8 @@ import LeadsDashboard from './pages/LeadsDashboard';
 import CampaignManager from './pages/CampaignManager'; 
 import CommercialLab from './pages/CommercialLab';
 import AcademyLab from './pages/AcademyLab';
+import AcademyLab2 from './pages/AcademyLab2';
+
 
 
 function App() {
@@ -45,6 +47,8 @@ function App() {
         return <CommercialLab setActiveTab={setActiveTab} />;
       case 'academy-lab':
         return <AcademyLab setActiveTab={setActiveTab} />;
+              case 'academy-lab-2':
+        return <AcademyLab2 setActiveTab={setActiveTab} />;
       case 'history':
       case 'dashboard':
       case 'settings':

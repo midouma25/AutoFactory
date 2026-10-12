@@ -1,6 +1,6 @@
 import React from 'react'; //[cite: 2]
 // تم إضافة أيقونة Users لقاعدة العملاء
-import { LayoutDashboard, PenTool, TrendingUp, History, Settings, FlaskConical, Layers, Map, Briefcase, BookOpen, Clapperboard, Users, Megaphone, Video } from 'lucide-react'; 
+import { LayoutDashboard, PenTool, TrendingUp, History, Settings, Layers, Map, Briefcase, BookOpen, Clapperboard, Users, Megaphone, Video, FlaskConical } from 'lucide-react'; 
 
 const menuItems = [ //[cite: 2]
   { id: 'dashboard', name: 'لوحة القيادة', icon: <LayoutDashboard size={20} /> }, //[cite: 2]
@@ -13,7 +13,9 @@ const menuItems = [ //[cite: 2]
   { id: 'leads', name: 'قاعدة العملاء', icon: <Users size={20} /> },
   // داخل مصفوفة menuItems:
 { id: 'commercial-lab', name: 'استوديو الإعلانات', icon: <Video size={20} /> },
-{ id: 'academy-lab', name: 'استوديو الأكاديمية', icon: <BookOpen size={20} /> },
+{ id: 'academy-lab', name: 'استوديو الأكاديمية نسخة الدروس', icon: <BookOpen size={20} /> },
+{ id: 'academy-lab-2', name: 'استوديو الأكاديمية نسخة المشاريع', icon: <FlaskConical size={20} /> },
+
   // 👈 إضافة زر استوديو الفيديوهات الجديد
   { id: 'campaigns', name: 'مدير الحملات', icon: <Megaphone size={20} /> },
   { id: 'reel-lab', name: 'استوديو الفيديوهات', icon: <Clapperboard size={20} /> }, 
@@ -32,6 +34,7 @@ export default function MainLayout({ activeTab, setActiveTab, children }) { //[c
     if (id === 'campaigns') return 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-900/30';
     if (id === 'commercial-lab') return 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-lg shadow-red-900/30';
     if (id === 'academy-lab') return 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-900/30';
+    if (id === 'academy-lab-2') return 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-lg shadow-pink-900/30';
     // 👈 إضافة ستايل مميز لزر قاعدة العملاء
     if (id === 'leads') return 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/30';
     return 'bg-blue-600 text-white shadow-lg'; //[cite: 2]
