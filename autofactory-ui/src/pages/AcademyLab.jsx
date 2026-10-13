@@ -61,10 +61,9 @@ try {
     }
   };
 
+// ==========================================
+  // ✍️ 3. تأليف الكورس (The Forge - مع نظام الزعماء)
   // ==========================================
-  // ✍️ 3. تأليف الكورس (The Forge)
-  // ==========================================
-// ✍️ 3. تأليف الكورس (The Forge - مع نظام الزعماء)
   const handleForgeAllLessons = async () => {
     if (!blueprint) return;
     
@@ -89,9 +88,9 @@ try {
         const lesson = section.lessons[lIdx];
         setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: lesson.title });
 
-         try {
-          // 💡 تم التوجيه إلى مسار V2 المخصص لهذا الاستوديو
-          const res = await axios.post('http://localhost:5000/api/academy/forge-lesson-v2', {
+        try {
+          // 1. توليد الدرس العادي
+          const res = await axios.post('http://localhost:5000/api/academy/forge-lesson', {
             courseTopic: updatedBlueprint.courseTitle,
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
@@ -112,29 +111,42 @@ try {
             setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: lesson.title });
           }
 
-          // 2. التحقق مما إذا كان حان وقت الزعيم (بعد كل درسين)
+// 2. التحقق مما إذا كان حان وقت الزعيم (بعد كل درسين)
           if (lessonsSinceLastBoss === 2) {
-             setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: "تجهيز بوابة الزعيم..." });
+             const prevLesson1 = newLessonsArray[newLessonsArray.length - 2];
+             const prevLesson2 = newLessonsArray[newLessonsArray.length - 1];
+             
+             // 🧠 خوارزمية السولو ليفلينغ: هل نفتح بوابة حمراء أم بوابة زعيم عادية؟
+             // نتحقق إذا كان أحد الدرسين السابقين يحتوي على كود برمجي حقيقي
+             const hasCode = (prevLesson1.codeSnippet && prevLesson1.codeSnippet.length > 10) || 
+                             (prevLesson2.codeSnippet && prevLesson2.codeSnippet.length > 10);
+             
+             const gateType = hasCode ? "البوابة الحمراء (Red Gate)" : "بوابة الزعيم (Boss Dungeon)";
+             const apiUrl = hasCode ? 'http://localhost:5000/api/academy/forge-red-gate' : 'http://localhost:5000/api/academy/forge-boss';
+
+             setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: `تجهيز ${gateType}...` });
              
              try {
-                // نطلب من السيرفر توليد اختبار الزعيم بناءً على محتوى الدرسين السابقين
-                const bossRes = await axios.post('http://localhost:5000/api/academy/forge-boss', {
+                const bossRes = await axios.post(apiUrl, {
                   courseTopic: updatedBlueprint.courseTitle,
-                  lesson1Content: newLessonsArray[newLessonsArray.length - 2].content,
-                  lesson2Content: newLessonsArray[newLessonsArray.length - 1].content
+                  lesson1Content: prevLesson1.content,
+                  lesson2Content: prevLesson2.content
                 });
 
                 if (bossRes.data.success) {
+                  const bossQuestions = bossRes.data.data.bossQuiz || [];
                   newLessonsArray.push({
-                    title: "بوابة الزعيم (Boss Dungeon)",
-                    description: "اختبار شامل لكسر البوابة. يتطلب نسبة نجاح 70% للمرور.",
-                    type: "boss_quiz", // نوع الدرس: اختبار زعيم
-                    content: "", // لا يوجد محتوى نظري
+                    title: gateType,
+                    description: hasCode 
+                      ? "بوابة حمراء مليئة بتحديات الأكواد الدامية. كسر البوابة يتطلب نسبة 70%." 
+                      : "اختبار شامل لكسر البوابة. يتطلب نسبة نجاح 70% للمرور.",
+                    type: hasCode ? "red_gate" : "boss_quiz", // 🆕 نوع جديد للبوابة الحمراء
+                    content: "", 
                     codeSnippet: "",
-                    bossQuiz: bossRes.data.data.bossQuiz || [], // 5 أسئلة
+                    bossQuiz: bossQuestions, 
                     isForged: true
                   });
-                  lessonsSinceLastBoss = 0; // تصفير العداد
+                  lessonsSinceLastBoss = 0; 
                   completedCount++;
                   setForgeProgress({ current: completedCount, total: totalLessons, currentLessonName: "تم كسر البوابة!" });
                 }
@@ -148,7 +160,7 @@ try {
         }
       }
       
-      // تحديث القسم بالمصفوفة الجديدة (الدروس + الزعماء)
+      // تحديث القسم بالمصفوفة الجديدة (الدروس العادية + دروس الزعماء)
       updatedBlueprint.blueprint[sIdx].lessons = newLessonsArray;
       setBlueprint({...updatedBlueprint});
     }
