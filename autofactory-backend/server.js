@@ -3914,5 +3914,565 @@ app.post('/api/academy/forge-red-gate', async (req, res) => {
     }
 });
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ==========================================
+// 🎓 مسارات مختبر الأكاديمية (AcademyLab - Course Generator)
+// ==========================================
+
+// 1. مسار توليد "هيكل المنهج" (Course Blueprint) - يعتمد على المدفع الذكي
+app.post('/api/academy2/blueprint', async (req, res) => {
+    const { topic, difficulty } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
+
+    try {
+        console.log(`\n📐 جاري هندسة هيكل منهج أكاديمي لموضوع: ${topic}...`);
+
+        const isBootcamp = difficulty.includes('Bootcamp');
+        const architectureInstruction = isBootcamp 
+            ? `هذا الكورس عبارة عن 'معسكر برمجي شامل' (Bootcamp / Specialization). 
+               قم بتقسيمه إلى 4 أو 6 "وحدات ضخمة"، حيث تُعتبر كل وحدة بمثابة كورس مصغر يركز على تقنية محددة (مثل جزء مخصص بالكامل لـ MongoDB، وجزء لـ React).
+               يجب أن تُسمي الوحدات بطريقة توحي بأنها تمنح شهادة (مثال: "المسار الأول: إتقان MongoDB [شهادة فرعية]").
+               داخل كل مسار، ضع 4 إلى 6 دروس عميقة.`
+            : `قم بتقسيم الكورس إلى 3 أو 4 "وحدات رئيسية" (Sections) كحد أقصى، وداخل كل وحدة ضع من 3 إلى 5 "دروس" (Lessons).`;
+
+        const systemPrompt = `أنت مهندس برمجيات كبير (Senior Architect) ومصمم مناهج تعليمية محترف في أكاديمية تقنية متقدمة.
+        مهمتك هي بناء "هيكل منهج" (Syllabus) عملي، خالي من الحشو، ومتسلسل منطقياً حول موضوع: "${topic}".
+        مستوى الدورة المستهدف هو: "${difficulty || 'متوسط'}".
+        
+        🚨 قواعد بناء الهيكل:
+        1. ${architectureInstruction}
+        2. عناوين الدروس يجب أن تكون عملية وتوحي بالتطبيق المباشر (مثال: "بناء أول خادم باستخدام Express" بدلاً من "مقدمة عن Express").
+        3. لا تكتب أي شروحات، فقط قم بتوليد الهيكل المنظم.
+
+        رد بصيغة JSON فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "عنوان فخم وجذاب للدورة",
+          "courseDescription": "وصف تسويقي وتعليمي للكورس في 3 أسطر يشرح الفائدة النهائية والطريق نحو الاعتماد.",
+          "blueprint": [
+            {
+              "sectionName": "اسم الوحدة أو المسار الفرعي",
+              "lessons": [
+                { "title": "عنوان الدرس الأول" },
+                { "title": "عنوان الدرس الثاني" }
+              ]
+            }
+          ]
+        }`;
+
+        // 🚀 استخدام المدفع الذكي
+        const rawContent = await generateContentSmart(systemPrompt, "تفضل، قم بهندسة هذا المنهج الآن.", 0.7, 8000);
+        const blueprintData = JSON.parse(rawContent);
+
+        res.json({ success: true, data: blueprintData });
+
+    } catch (error) {
+        console.error('❌ خطأ في هندسة هيكل المنهج:', error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء بناء هيكل المنهج.' });
+    }
+});
+
+
+
+// 2. مسار "تأليف محتوى الدرس" التفصيلي (Lesson Content Forge) - يعتمد على المدفع الذكي
+app.post('/api/academy2/forge-lesson', async (req, res) => {
+    const { courseTopic, sectionName, lessonTitle, difficulty } = req.body;
+
+    if (!lessonTitle) return res.status(400).json({ error: 'عنوان الدرس مفقود.' });
+
+    try {
+        console.log(`\n✍️ جاري صياغة المحتوى الدسم لدرس: "${lessonTitle}"...`);
+
+        const systemPrompt = `أنت كبير مهندسي البرمجيات (Principal Engineer) وأعظم معلم تقني في العالم (Top-Rated Instructor) في منصة تضاهي LeetCode و Coursera. تستخدم دائماً "مبدأ فاينمان" (Feynman Technique) لتبسيط أعقد الأمور.
+        مهمتك الآن هي تأليف درس واحد فقط، وعليك أولاً تحليل عنوان الدرس لتحديد نوعه: "نظري/مفاهيمي" أم "برمجي/عملي". بناءً على هذا التحليل، ستصوغ درساً شاملاً، عميقاً، وتفصيلياً جداً (Masterclass).
+
+        - موضوع الكورس العام: "${courseTopic}"
+        - الوحدة الحالية: "${sectionName}"
+        - 📌 الدرس المطلوب كتابته الآن: "${lessonTitle}"
+        - مستوى الطالب المستهدف: "${difficulty || 'متوسط'}"
+
+        🚨 استراتيجية المعلم المخضرم (The Master Teacher Method):
+        حلل عنوان الدرس "${lessonTitle}". 
+        
+        🔴 إذا كان الدرس "نظرياً/مفاهيمياً" (مثال: كيف يعمل الإنترنت، ما هي الـ APIs، مفاهيم قواعد البيانات):
+           - ركز على التشبيهات (Analogies) من الحياة اليومية لتبسيط المعقد (مثال: الـ API كالنادل في المطعم).
+           - تجنب حشو الأكواد المعقدة، استخدم مقتطفات بسيطة جداً فقط للتوضيح إن لزم الأمر.
+           - حقل "dailyQuest" يجب أن يكون سؤال خيارات متعددة (MCQ) يختبر الفهم النظري العميق.
+
+        🔵 إذا كان الدرس "برمجياً/عملياً" (مثال: المتغيرات، بناء خادم، استخدام React Hooks، خوارزميات):
+           - القاعدة الذهبية للشرح: (شرح قصير ⬅️ كود ⬅️ ماذا يفعل هذا الكود ⬅️ كود متقدم).
+           - أغرق حقل "content" بالأمثلة البرمجية باستخدام علامات الـ Markdown (\`\`\`javascript مثلاً). لا تترك فكرة دون مثال برمجي يوضحها.
+           - حقل "codeSnippet" يجب أن يحتوي على كود المشروع النهائي أو الخلاصة الجاهزة للنسخ والتشغيل (بدون شروحات نصية داخله).
+           - 🆕 حقل "codeExplanation": يجب أن تشرح فيه وتُشرّح (Anatomy) الكود الموجود في codeSnippet سطراً بسطر أو كتلة بكتلة.
+           - حقل "dailyQuest" يجب أن يكون "تحدي كود" (Coding Challenge). (مثال: "أكمل السطر الناقص في الكود التالي"، "ما هو مخرج Output هذا الكود؟"، أو "اكتشف الخطأ Debug").
+
+        🚨 قواعد هندسة المحتوى النصي (The S-Rank Structure):
+        يجب أن يكون حقل "content" طويلاً ودسماً جداً (لا يقل عن 800 إلى 1000 كلمة). إياك والاختصار. 
+        يجب أن تلتزم التزاماً حرفياً بهيكل الـ Markdown التالي في الشرح:
+
+        ### 🎯 مقدمة الدرس وأهميته
+        (ابدأ بمقدمة قوية تشرح فكرة الدرس، لماذا نتعلم هذا الموضوع؟ وما هي المشكلة الحقيقية التي يحلها في سوق العمل وفي المشاريع الكبيرة).
+
+        ### 🧠 الغوص في الأعماق (Deep Dive)
+        (هنا قم بشرح المفهوم التقني بالتفصيل الممل. فكك المفهوم إلى أجزاء صغيرة. استخدم العناوين الفرعية #### لشرح كل جزء على حدة. اشرح كيف تعمل التقنية تحت الغطاء Under the hood. تذكر: أكثر من الأكواد هنا إذا كان الدرس برمجياً!).
+
+        ### ⚙️ التطبيق العملي وسيناريوهات الاستخدام
+        (أعطِ أمثلة واقعية Real-world Use Cases. متى نستخدم هذه التقنية؟ ولماذا نفضلها على البدائل الأخرى؟).
+
+        ### ⚠️ أخطاء شائعة وأفضل الممارسات (Pro Tips)
+        (فقرة بالغة الأهمية: ما هي الأخطاء التي يقع فيها المبرمجون المبتدئون عند استخدام هذه التقنية؟ وكيف يتجنبها المحترفون؟ اذكر الـ Best Practices).
+
+        🚨 قواعد التنسيق الإجبارية (Markdown):
+        - استخدم (###) للعناوين الرئيسية المذكورة أعلاه.
+        - استخدم (####) للعناوين الفرعية داخل الشرح.
+        - اترك سطرين فارغين (\\n\\n) بين كل فقرة وأخرى لإنشاء "تنفس بصري" مريح للطالب.
+        - استخدم **الخط العريض** للكلمات المفتاحية والمصطلحات التقنية.
+        - استخدم القوائم النقطية (-) بكثرة لتنظيم الأفكار.
+
+        🚨 قواعد هيكل JSON الصارمة (CRITICAL):
+        - حقل "options" في "dailyQuest" يجب أن يكون مصفوفة من 4 نصوص مسطحة (Flat Strings) فقط. لا تضع مصفوفات متداخلة!
+        - "correctAnswerIndex": يجب أن يكون عشوائياً (0, 1, 2, أو 3).
+        - "explanation": اشرح بالتفصيل العلمي والمنطقي لماذا هذه الإجابة أو هذا الكود هو الصحيح دوناً عن غيره.
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "content": "الشرح التفصيلي المهيكل بـ Markdown هنا...",
+          "codeSnippet": "const app = express(); \\n// الكود الفعلي هنا",
+          "codeExplanation": "🔬 تشريح الكود: \\n- السطر الأول: قمنا باستدعاء المكتبة لكي...\\n- الدالة الرئيسية: تقوم بـ...",
+          "dailyQuest": {
+            "question": "السؤال النظري أو تحدي الكود هنا؟",
+            "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+            "correctAnswerIndex": 2,
+            "explanation": "الإجابة صحيحة لأن..."
+          }
+        }`;
+
+        // 🚀 استخدام المدفع الذكي بطاقة استيعابية ضخمة (15000 توكن) ليتمكن Gemini من التوسع في الشرح
+        const rawContent = await generateContentSmart(systemPrompt, "أكتب المحتوى الاحترافي والمطول لهذا الدرس الآن.", 0.8, 15000);
+        
+        // حماية إضافية للتحقق من JSON
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error(`❌ خطأ في صياغة درس (${lessonTitle}):`, error.message);
+        res.status(500).json({ error: 'حدث خطأ أثناء كتابة محتوى الدرس.' });
+    }
+});
+
+
+
+
+// 🚀 مسار V2 المخصص للاستوديو التجريبي (AcademyLab2)
+app.post('/api/academy2/forge-lesson-v2', async (req, res) => {
+    try {
+        const { courseTopic, sectionName, lessonTitle, difficulty } = req.body;
+
+        // 🧠 المحرك البيداغوجي: تحديد أسلوب الشرح بناءً على الصعوبة
+        let pedagogicalRules = "";
+
+        if (difficulty === 'crash_eli5') {
+            pedagogicalRules = `
+        🚨 استراتيجية الشرح (مبدأ فاينمان - Explain Like I'm 5):
+        أنت الآن لست مجرد مبرمج، أنت أعظم وألطف معلم في العالم. أنت تشرح المفاهيم لشخص يبلغ من العمر 10 سنوات!
+        1. ابدأ من الصفر المطلق: لا تفترض أي معرفة مسبقة على الإطلاق.
+        2. التشبيهات اليومية (CRITICAL): إياك أن تشرح مفهوماً تقنياً دون ربطه بشيء من الحياة اليومية. (مثال: "قاعدة البيانات تشبه الخزانة المليئة بالأدراج").
+        3. التدرج البطيء والآمن: ابدأ بالقصة أو التشبيه أولاً، ثم المفهوم النظري المبسط، وفي النهاية فقط ضع الكود. لا تقفز للأكواد المعقدة مباشرة.
+        4. لغة دافئة ومبتسمة: استخدم لغة ودودة جداً، مشجعة، قل كلمات مثل "تخيل معي"، "لا تقلق الأمر بسيط جداً".
+        5. التفصيل المريح: اجعل الشرح طويلاً ومفصلاً ولكن بفقرات قصيرة جداً لكي لا يمل القارئ.
+            `;
+        } else {
+            pedagogicalRules = `
+        🚨 استراتيجية الشرح (أسلوب المهندسين والخبراء - Masterclass):
+        أنت كبير مهندسي البرمجيات (Principal Engineer).
+        1. الغوص في الأعماق (Deep Dive): اشرح المفهوم التقني بالتفصيل الممل، فكك المفهوم إلى أجزاء، واشرح كيف تعمل التقنية تحت الغطاء.
+        2. التطبيق العملي (Use Cases): متى نستخدم هذه التقنية؟ ولماذا نفضلها على البدائل؟
+        3. أخطاء شائعة (Anti-patterns): ما هي الأخطاء التي يقع فيها المبتدئون وكيف يتجنبها المحترفون؟
+            `;
+        }
+
+        const systemPrompt = `أنت أستاذ تقني من النخبة.
+        مهمتك تأليف درس شامل، عميق، وتفصيلي جداً.
+
+        - موضوع الكورس العام: "${courseTopic}"
+        - الوحدة الحالية: "${sectionName}"
+        - 📌 عنوان الدرس: "${lessonTitle}"
+
+        ${pedagogicalRules}
+
+        🚨 قواعد التنسيق الإجبارية (Markdown):
+        - يجب أن تستخدم لغة Markdown مع مسافات الأسطر الإجبارية (\\n\\n).
+        - العناوين الرئيسية: تبدأ بـ ### متبوعة بمسافة.
+        - العناوين الفرعية: تبدأ بـ #### متبوعة بمسافة.
+        - التنفس البصري (CRITICAL): يجب وضع سطرين فارغين تماماً (\\n\\n) قبل وبعد أي عنوان، وبعد كل فقرة.
+        - القوائم: استخدم (-) للقوائم النقطية، واترك سطراً فارغاً قبل بداية القائمة.
+        - الكلمات البارزة: ضع المصطلحات بين علامتي \` هكذا: \`React\`. والكلمات الهامة بين نجمتين **هام**.
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "content": "### 🎯 عنوان رئيسي\\n\\nفقرة أولى...\\n\\n#### عنوان فرعي\\n\\n- نقطة 1\\n- نقطة 2\\n\\nفقرة أخيرة...",
+          "codeSnippet": "// الكود الفعلي هنا (إن وجد، وإلا دعه فارغاً)",
+          "dailyQuest": {
+            "question": "سؤال تقييمي ذكي من محتوى الدرس؟",
+            "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+            "correctAnswerIndex": 2,
+            "explanation": "شرح مبسط يشرح لماذا هذه الإجابة هي الصحيحة..."
+          }
+        }`;
+
+        // 💡 10000 توكن لضمان عدم قطع الشرح الطويل
+        const content = await generateContentSmart(systemPrompt, `اكتب محتوى الدرس: ${lessonTitle}`, 0.7, 10000);
+        res.json({ success: true, data: content });
+
+    } catch (error) {
+        console.error("❌ Error in forge-lesson-v2:", error);
+        res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال بالذكاء الاصطناعي.' });
+    }
+});
+
+// 🗺️ مسار هندسة الهيكل (AcademyLab2 Blueprint - Coursera Style Architecture)
+app.post('/api/academy2/blueprint1', async (req, res) => {
+    const { topic, difficulty } = req.body;
+
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
+
+    try {
+        console.log(`\n🎓 [AcademyLab2] جاري بناء "شهادة مهنية" ضخمة لموضوع: ${topic}...`);
+
+        let architectureInstruction = "";
+        let expectedSize = "";
+
+        if (difficulty.includes('Bootcamp') || topic.includes('معسكر')) {
+            expectedSize = "شهادة مهنية احترافية (Professional Certificate - 15 Course Series)";
+            architectureInstruction = `
+        🚨 الهيكل المرجعي (Coursera Style):
+        هذا ليس كورساً عادياً! هذا "برنامج شهادة مهنية" يتكون من سلسلة كورسات مستقلة (Course Series).
+        يجب أن تقسم البرنامج إلى (10 إلى 15) "كورس مستقل" (سنضعها في حقل sectionName).
+        
+        مثال لمسار Full Stack:
+        - الكورس 1: مقدمة في هندسة البرمجيات (15 hours)
+        - الكورس 2: البرمجة بلغة بايثون للذكاء الاصطناعي (20 hours)
+        - الكورس 3: تطوير واجهات الويب HTML/CSS/JS (18 hours)
+        - الكورس 4: تطوير السيرفرات بـ Node.js (15 hours)
+        - الكورس 5: قواعد البيانات MongoDB (12 hours)
+        - الكورس 6: الحاويات والسحابة Docker & Cloud (15 hours)
+        - الكورس الأخير: مشروع التخرج الشامل (Capstone Project).
+        
+        داخل كل "كورس"، ضع من (5 إلى 8) دروس تشكل محتواه المستقل.`;
+
+        } else {
+            expectedSize = "تخصص دقيق (Specialization - 5 Course Series)";
+            architectureInstruction = `
+        🚨 الهيكل المرجعي (Coursera Style):
+        قم بتقسيم البرنامج إلى (5 إلى 7) "كورسات مستقلة".
+        داخل كل كورس ضع من (5 إلى 7) دروس متعمقة.`;
+        }
+
+        const systemPrompt = `أنت عميد جامعة تقنية وخبير في تصميم الشهادات المهنية (Professional Certificates) لدى كبرى الشركات (مثل IBM و Google).
+        
+        مهمتك تصميم خريطة طريق متكاملة لبرنامج شهادة مهنية.
+
+        - موضوع الشهادة: "${topic}"
+        - نوع البرنامج: "${expectedSize}"
+
+        ${architectureInstruction}
+
+        🚨 قواعد بناء الـ JSON (CRITICAL RULES):
+        1. كل كائن في مصفوفة "blueprint" يمثل "كورساً مستقلاً" داخل الشهادة المهنية.
+        2. يجب إضافة الحقول الإضافية لكل كورس: "coursePrefix" (مثال: Course 1)، "estimatedHours" (ساعات الكورس)، و "skills" (مصفوفة بـ 4 مهارات سيكتسبها الطالب في هذا الكورس تحديداً).
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "courseTitle": "اسم الشهادة (مثال: IBM Full Stack Software Developer Professional Certificate)",
+          "courseDescription": "وصف شامل للشهادة المهنية يبرز أهميتها لسوق العمل...",
+          "blueprint": [
+            {
+              "coursePrefix": "Course 1",
+              "sectionName": "مقدمة في هندسة البرمجيات وتطوير الويب",
+              "estimatedHours": "15 hours",
+              "skills": ["Software Engineering", "Web Development", "SDLC", "Agile"],
+              "lessons": [
+                {
+                  "title": "ما هي هندسة البرمجيات؟",
+                  "description": "شرح نظري مبسط..."
+                }
+              ]
+            }
+            // ⚠️ استمر في إضافة الكورسات (Course 2, Course 3...) حتى تصل للعدد الضخم المطلوب (10 إلى 15 كورس)!
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم برنامج الشهادة المهنية العملاق الآن بصيغة JSON.", 0.8, 25000);
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        console.log(`✅ [AcademyLab2] تم الانتهاء بنجاح! تم إنشاء سلسلة من ${parsedContent.blueprint.length} كورسات.`);
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error("❌ خطأ في توليد الهيكل:", error);
+        res.status(500).json({ success: false, error: 'حدث خطأ في تصميم الشهادة المهنية.' });
+    }
+});
+
+
+// 🐉 مسار توليد اختبار الزعيم (Boss Dungeon) المحصن
+app.post('/api/academy2/forge-boss', async (req, res) => {
+    try {
+        const { courseTopic, lesson1Content, lesson2Content } = req.body;
+
+        // 🛡️ الحماية الهندسية القصوى: التأكد من أن المحتوى نصي وموجود قبل قصه
+        const safeContent1 = (typeof lesson1Content === 'string') ? lesson1Content : "";
+        const safeContent2 = (typeof lesson2Content === 'string') ? lesson2Content : "";
+
+const systemPrompt = `أنت مصمم اختبارات عبقري (Boss Dungeon Master) في منصة برمجية.
+        مهمتك قراءة الدرسين السابقين وبناء "اختبار زعيم" من 5 أسئلة قوية جداً.
+        
+        - موضوع الكورس: ${courseTopic}
+        - محتوى الدرس الأول: ${safeContent1.substring(0, 1000)}...
+        - محتوى الدرس الثاني: ${safeContent2.substring(0, 1000)}...
+
+        🚨 استراتيجية أسئلة الزعيم (Boss Mechanics):
+        1. إذا كان الدرسان يركزان على الأكواد، يجب أن تكون أسئلة الزعيم "تحديات برمجية" (اكتشف الخطأ، ما مخرجات الكود؟).
+        2. إذا كان الدرسان نظريين، اجعل الأسئلة سيناريوهات هندسية.
+
+        🚨 قواعد هيكل JSON صارمة جداً (CRITICAL):
+        - حقل "options" في كل سؤال يجب أن يكون مصفوفة من نصوص مسطحة (Flat Strings array of 4 items).
+        - ❌ ممنوع الترقيم داخل الخيارات (لا تكتب "أ. كذا"، اكتب النص مباشرة).
+        - ❌ ممنوع المصفوفات المتداخلة (لا تفعل هكذا: [["أ", "نص"]]).
+        - "correctAnswerIndex" يجب أن يتوزع عشوائياً (0, 1, 2, 3) بين الأسئلة.
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "bossQuiz": [
+            {
+              "question": "تحدي الكود أو السؤال الأول؟",
+              "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+              "correctAnswerIndex": 1,
+              "explanation": "شرح لماذا هذه الإجابة هي الصحيحة."
+            }
+            // ... 4 أسئلة أخرى
+          ]
+        }`;
+
+        // توليد المحتوى
+        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتوليد اختبار الزعيم الآن بصيغة JSON.", 0.7, 10000);
+        
+        // التأكد من تحويل النص إلى كائن JSON
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error("❌ خطأ في توليد الزعيم:", error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال بالذكاء الاصطناعي.' });
+    }
+});
+
+
+// ==========================================
+// 🎓 مسارات مختبر الأكاديمية (AcademyLab - Course Generator)
+// ==========================================
+
+// 1. مسار إلهام الأفكار (Academy 2)
+app.post('/api/academy2/suggest-topic', async (req, res) => {
+    const { type } = req.body;
+
+    try {
+        let promptInstruction = '';
+        if (type === 'crash') {
+            promptInstruction = 'أعطني عنواناً لـ "كراش كورس" (دورة مكثفة سريعة) في تقنية حديثة مطلوبة في سوق العمل.';
+        } else if (type === 'money') {
+            promptInstruction = 'أعطني عنواناً لكورس يعلم مهارة برمجية تجلب المال المباشر أو كيفية بناء منتجات SaaS.';
+        } else if (type === 'bootcamp') {
+            promptInstruction = 'أعطني عنواناً لـ "تخصص متكامل" (Bootcamp) ضخم جداً يغطي تقنيات متعددة.';
+        } else if (type === 'coursera') {
+            // 🆕 البرومبت السحري المحدث لشهادات التخصص الشاملة باللغة العربية
+            promptInstruction = 'أعطني عنواناً احترافياً لـ "شهادة مهنية" (Professional Certificate) ضخمة وشاملة تتكون من سلسلة كورسات (حوالي 10 إلى 15 كورس). ركز على أن تكون الفكرة لتخصص مهني متكامل ومطلوب جداً في سوق العمل الحالي. (أمثلة: شهادة مطور الويب الشامل المتقدمة، شهادة مهندس البيانات والذكاء الاصطناعي، شهادة خبير الأمن السيبراني). 🚨 تعليمات صارمة: لا تكتب مقدمات، واكتب العنوان باللغة العربية بأسلوب جذاب، فخم، ويوحي بالضخامة الأكاديمية.';
+        } else {
+            promptInstruction = 'أعطني عنواناً لكورس تريند ومطلوب جداً في سوق العمل الحالي يدمج بين الذكاء الاصطناعي وتطوير الويب.';
+        }
+
+        const systemPrompt = `أنت مستشار تعليمي ومسوق تقني خبير.
+        المطلوب منك إعطاء "عنوان كورس" واحد فقط بناءً على طلب المستخدم.
+        لا تكتب أي مقدمات، لا تضع علامات تنصيص، ولا تشرح الفكرة. العنوان فقط.
+        
+        رد بصيغة JSON فقط بهذا الهيكل:
+        { "topic": "اكتب العنوان المثير والجذاب هنا" }`;
+
+        const currentGroq = getGroqClient(); 
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: promptInstruction }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9, 
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const data = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
+
+        res.json({ success: true, idea: data.topic });
+
+    } catch (error) {
+        res.status(500).json({ error: 'فشل في استلهام فكرة الكورس.' });
+    }
+});
+
+// 🔴 مسار توليد البوابة الحمراء (Red Gate - Coding Boss)
+app.post('/api/academy2/forge-red-gate', async (req, res) => {
+    try {
+        const { courseTopic, lesson1Content, lesson2Content } = req.body;
+
+        const safeContent1 = (typeof lesson1Content === 'string') ? lesson1Content : "";
+        const safeContent2 = (typeof lesson2Content === 'string') ? lesson2Content : "";
+
+        const systemPrompt = `أنت مهندس برمجيات (S-Rank Hunter) ومصمم تحديات برمجية قاسية.
+        الدروس السابقة تحتوي على أكواد برمجية. مهمتك بناء "بوابة حمراء" (Red Gate) وهي عبارة عن 5 تحديات أكواد (Coding Quests) مرعبة.
+        
+        - موضوع الكورس: ${courseTopic}
+        - محتوى الدرس الأول: ${safeContent1.substring(0, 1000)}...
+        - محتوى الدرس الثاني: ${safeContent2.substring(0, 1000)}...
+
+        🚨 قواعد البوابة الحمراء (Red Gate):
+        1. الأسئلة يجب أن تكون "تحديات برمجية" حصراً: (اكتشف الخطأ في الكود، ما هي مخرجات الكود؟، أكمل السطر الناقص).
+        2. استخدم علامات Markdown (\`\`\`javascript) داخل حقل "question" لكتابة الكود بوضوح داخل السؤال.
+        3. الخيارات (options) يجب أن تكون مصفوفة من 4 نصوص مسطحة (Flat Strings) خالية من المصفوفات المتداخلة.
+        4. العشوائية الإجبارية: "correctAnswerIndex" موزع عشوائياً (0, 1, 2, 3).
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "bossQuiz": [
+            {
+              "question": "اقرأ الكود التالي:\\n\\n\`\`\`javascript\\nconst x = 5;\\n\`\`\`\\nما هو الخطأ هنا؟",
+              "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+              "correctAnswerIndex": 1,
+              "explanation": "الشرح البرمجي الدقيق للحل..."
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "افتح البوابة الحمراء الآن بصيغة JSON.", 0.7, 10000);
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error("❌ خطأ في توليد البوابة الحمراء:", error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال بالذكاء الاصطناعي.' });
+    }
+});
+
+
+
+// 🎓 مسار بناء الشهادة المهنية الضخمة (The Master Certificate Builder)
+app.post('/api/academy2/blueprint-certificate', async (req, res) => {
+    const { topic } = req.body;
+
+    try {
+        console.log(`\n🎓 جاري بناء "شهادة مهنية ضخمة مبسطة" لموضوع: ${topic}...`);
+
+        const systemPrompt = `أنت عميد أكاديمية تقنية وخبير في "التبسيط المطلق" (Explain Like I'm 5).
+        مهمتك تصميم خريطة طريق لـ "شهادة مهنية احترافية" (Professional Certificate) ضخمة جداً في موضوع: "${topic}".
+        
+        🚨 قواعد الهندسة المعمارية (CRITICAL):
+        1. الحجم الإلزامي: يجب أن تقسم الشهادة إلى (9 إلى 15) "كراش كورس" متسلسل.
+        2. التشبيه الممتد (Extended Analogy): اختر تشبيهاً واحداً من الحياة الواقعية (مثال: بناء مدينة، مطعم، مصنع سيارات) واستخدمه كـ "Theme" مستمر لربط جميع الكورسات.
+        3. الترابط السردي (Cliffhangers): كل كورس يجب أن يُسلم الراية للكورس الذي يليه بطريقة منطقية لسد فجوة معينة.
+        
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "certificateTitle": "اسم الشهادة المهنية (مثال: شهادة مطور الويب الشامل بأسلوب الليجو)",
+          "mainAnalogy": "التشبيه المعتمد (مثال: سنتخيل أننا نبني مطعماً ضخماً...)",
+          "courses": [
+            {
+              "courseOrder": 1,
+              "courseTitle": "كراش كورس 1: [اسم التقنية] - [ربطها بالتشبيه]",
+              "description": "وصف الكورس وكيف يمهد للذي يليه بأسلوب طفولي مرح.",
+              "estimatedHours": "20 hours"
+            },
+            {
+              "courseOrder": 2,
+              "courseTitle": "كراش كورس 2: ...",
+              "description": "...",
+              "estimatedHours": "25 hours"
+            }
+            // ⚠️ استمر بقوة حتى الكورس 15!
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم الشهادة المهنية الضخمة الآن.", 0.8, 15000);
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ في تصميم الشهادة.' });
+    }
+});
+
+
+// 🗺️ مسار بناء الوحدات داخل الكراش كورس الواحد المترابط
+app.post('/api/academy2/blueprint-crash-course', async (req, res) => {
+    const { certificateTitle, mainAnalogy, currentCourseTitle, previousCourseTitle, nextCourseTitle } = req.body;
+
+    try {
+        const systemPrompt = `أنت مهندس مناهج خبير في التبسيط المطلق (ELI5).
+        أنت الآن تقوم بتصميم محتويات (كراش كورس) وهو جزء من شهادة مهنية ضخمة اسمها: "${certificateTitle}".
+        
+        - التشبيه العام المعتمد للشهادة: "${mainAnalogy}"
+        - 📌 الكورس الحالي المطلوب تفصيله: "${currentCourseTitle}"
+        - الكورس السابق الذي درسه الطالب: "${previousCourseTitle || 'لا يوجد، هذا هو البداية'}"
+        - الكورس القادم الذي سينتقلون إليه لاحقاً: "${nextCourseTitle || 'لا يوجد، هذا مشروع التخرج'}"
+
+        🚨 هندسة الكراش كورس:
+        - قم بتقسيم هذا الكورس حصرياً إلى (7 إلى 10) "وحدات رئيسية" (Sections).
+        - داخل كل وحدة، ضع (5 إلى 8) دروس.
+        - استخدم التشبيه المعتمد (${mainAnalogy}) في صياغة أسماء الوحدات والدروس لتبدو كقصة مستمرة.
+
+        رد بصيغة JSON فقط بهذا الهيكل:
+        {
+          "courseTitle": "${currentCourseTitle}",
+          "blueprint": [
+            {
+              "sectionName": "الوحدة 1: ...",
+              "lessons": [
+                { "title": "...", "description": "..." }
+              ]
+            }
+            // استمر حتى 9 أو 10 وحدات...
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم وحدات هذا الكراش كورس.", 0.8, 20000);
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ.' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
