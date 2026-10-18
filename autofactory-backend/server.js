@@ -4149,141 +4149,75 @@ app.post('/api/academy2/forge-lesson-v2', async (req, res) => {
     }
 });
 
-// 🗺️ مسار هندسة الهيكل (AcademyLab2 Blueprint - Coursera Style Architecture)
+// جعل المسار القديم blueprint1 يدعم الشهادة المهنية أيضاً للتوافق التام مع الواجهة
 app.post('/api/academy2/blueprint1', async (req, res) => {
     const { topic, difficulty } = req.body;
-
     if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
 
+    // إذا اختار المستخدم الشهادة المهنية، نوجهه لنفس منطق الشهادة المهنية الخارقة
+    if (difficulty === 'pro_certificate_eli5' || difficulty?.includes('Bootcamp') || difficulty?.includes('معسكر')) {
+        req.url = '/api/academy2/blueprint-certificate';
+        return app._router.handle(req, res, () => {});
+    }
+
     try {
-        console.log(`\n🎓 [AcademyLab2] جاري بناء "شهادة مهنية" ضخمة لموضوع: ${topic}...`);
-
-        let architectureInstruction = "";
-        let expectedSize = "";
-
-        if (difficulty.includes('Bootcamp') || topic.includes('معسكر')) {
-            expectedSize = "شهادة مهنية احترافية (Professional Certificate - 15 Course Series)";
-            architectureInstruction = `
-        🚨 الهيكل المرجعي (Coursera Style):
-        هذا ليس كورساً عادياً! هذا "برنامج شهادة مهنية" يتكون من سلسلة كورسات مستقلة (Course Series).
-        يجب أن تقسم البرنامج إلى (10 إلى 15) "كورس مستقل" (سنضعها في حقل sectionName).
-        
-        مثال لمسار Full Stack:
-        - الكورس 1: مقدمة في هندسة البرمجيات (15 hours)
-        - الكورس 2: البرمجة بلغة بايثون للذكاء الاصطناعي (20 hours)
-        - الكورس 3: تطوير واجهات الويب HTML/CSS/JS (18 hours)
-        - الكورس 4: تطوير السيرفرات بـ Node.js (15 hours)
-        - الكورس 5: قواعد البيانات MongoDB (12 hours)
-        - الكورس 6: الحاويات والسحابة Docker & Cloud (15 hours)
-        - الكورس الأخير: مشروع التخرج الشامل (Capstone Project).
-        
-        داخل كل "كورس"، ضع من (5 إلى 8) دروس تشكل محتواه المستقل.`;
-
-        } else {
-            expectedSize = "تخصص دقيق (Specialization - 5 Course Series)";
-            architectureInstruction = `
-        🚨 الهيكل المرجعي (Coursera Style):
-        قم بتقسيم البرنامج إلى (5 إلى 7) "كورسات مستقلة".
-        داخل كل كورس ضع من (5 إلى 7) دروس متعمقة.`;
-        }
-
-        const systemPrompt = `أنت عميد جامعة تقنية وخبير في تصميم الشهادات المهنية (Professional Certificates) لدى كبرى الشركات (مثل IBM و Google).
-        
-        مهمتك تصميم خريطة طريق متكاملة لبرنامج شهادة مهنية.
-
-        - موضوع الشهادة: "${topic}"
-        - نوع البرنامج: "${expectedSize}"
-
-        ${architectureInstruction}
-
-        🚨 قواعد بناء الـ JSON (CRITICAL RULES):
-        1. كل كائن في مصفوفة "blueprint" يمثل "كورساً مستقلاً" داخل الشهادة المهنية.
-        2. يجب إضافة الحقول الإضافية لكل كورس: "coursePrefix" (مثال: Course 1)، "estimatedHours" (ساعات الكورس)، و "skills" (مصفوفة بـ 4 مهارات سيكتسبها الطالب في هذا الكورس تحديداً).
-
-        رد بصيغة JSON فقط بهذا الهيكل:
+        const singlePrompt = `أنت عميد أكاديمية تقنية. صمم هيكل كراش كورس شامل من 6 إلى 10 وحدات (Sections)، وفي كل وحدة من 5 إلى 10 دروس متدرجة حول: "${topic}".
+        🚨 إلزامي: الوحدة الأخيرة يجب أن تكون مخصصة بالكامل لبناء مشروع تطبيقي بسيط خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.
+        رد بصيغة JSON فقط:
         {
-          "courseTitle": "اسم الشهادة (مثال: IBM Full Stack Software Developer Professional Certificate)",
-          "courseDescription": "وصف شامل للشهادة المهنية يبرز أهميتها لسوق العمل...",
+          "isCertificateSeries": false,
+          "courseTitle": "عنوان الكورس",
+          "courseDescription": "وصف الكورس",
           "blueprint": [
             {
-              "coursePrefix": "Course 1",
-              "sectionName": "مقدمة في هندسة البرمجيات وتطوير الويب",
-              "estimatedHours": "15 hours",
-              "skills": ["Software Engineering", "Web Development", "SDLC", "Agile"],
-              "lessons": [
-                {
-                  "title": "ما هي هندسة البرمجيات؟",
-                  "description": "شرح نظري مبسط..."
-                }
-              ]
+              "coursePrefix": "الوحدة 1",
+              "sectionName": "اسم الوحدة",
+              "isProjectUnit": false,
+              "lessons": [ { "title": "عنوان الدرس", "description": "وصف الدرس", "lessonType": "theory_or_code" } ]
             }
-            // ⚠️ استمر في إضافة الكورسات (Course 2, Course 3...) حتى تصل للعدد الضخم المطلوب (10 إلى 15 كورس)!
           ]
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم برنامج الشهادة المهنية العملاق الآن بصيغة JSON.", 0.8, 25000);
+        const rawContent = await generateContentSmart(singlePrompt, "صمم الهيكل الآن بصيغة JSON.", 0.8, 20000);
         const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-
-        console.log(`✅ [AcademyLab2] تم الانتهاء بنجاح! تم إنشاء سلسلة من ${parsedContent.blueprint.length} كورسات.`);
         res.json({ success: true, data: parsedContent });
-
     } catch (error) {
-        console.error("❌ خطأ في توليد الهيكل:", error);
-        res.status(500).json({ success: false, error: 'حدث خطأ في تصميم الشهادة المهنية.' });
+        res.status(500).json({ success: false, error: 'حدث خطأ في تصميم المنهج.' });
     }
 });
 
 
-// 🐉 مسار توليد اختبار الزعيم (Boss Dungeon) المحصن
+
+
+
+// ============================================================================
+// 🐉 5. مسار بوابة الزعيم (Boss Dungeon - بعد درسين نظريين)
+// ============================================================================
 app.post('/api/academy2/forge-boss', async (req, res) => {
     try {
         const { courseTopic, lesson1Content, lesson2Content } = req.body;
-
-        // 🛡️ الحماية الهندسية القصوى: التأكد من أن المحتوى نصي وموجود قبل قصه
         const safeContent1 = (typeof lesson1Content === 'string') ? lesson1Content : "";
         const safeContent2 = (typeof lesson2Content === 'string') ? lesson2Content : "";
 
-const systemPrompt = `أنت مصمم اختبارات عبقري (Boss Dungeon Master) في منصة برمجية.
-        مهمتك قراءة الدرسين السابقين وبناء "اختبار زعيم" من 5 أسئلة قوية جداً.
-        
-        - موضوع الكورس: ${courseTopic}
-        - محتوى الدرس الأول: ${safeContent1.substring(0, 1000)}...
-        - محتوى الدرس الثاني: ${safeContent2.substring(0, 1000)}...
-
-        🚨 استراتيجية أسئلة الزعيم (Boss Mechanics):
-        1. إذا كان الدرسان يركزان على الأكواد، يجب أن تكون أسئلة الزعيم "تحديات برمجية" (اكتشف الخطأ، ما مخرجات الكود؟).
-        2. إذا كان الدرسان نظريين، اجعل الأسئلة سيناريوهات هندسية.
-
-        🚨 قواعد هيكل JSON صارمة جداً (CRITICAL):
-        - حقل "options" في كل سؤال يجب أن يكون مصفوفة من نصوص مسطحة (Flat Strings array of 4 items).
-        - ❌ ممنوع الترقيم داخل الخيارات (لا تكتب "أ. كذا"، اكتب النص مباشرة).
-        - ❌ ممنوع المصفوفات المتداخلة (لا تفعل هكذا: [["أ", "نص"]]).
-        - "correctAnswerIndex" يجب أن يتوزع عشوائياً (0, 1, 2, 3) بين الأسئلة.
-
-        رد بصيغة JSON فقط بهذا الهيكل:
+        const systemPrompt = `أنت مصمم معارك زعماء (Boss Dungeon Master). استخرج 5 أسئلة مفاهيمية وسيناريوهات ذكية من الدرسين السابقين في (${courseTopic}).
+        🚨 حقل "options" يجب أن يكون مصفوفة من 4 نصوص مسطحة (Flat Strings) فقط بدون مصفوفات متداخلة.
+        رد بصيغة JSON فقط:
         {
           "bossQuiz": [
             {
-              "question": "تحدي الكود أو السؤال الأول؟",
-              "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+              "question": "السؤال...",
+              "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
               "correctAnswerIndex": 1,
-              "explanation": "شرح لماذا هذه الإجابة هي الصحيحة."
+              "explanation": "الشرح المبسط..."
             }
-            // ... 4 أسئلة أخرى
           ]
         }`;
 
-        // توليد المحتوى
-        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتوليد اختبار الزعيم الآن بصيغة JSON.", 0.7, 10000);
-        
-        // التأكد من تحويل النص إلى كائن JSON
+        const rawContent = await generateContentSmart(systemPrompt, "ولّد اختبار الزعيم بصيغة JSON.", 0.7, 10000);
         const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-        
         res.json({ success: true, data: parsedContent });
-
     } catch (error) {
-        console.error("❌ خطأ في توليد الزعيم:", error.message);
-        res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال بالذكاء الاصطناعي.' });
+        res.status(500).json({ success: false, error: 'حدث خطأ في توليد الزعيم.' });
     }
 });
 
@@ -4291,8 +4225,7 @@ const systemPrompt = `أنت مصمم اختبارات عبقري (Boss Dungeon 
 // ==========================================
 // 🎓 مسارات مختبر الأكاديمية (AcademyLab - Course Generator)
 // ==========================================
-
-// 1. مسار إلهام الأفكار (Academy 2)
+// 1. مسار إلهام أفكار الشهادات المهنية الضخمة (باللغة العربية)
 app.post('/api/academy2/suggest-topic', async (req, res) => {
     const { type } = req.body;
 
@@ -4303,29 +4236,26 @@ app.post('/api/academy2/suggest-topic', async (req, res) => {
         } else if (type === 'money') {
             promptInstruction = 'أعطني عنواناً لكورس يعلم مهارة برمجية تجلب المال المباشر أو كيفية بناء منتجات SaaS.';
         } else if (type === 'bootcamp') {
-            promptInstruction = 'أعطني عنواناً لـ "تخصص متكامل" (Bootcamp) ضخم جداً يغطي تقنيات متعددة.';
+            promptInstruction = 'أعطني عنواناً لـ "معسكر برمجي" (Bootcamp) ضخم يغطي تقنيات متعددة.';
         } else if (type === 'coursera') {
-            // 🆕 البرومبت السحري المحدث لشهادات التخصص الشاملة باللغة العربية
-            promptInstruction = 'أعطني عنواناً احترافياً لـ "شهادة مهنية" (Professional Certificate) ضخمة وشاملة تتكون من سلسلة كورسات (حوالي 10 إلى 15 كورس). ركز على أن تكون الفكرة لتخصص مهني متكامل ومطلوب جداً في سوق العمل الحالي. (أمثلة: شهادة مطور الويب الشامل المتقدمة، شهادة مهندس البيانات والذكاء الاصطناعي، شهادة خبير الأمن السيبراني). 🚨 تعليمات صارمة: لا تكتب مقدمات، واكتب العنوان باللغة العربية بأسلوب جذاب، فخم، ويوحي بالضخامة الأكاديمية.';
+            promptInstruction = 'أعطني عنواناً عربياً فخماً واحترافياً لـ "شهادة مهنية شاملة" (Professional Certificate) تتكون من سلسلة متدرجة من 9 إلى 15 كراش كورس (تبدأ من الصفر المطلق وتصل إلى الذكاء الاصطناعي والحوسبة السحابية ومشاريع التخرج). لا تذكر أسماء شركات، واكتب العنوان باللغة العربية فقط.';
         } else {
             promptInstruction = 'أعطني عنواناً لكورس تريند ومطلوب جداً في سوق العمل الحالي يدمج بين الذكاء الاصطناعي وتطوير الويب.';
         }
 
         const systemPrompt = `أنت مستشار تعليمي ومسوق تقني خبير.
-        المطلوب منك إعطاء "عنوان كورس" واحد فقط بناءً على طلب المستخدم.
-        لا تكتب أي مقدمات، لا تضع علامات تنصيص، ولا تشرح الفكرة. العنوان فقط.
-        
+        المطلوب منك إعطاء "عنوان" واحد فقط باللغة العربية بناءً على طلب المستخدم بدون أي مقدمات أو علامات تنصيص.
         رد بصيغة JSON فقط بهذا الهيكل:
         { "topic": "اكتب العنوان المثير والجذاب هنا" }`;
 
-        const currentGroq = getGroqClient(); 
+        const currentGroq = getGroqClient();
         const chatCompletion = await currentGroq.chat.completions.create({
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: promptInstruction }
             ],
             model: 'qwen/qwen3.8-27b',
-            temperature: 0.9, 
+            temperature: 0.9,
             response_format: { type: "json_object" }
         });
 
@@ -4333,146 +4263,432 @@ app.post('/api/academy2/suggest-topic', async (req, res) => {
         const data = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
 
         res.json({ success: true, idea: data.topic });
-
     } catch (error) {
         res.status(500).json({ error: 'فشل في استلهام فكرة الكورس.' });
     }
 });
 
-// 🔴 مسار توليد البوابة الحمراء (Red Gate - Coding Boss)
+
+
+// ============================================================================
+// 🔴 6. مسار البوابة الحمراء (Red Gate - بعد درسين يحتويان على كود)
+// ============================================================================
 app.post('/api/academy2/forge-red-gate', async (req, res) => {
     try {
         const { courseTopic, lesson1Content, lesson2Content } = req.body;
-
         const safeContent1 = (typeof lesson1Content === 'string') ? lesson1Content : "";
         const safeContent2 = (typeof lesson2Content === 'string') ? lesson2Content : "";
 
-        const systemPrompt = `أنت مهندس برمجيات (S-Rank Hunter) ومصمم تحديات برمجية قاسية.
-        الدروس السابقة تحتوي على أكواد برمجية. مهمتك بناء "بوابة حمراء" (Red Gate) وهي عبارة عن 5 تحديات أكواد (Coding Quests) مرعبة.
-        
-        - موضوع الكورس: ${courseTopic}
-        - محتوى الدرس الأول: ${safeContent1.substring(0, 1000)}...
-        - محتوى الدرس الثاني: ${safeContent2.substring(0, 1000)}...
-
-        🚨 قواعد البوابة الحمراء (Red Gate):
-        1. الأسئلة يجب أن تكون "تحديات برمجية" حصراً: (اكتشف الخطأ في الكود، ما هي مخرجات الكود؟، أكمل السطر الناقص).
-        2. استخدم علامات Markdown (\`\`\`javascript) داخل حقل "question" لكتابة الكود بوضوح داخل السؤال.
-        3. الخيارات (options) يجب أن تكون مصفوفة من 4 نصوص مسطحة (Flat Strings) خالية من المصفوفات المتداخلة.
-        4. العشوائية الإجبارية: "correctAnswerIndex" موزع عشوائياً (0, 1, 2, 3).
-
-        رد بصيغة JSON فقط بهذا الهيكل:
+        const systemPrompt = `أنت مهندس برمجيات (S-Rank Hunter) ومصمم تحديات أكواد. ابنِ "بوابة حمراء" مكونة من 5 تحديات أكواد (Coding Quests) من محتوى الدرسين في (${courseTopic}).
+        - الدرس الأول: ${safeContent1.substring(0, 800)}
+        - الدرس الثاني: ${safeContent2.substring(0, 800)}
+        🚨 الأسئلة يجب أن تتضمن أكواد Markdown (\`\`\`) لاكتشاف الخطأ أو توقع المخرجات أو إكمال السطر الناقص.
+        🚨 الخيارات 4 نصوص مسطحة فقط.
+        رد بصيغة JSON فقط:
         {
           "bossQuiz": [
             {
-              "question": "اقرأ الكود التالي:\\n\\n\`\`\`javascript\\nconst x = 5;\\n\`\`\`\\nما هو الخطأ هنا؟",
-              "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+              "question": "اقرأ الكود التالي... ما هو المخرج أو الخطأ؟",
+              "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
               "correctAnswerIndex": 1,
-              "explanation": "الشرح البرمجي الدقيق للحل..."
+              "explanation": "الشرح البرمجي المبسط..."
             }
           ]
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "افتح البوابة الحمراء الآن بصيغة JSON.", 0.7, 10000);
+        const rawContent = await generateContentSmart(systemPrompt, "افتح البوابة الحمراء بصيغة JSON.", 0.7, 10000);
         const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-        
         res.json({ success: true, data: parsedContent });
-
     } catch (error) {
-        console.error("❌ خطأ في توليد البوابة الحمراء:", error.message);
-        res.status(500).json({ success: false, error: 'حدث خطأ في الاتصال بالذكاء الاصطناعي.' });
+        res.status(500).json({ success: false, error: 'حدث خطأ في توليد البوابة الحمراء.' });
     }
 });
 
 
 
-// 🎓 مسار بناء الشهادة المهنية الضخمة (The Master Certificate Builder)
+
+
+// ============================================================================
+// 🎓 2. مسار بناء الشهادة المهنية الكاملة (9 إلى 15+ كراش كورس متدرج + نظام الشهادات)
+// ============================================================================
 app.post('/api/academy2/blueprint-certificate', async (req, res) => {
     const { topic } = req.body;
 
-    try {
-        console.log(`\n🎓 جاري بناء "شهادة مهنية ضخمة مبسطة" لموضوع: ${topic}...`);
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الشهادة المهنية.' });
 
-        const systemPrompt = `أنت عميد أكاديمية تقنية وخبير في "التبسيط المطلق" (Explain Like I'm 5).
-        مهمتك تصميم خريطة طريق لـ "شهادة مهنية احترافية" (Professional Certificate) ضخمة جداً في موضوع: "${topic}".
+    try {
+        console.log(`\n🎓 [Super Certificate Architect] جاري هندسة شهادة مهنية متكاملة لموضوع: ${topic}...`);
+
+        const systemPrompt = `أنت عميد أكاديمية تقنية عالمية وأفضل مصمم مناهج وشهادات مهنية (Professional Certificates) في العالم، وتتمتع بعبقرية فائقة في التبسيط المطلق (Explain Like I'm 5).
         
-        🚨 قواعد الهندسة المعمارية (CRITICAL):
-        1. الحجم الإلزامي: يجب أن تقسم الشهادة إلى (9 إلى 15) "كراش كورس" متسلسل.
-        2. التشبيه الممتد (Extended Analogy): اختر تشبيهاً واحداً من الحياة الواقعية (مثال: بناء مدينة، مطعم، مصنع سيارات) واستخدمه كـ "Theme" مستمر لربط جميع الكورسات.
-        3. الترابط السردي (Cliffhangers): كل كورس يجب أن يُسلم الراية للكورس الذي يليه بطريقة منطقية لسد فجوة معينة.
+        مهمتك هي بناء هيكل **"شهادة مهنية خارقة"** حول موضوع: "${topic}".
+
+        🚨 القواعد المعمارية الصارمة (CRITICAL RULES - DO NOT BE LAZY):
         
-        رد بصيغة JSON فقط بهذا الهيكل:
+        1. عدد الكراش كورسات (من 9 إلى 15 كراش كورس أو أكثر إذا لزم الأمر):
+           - فكك المجال بالكامل إلى سلسلة متصلة ومتناسقة من الكراش كورسات (لا تقل عن 9 كورسات، وتصل إلى 15 كورساً أو أكثر حسب ضخامة المجال).
+           - يجب أن يكون التدرج تصاعدياً ومنطقياً جداً (من الأسهل للصفر المطلق ⬅️ إلى الأصعب والاحترافي في نهاية المجال).
+           - مثال استرشادي لو كان المجال Full-Stack:
+             * الكورس 1: مدخل شامل ومبسط لعالم هندسة البرمجيات وكيف يعمل الإنترنت.
+             * الكورس 2: تجهيز بيئة العمل، التيرمينال، وأساسيات التفكير المنطقي.
+             * الكورس 3: مقدمة تأسيسية في HTML5 و CSS3 وبناء الهياكل.
+             * الكورس 4: احتراف التصميم المتجاوب والأنيميشن و Tailwind CSS.
+             * الكورس 5: أساسيات البرمجة بلغة JavaScript والتلاعب بالـ DOM.
+             * الكورس 6: احتراف JavaScript المتقدمة (ES6+, Async, APIs).
+             * الكورس 7: إدارة الأكواد والعمل الجماعي عبر Git و GitHub.
+             * الكورس 8: بناء واجهات المستخدم التفاعلية باستخدام React.js.
+             * الكورس 9: إدارة الحالة المتقدمة والأداء في React.
+             * الكورس 10: بناء الخوادم والـ APIs باستخدام Node.js و Express.
+             * الكورس 11: قواعد البيانات (MongoDB / SQL) وهيكلة البيانات.
+             * الكورس 12: ربط الـ Full-Stack والأمان والتوثيق (JWT & Auth).
+             * الكورس 13: البرمجة والتطوير الخارق بمساعدة أدوات ووكلاء الذكاء الاصطناعي (Dev with AI Tools & Agents).
+             * الكورس 14: الحاويات والنشر السحابي (Docker, CI/CD, Cloud Deployment).
+             * الكورس 15: مشروع التخرج العملاق (Full-Stack Capstone) والاستعداد لسوق العمل.
+
+        2. الترابط القصصي والتشبيه الممتد (Master Analogy):
+           ابتكر تشبيهاً قصصياً واحداً ممتعاً يفهمه طفل صغير (مثل بناء مدينة ذكية أو مطعم عالمي) يربط الكورسات ببعضها، واشرح في كل كورس كيف يتصل بالكورس الذي قبله ("connectionToPrevious") وكيف يمهد للكورس الذي بعده ("cliffhangerToNext").
+
+        3. مشروع GitHub بمساعدة AI Agent لكل كراش كورس:
+           حدد لكل كراش كورس مشروعاً تطبيقياً بسيطاً وواضحاً ("githubProject") سيبنيه الطالب في الوحدة الأخيرة من ذلك الكورس بمساعدة AI Agent ويرفعه على GitHub.
+
+        4. نظام الشهادات المزدوج:
+           - كل كراش كورس يمنح شهادة خاصة به ("subCertificateTitle").
+           - إتمام جميع الكراش كورسات يمنح الطالب "الشهادة المهنية الخارقة" ("superCertificate").
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "certificateTitle": "اسم الشهادة المهنية (مثال: شهادة مطور الويب الشامل بأسلوب الليجو)",
-          "mainAnalogy": "التشبيه المعتمد (مثال: سنتخيل أننا نبني مطعماً ضخماً...)",
+          "isCertificateSeries": true,
+          "certificateTitle": "الاسم الرسمي الفخم للشهادة المهنية الخارقة",
+          "courseTitle": "الاسم الرسمي الفخم للشهادة المهنية الخارقة",
+          "courseDescription": "وصف شامل ومفصل للشهادة المهنية وكيف تأخذ الطالب من الصفر المطلق إلى قمة الاحتراف...",
+          "mainAnalogy": "القصة والتشبيه المبسط الموحد الذي يربط جميع الكراش كورسات معاً...",
+          "superCertificate": {
+            "title": "الشهادة المهنية الخارقة المعتمدة في ...",
+            "badgeText": "S-Rank Master Professional Certificate",
+            "careerOutcomes": ["مسمى وظيفي 1", "مسمى وظيفي 2", "مسمى وظيفي 3"]
+          },
           "courses": [
             {
               "courseOrder": 1,
-              "courseTitle": "كراش كورس 1: [اسم التقنية] - [ربطها بالتشبيه]",
-              "description": "وصف الكورس وكيف يمهد للذي يليه بأسلوب طفولي مرح.",
-              "estimatedHours": "20 hours"
-            },
-            {
-              "courseOrder": 2,
-              "courseTitle": "كراش كورس 2: ...",
-              "description": "...",
-              "estimatedHours": "25 hours"
+              "coursePrefix": "الكراش كورس 1",
+              "difficultyLevel": "المستوى 1: تأسيسي (سهل جداً)",
+              "courseTitle": "كراش كورس 1: ...",
+              "description": "وصف تفصيلي مبسط لما سيتعلمه الطالب في هذا الكراش كورس...",
+              "courseDescription": "وصف تفصيلي مبسط لما سيتعلمه الطالب في هذا الكراش كورس...",
+              "estimatedHours": "15 ساعة",
+              "certificateBadge": "شهادة إتمام الكراش كورس 1: ...",
+              "connectionToPrevious": "نقطة البداية من الصفر المطلق...",
+              "cliffhangerToNext": "كيف يمهد هذا الكورس للكورس رقم 2؟",
+              "githubProject": {
+                "projectTitle": "اسم المشروع البسيط الذي سيبنيه ويرفعه على GitHub",
+                "projectSummary": "وصف المشروع وكيف سيستخدم الطالب AI Agent للمساعدة في بنائه"
+              },
+              "skills": ["مهارة 1", "مهارة 2", "مهارة 3", "مهارة 4"]
             }
-            // ⚠️ استمر بقوة حتى الكورس 15!
+            // ⚠️ استمر في توليد ما بين 9 إلى 15 كراش كورس (أو أكثر) متدرجة الصعوبة!
           ]
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم الشهادة المهنية الضخمة الآن.", 0.8, 15000);
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `قم بهندسة الشهادة المهنية الكاملة لموضوع "${topic}" (من 9 إلى 15 كراش كورس متدرج من السهل إلى الأصعب مع مشاريع GitHub وشهادات فرعية) بصيغة JSON.`,
+            0.8,
+            25000
+        );
         const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-        
+
+        console.log(`✅ [Super Certificate] تم بناء الشهادة بنجاح بعدد (${parsedContent.courses?.length || 0}) كراش كورسات!`);
         res.json({ success: true, data: parsedContent });
 
     } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ في تصميم الشهادة.' });
+        console.error('❌ خطأ في تصميم الشهادة المهنية:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ في تصميم الشهادة المهنية.' });
     }
 });
 
 
-// 🗺️ مسار بناء الوحدات داخل الكراش كورس الواحد المترابط
+
+
+
+// ============================================================================
+// 🗺️ 2. مسار تفكيك الكراش كورس الواحد إلى منهج كامل (8-12 وحدة مفصلة)
+// ============================================================================
+
 app.post('/api/academy2/blueprint-crash-course', async (req, res) => {
-    const { certificateTitle, mainAnalogy, currentCourseTitle, previousCourseTitle, nextCourseTitle } = req.body;
+    const { 
+        certificateTitle, 
+        mainAnalogy, 
+        courseOrder,
+        totalCourses,
+        currentCourseTitle, 
+        currentCourseDescription,
+        githubProject,
+        previousCourseTitle, 
+        nextCourseTitle 
+    } = req.body;
+
+    if (!currentCourseTitle) {
+        return res.status(400).json({ error: 'عنوان الكراش كورس الحالي مطلوب.' });
+    }
 
     try {
-        const systemPrompt = `أنت مهندس مناهج خبير في التبسيط المطلق (ELI5).
-        أنت الآن تقوم بتصميم محتويات (كراش كورس) وهو جزء من شهادة مهنية ضخمة اسمها: "${certificateTitle}".
-        
-        - التشبيه العام المعتمد للشهادة: "${mainAnalogy}"
-        - 📌 الكورس الحالي المطلوب تفصيله: "${currentCourseTitle}"
-        - الكورس السابق الذي درسه الطالب: "${previousCourseTitle || 'لا يوجد، هذا هو البداية'}"
-        - الكورس القادم الذي سينتقلون إليه لاحقاً: "${nextCourseTitle || 'لا يوجد، هذا مشروع التخرج'}"
+        console.log(`\n🧩 [Crash Course Architect] جاري تفكيك (${currentCourseTitle}) إلى 5-10+ وحدات...`);
 
-        🚨 هندسة الكراش كورس:
-        - قم بتقسيم هذا الكورس حصرياً إلى (7 إلى 10) "وحدات رئيسية" (Sections).
-        - داخل كل وحدة، ضع (5 إلى 8) دروس.
-        - استخدم التشبيه المعتمد (${mainAnalogy}) في صياغة أسماء الوحدات والدروس لتبدو كقصة مستمرة.
+        const projectTitle = githubProject?.projectTitle || `مشروع تطبيقي شامل لـ ${currentCourseTitle}`;
+
+        const systemPrompt = `أنت أعظم مهندس مناهج تعليمية (Curriculum Architect) وخبير في التبسيط المطلق (ELI5 - تشرح لطفل صغير ذكي وتصل به للاحتراف).
+        
+        أنت الآن تقوم ببناء الهيكل التفصيلي لـ "${currentCourseTitle}" (الكورس رقم ${courseOrder || 1} من أصل ${totalCourses || 12} ضمن "${certificateTitle || 'الشهادة المهنية'}").
+        
+        📋 المعطيات:
+        - 🎭 القصة والتشبيه الممتد: "${mainAnalogy || 'تبسيط المفاهيم بتشبيهات الحياة اليومية'}"
+        - 📝 وصف الكراش كورس: "${currentCourseDescription || ''}"
+        - ⏪ الكورس السابق: "${previousCourseTitle || 'لا يوجد (هذا هو الكورس التأسيسي الأول)'}"
+        - ⏩ الكورس القادم: "${nextCourseTitle || 'لا يوجد (هذا هو كورس التخرج النهائي)'}"
+        - 🚀 مشروع نهاية هذا الكراش كورس: "${projectTitle}"
+
+        🚨 قواعد الهندسة المعمارية الصارمة (CRITICAL RULES):
+        
+        1. عدد الوحدات والدروس:
+           - قسّم هذا الكراش كورس إلى **(من 5 إلى 10 وحدات رئيسية / Sections)**، وإذا كان الموضوع دسماً أضف وحدات أكثر دون تردد.
+           - داخل كل وحدة، ضع **(من 5 إلى 10 دروس)** متدرجة ومفصلة.
+
+        2. تنويع الدروس (نظري + كودي تفاعلي):
+           - حدد لكل درس حقل "lessonCategory": إما "theory" (نظري مفاهيمي) أو "code" (تطبيقي برمجي يحتوي على كتابة كود وتلميحات) أو "ai_project" (لدروس وحدة المشروع النهائية).
+           - كل وحدة ستنتهي باختبار نهائي مختلط (نظري + كودي).
+
+        3. 🚨 الوحدة الأخيرة الإجبارية (وحدة بناء المشروع البسيط + AI Agent + GitHub):
+           يجب أن تكون **الوحدة الأخيرة دائماً** مخصصة بالكامل لبناء المشروع: "${projectTitle}" ووضعه على GitHub!
+           اضبط حقل "isProjectUnit": true لهذه الوحدة الأخيرة، ويجب أن تحتوي على 6 إلى 8 دروس تشرح بالتفصيل الممل جداً:
+           - الدرس 1: فهم فكرة المشروع، تخطيط هيكل الملفات، وتجهيز بيئة العمل من الصفر.
+           - الدرس 2: كيف تستعين بـ AI Agent (مثل Cursor أو Copilot أو ChatGPT) كمساعد برمجي وكيف تكتب له الـ Prompts الصحيحة لبناء المشروع.
+           - الدرس 3: بناء الجزء الأول من كود المشروع خطوة بخطوة (مع شرح كل سطر).
+           - الدرس 4: إكمال بناء المشروع وربط الأجزاء واختبار عمله.
+           - الدرس 5: كيف تطلب من الـ AI Agent فحص الكود وإصلاح الأخطاء (Debugging) وتحسين التصميم.
+           - الدرس 6: شرح أوامر Git ورفع المشروع خطوة بخطوة على حساب الطالب في GitHub.
+           - الدرس 7: كتابة ملف README.md احترافي بمساعدة الـ AI واستلام شهادة الكراش كورس والتمهيد للكورس القادم (${nextCourseTitle || 'سوق العمل'}).
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "${currentCourseTitle}",
+          "subCertificateTitle": "شهادة إتقان ${currentCourseTitle}",
+          "blueprint": [
+            {
+              "sectionOrder": 1,
+              "sectionName": "الوحدة 1: ...",
+              "isProjectUnit": false,
+              "sectionExamSummary": "اختبار الوحدة 1 المختلط (نظري + كودي)",
+              "lessons": [
+                {
+                  "title": "عنوان الدرس الأول",
+                  "description": "وصف الدرس",
+                  "lessonCategory": "theory"
+                },
+                {
+                  "title": "عنوان الدرس الثاني (تطبيقي كودي)",
+                  "description": "وصف الدرس البرمجي",
+                  "lessonCategory": "code"
+                }
+                // ⚠️ ضع من 5 إلى 10 دروس في كل وحدة!
+              ]
+            },
+            {
+              "sectionOrder": 99,
+              "sectionName": "الوحدة النهائية: بناء مشروع (${projectTitle}) بمساعدة AI Agent ورفعه على GitHub",
+              "isProjectUnit": true,
+              "sectionExamSummary": "الاختبار الختامي ومراجعة المشروع",
+              "lessons": [
+                // ⚠️ دروس المشروع الـ 7 التفصيلية مع lessonCategory: "ai_project"
+              ]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `قم ببناء الهيكل الكامل (5 إلى 10+ وحدات، وفي كل وحدة 5 إلى 10 دروس، مع وحدة المشروع النهائي على GitHub بمساعدة AI Agent) للكراش كورس "${currentCourseTitle}" بصيغة JSON.`,
+            0.8,
+            25000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        console.log(`✅ [Crash Course Architect] تم إنشاء ${parsedContent.blueprint?.length || 0} وحدات بنجاح!`);
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error('❌ خطأ في تفكيك الكراش كورس:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء هندسة وحدات الكراش كورس.' });
+    }
+});
+
+
+// ============================================================================
+// 🏆 7. مسار جديد كلياً: الاختبار النهائي المختلط لكل وحدة (Unit Final Mixed Exam)
+// ============================================================================
+app.post('/api/academy2/forge-unit-exam', async (req, res) => {
+    try {
+        const { courseTopic, sectionName, unitLessonsSummary } = req.body;
+
+        console.log(`\n🏆 [Unit Final Exam] جاري بناء الاختبار النهائي المختلط للوحدة: "${sectionName}"...`);
+
+        const systemPrompt = `أنت رئيس لجنة الامتحانات التقنية.
+        مهمتك بناء **"الاختبار النهائي للوحدة" (Unit Final Exam)** للوحدة: "${sectionName}" ضمن كورس "${courseTopic}".
+        ملخص دروس الوحدة التي درسها الطالب: ${unitLessonsSummary || sectionName}
+
+        🚨 قواعد الاختبار النهائي للوحدة (مختلط: نظري + كودي):
+        1. يجب أن يتكون الاختبار من **6 أسئلة شاملة**:
+           - الأسئلة 1 إلى 3: أسئلة نظرية ومفاهيمية تقيس الفهم العميق لفلسفة الوحدة.
+           - الأسئلة 4 إلى 6: أسئلة كودية تطبيقية (تحتوي على كود بعلامات Markdown \`\`\`) تطلب اكتشاف خطأ أو تحديد الكود الصحيح لبناء ميزة.
+        2. أضف أيضاً تحدياً برمجياً كتابياً صغيراً في حقل "unitCodingChallenge" يكتبه الطالب بيده كجزء من تقييم الوحدة مع 3 تلميحات.
+        3. الخيارات "options" في كل سؤال يجب أن تكون مصفوفة من 4 نصوص مسطحة فقط (Flat Strings).
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "examTitle": "الاختبار النهائي للوحدة: ${sectionName}",
+          "bossQuiz": [
+            {
+              "questionType": "theory",
+              "question": "سؤال نظري عميق...",
+              "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+              "correctAnswerIndex": 0,
+              "explanation": "شرح الإجابة..."
+            },
+            {
+              "questionType": "code",
+              "question": "سؤال كودي يحتوي على شفرة برمجية...",
+              "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+              "correctAnswerIndex": 2,
+              "explanation": "شرح الكود..."
+            }
+            // ⚠️ أكمل حتى 6 أسئلة (3 نظري + 3 كودي)
+          ],
+          "unitCodingChallenge": {
+            "taskQuestion": "تحدي الوحدة العملي: اكتب كوداً يجمع مفاهيم هذه الوحدة لـ...",
+            "starterCode": "// ابدأ كتابة كود التحدي النهائي للوحدة هنا\\n",
+            "hints": [
+              "💡 تلميح 1: ...",
+              "🛠️ تلميح 2: ...",
+              "🔓 تلميح 3: ..."
+            ],
+            "solutionCode": "// الحل النموذجي"
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "قم بتوليد الاختبار النهائي المختلط للوحدة الآن بصيغة JSON.", 0.7, 12000);
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+
+    } catch (error) {
+        console.error('❌ خطأ في توليد اختبار الوحدة النهائي:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ في توليد الاختبار النهائي للوحدة.' });
+    }
+});
+
+
+// ============================================================================
+// 🤖 8. مسار جديد كلياً: المصحح الذكي لخانة كتابة الكود الخاصة بالطالب (AI Code Reviewer)
+// ============================================================================
+app.post('/api/academy2/verify-student-code', async (req, res) => {
+    try {
+        const { taskQuestion, studentCode, solutionCode } = req.body;
+
+        if (!studentCode || studentCode.trim() === '') {
+            return res.status(400).json({ success: false, error: 'يرجى كتابة الكود أولاً قبل التحقق.' });
+        }
+
+        const systemPrompt = `أنت معلم برمجة لطيف ومشجع جداً (تشرح بأسلوب مبسط لطفل ذكي).
+        - المطلوب من الطالب: "${taskQuestion}"
+        - الحل النموذجي المرجعي: "${solutionCode}"
+        - الكود الذي كتبه الطالب: "${studentCode}"
+
+        مهمتك:
+        افحص كود الطالب بمرونة؛ إذا كان يؤدي المطلوب (حتى لو كتب متغيرات بأسماء مختلفة أو بطريقة صحيحة أخرى) اعتبره ناجحاً ("isCorrect": true) وكافئه بكلمات حماسية!
+        وإذا كان فيه خطأ، اجعل "isCorrect": false واشرح له خطأه بلطف شديد دون إحباط، وأخبره أي سطر يحتاج لتعديل.
 
         رد بصيغة JSON فقط بهذا الهيكل:
         {
-          "courseTitle": "${currentCourseTitle}",
-          "blueprint": [
-            {
-              "sectionName": "الوحدة 1: ...",
-              "lessons": [
-                { "title": "...", "description": "..." }
-              ]
-            }
-            // استمر حتى 9 أو 10 وحدات...
-          ]
+          "isCorrect": true,
+          "feedback": "رسالتك التشجيعية أو ملاحظتك المبسطة للطالب هنا...",
+          "correctedSnippet": "السطر المصحح إن وجد خطأ، أو اتركه فارغاً إذا كان كوده صحيحاً"
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "ابدأ بتصميم وحدات هذا الكراش كورس.", 0.8, 20000);
+        const rawContent = await generateContentSmart(systemPrompt, "افحص كود الطالب الآن بصيغة JSON.", 0.5, 4000);
         const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-        
+
         res.json({ success: true, data: parsedContent });
 
     } catch (error) {
-        res.status(500).json({ error: 'حدث خطأ.' });
+        console.error('❌ خطأ في فحص كود الطالب:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء فحص الكود.' });
     }
 });
+
+
+// ============================================================================
+// 👑 9. مسار توليد الوثيقة التفصيلية الشاملة للشهادة المهنية وتجميع الكراش كورسات
+// ============================================================================
+app.post('/api/academy2/forge-certificate-dossier', async (req, res) => {
+    try {
+        const { certificateTitle, certificateDescription, mainAnalogy, coursesSummary } = req.body;
+
+        console.log(`\n👑 [Master Dossier] جاري تأليف الوثيقة التفصيلية الشاملة للشهادة: "${certificateTitle}"...`);
+
+        const systemPrompt = `أنت عميد أكاديمية تقنية عالمية وخبير في التخطيط الاستراتيجي للشهادات المهنية (على طراز Coursera وIBM).
+        مهمتك هي كتابة **"الوثيقة المرجعية والتسويقية الشاملة"** للشهادة المهنية التالية وتفصيل كل كراش كورس بداخلها:
+        
+        - اسم الشهادة المهنية: "${certificateTitle}"
+        - الوصف الأولي: "${certificateDescription}"
+        - القصة والتشبيه الممتد (ELI5): "${mainAnalogy}"
+        - قائمة الكراش كورسات المشمولة ووحداتها: ${JSON.stringify(coursesSummary)}
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "executiveVision": "شرح مفصل وملهم (3 فقرات) يشرح فلسفة هذه الشهادة المهنية وكيف تأخذ الطالب من الصفر المطلق إلى الاحتراف الكامل...",
+          "timePlan": {
+            "totalHours": "إجمالي الساعات (مثال: 210 ساعة تدريبية)",
+            "durationStandard": "4 إلى 5 أشهر (بمعدل 10 ساعات أسبوعياً)",
+            "durationIntensive": "شهران (بمعدل 25 ساعة أسبوعياً - معسكر مكثف)"
+          },
+          "careerAndFinancialROI": {
+            "jobRoles": ["المسمى الوظيفي 1", "المسمى الوظيفي 2", "المسمى الوظيفي 3", "المسمى الوظيفي 4"],
+            "freelanceServices": [
+              "خدمة العمل الحر 1 التي يمكن للطالب بيعها للعملاء وبكم؟",
+              "خدمة العمل الحر 2...",
+              "خدمة العمل الحر 3..."
+            ],
+            "saasOpportunities": [
+              "فكرة مشروع Micro-SaaS 1 يستطيع الطالب بناءها بعد إتمام الشهادة",
+              "فكرة مشروع Micro-SaaS 2..."
+            ]
+          },
+          "detailedCoursesGuide": [
+            {
+              "courseOrder": 1,
+              "courseTitle": "اسم الكراش كورس",
+              "deepExplanation": "شرح مفصل جداً لما يدرسه الطالب في هذا الكراش كورس، ولماذا هو أساسي، وكيف يبني على ما قبله...",
+              "keyTakeaways": ["ماذا سيتقن 1", "ماذا سيتقن 2", "ماذا سيتقن 3"],
+              "projectAndAiRole": "شرح تفصيلي للمشروع الذي سيبنيه في نهاية هذا الكراش كورس وكيف سيستعين بـ AI Agent ورفعه على GitHub"
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            "قم بتأليف الوثيقة التفصيلية الشاملة للشهادة المهنية وجميع الكراش كورسات الآن بصيغة JSON.",
+            0.7,
+            18000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في توليد وثيقة الشهادة:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء توليد وثيقة الشهادة.' });
+    }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
