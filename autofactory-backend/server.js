@@ -4690,5 +4690,118 @@ app.post('/api/academy2/forge-certificate-dossier', async (req, res) => {
 
 
 
+
+// ============================================================================
+// 🚀 10. مسار تحسين عناوين الشهادة المهنية وسد الفجوات بالكراش كورسات الناقصة
+// ============================================================================
+app.post('/api/academy2/enhance-certificate-courses', async (req, res) => {
+    try {
+        const { certificateTitle, mainAnalogy, currentCourses } = req.body;
+
+        console.log(`\n🚀 [AI Optimizer] جاري فحص وترقية الشهادة المهنية: "${certificateTitle}"...`);
+
+        const systemPrompt = `أنت عميد أكاديمية تقنية عالمية ومهندس مناهج خارق (S-Rank Curriculum Architect).
+        لدينا الشهادة المهنية التالية: "${certificateTitle}"
+        والتشبيه القصصي المعتمد لها (ELI5): "${mainAnalogy}"
+        وهذه قائمة الكراش كورسات الحالية فيها:
+        ${JSON.stringify(currentCourses)}
+
+        🚨 مهمتك المزدوجة:
+        1. تحسين وصقل عناوين وأوصاف الكورسات الحالية لتكون أكثر احترافية وتشويقاً، مع الحفاظ على حقل "originalIndex" لكل كورس قديم كما هو تماماً لكي لا نفقد بياناته!
+        2. اكتشاف 2 إلى 4 "كراش كورسات ناقصة وحاسمة" تجعل هذه الشهادة المهنية خارقة ولا مثيل لها في سوق العمل (مثل: الأمان السيبراني وحماية الـ APIs، الاختبارات الآلية QA & Testing، بناء وكلاء الذكاء الاصطناعي AI Agents، تصميم الأنظمة System Design، أو تحويل المشاريع إلى SaaS مربح)، ودمجها في **المكان الترتيبي الأنسب** داخل المصفوفة (وليس في آخرها فقط). الكورسات الجديدة ضع لها "originalIndex": null.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "upgradedCertificateTitle": "الاسم المطور للشهادة المهنية",
+          "architectSummary": "شرح موجز لما قمت بترقيته وما هي الكورسات الناقصة التي أضفتها ولماذا وضعتها في تلك الأماكن...",
+          "courses": [
+            {
+              "originalIndex": 0,
+              "courseTitle": "العنوان المحسن أو الجديد...",
+              "description": "الوصف المبسط والعميق...",
+              "difficultyLevel": "المستوى...",
+              "estimatedHours": "16 ساعة",
+              "certificateBadge": "شهادة إتمام...",
+              "connectionToPrevious": "كيف يرتبط بما قبله...",
+              "githubProject": {
+                "projectTitle": "اسم مشروع GitHub",
+                "projectSummary": "وصف المشروع بمساعدة AI Agent"
+              },
+              "skills": ["مهارة 1", "مهارة 2", "مهارة 3"]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            "قم بترقية عناوين الشهادة المهنية وحقن الكراش كورسات الناقصة في أماكنها الصحيحة الآن بصيغة JSON.",
+            0.7,
+            20000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في ترقية الشهادة:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء ترقية الشهادة المهنية.' });
+    }
+});
+
+// ============================================================================
+// 🎯 11. مسار حقن كراش كورس مخصص من المستخدم ووضعه في المكان المناسب
+// ============================================================================
+app.post('/api/academy2/inject-custom-course', async (req, res) => {
+    try {
+        const { certificateTitle, mainAnalogy, customTopic, placementMode, currentCourses } = req.body;
+
+        console.log(`\n🎯 [Custom Injector] جاري هندسة ودمج كراش كورس مخصص: "${customTopic}"...`);
+
+        const systemPrompt = `أنت مهندس مناهج تعليمية عبقري وخبير في التبسيط المطلق (ELI5).
+        يريد المستخدم إضافة كراش كورس جديد حول موضوع: "${customTopic}"
+        داخل الشهادة المهنية: "${certificateTitle}"
+        التشبيه القصصي للشهادة: "${mainAnalogy}"
+        قائمة الكورسات الحالية بالترتيب (مع الفهرس index):
+        ${JSON.stringify(currentCourses)}
+
+        مهمتك:
+        1. صياغة هذا الموضوع ("${customTopic}") ككراش كورس كامل وممتع يتناغم مع التشبيه القصصي للشهادة، مع تحديد مهاراته، وشهادته الفرعية، ومشروع التخرج على GitHub بمساعدة AI Agent.
+        2. تحديد الفهرس الأمثل ("insertIndex" يبدأ من 0) لوضع هذا الكورس في السلسلة بحيث يكون التدرج منطقياً من الأسهل للأصعب، وشرح سبب اختيار هذا المكان في "placementReason".
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "insertIndex": 4,
+          "placementReason": "اخترنا وضعه بعد كورس كذا وقبل كورس كذا لأن الطالب يحتاج...",
+          "newCourse": {
+            "courseTitle": "عنوان الكراش كورس المخصص بأسلوب جذاب ومرتبط بالتشبيه",
+            "description": "وصف تفصيلي مبسط لما سيتعلمه الطالب في هذا الكراش كورس...",
+            "difficultyLevel": "المستوى المناسب...",
+            "estimatedHours": "16 ساعة",
+            "certificateBadge": "شهادة إتقان ...",
+            "connectionToPrevious": "كيف يبني على الكورس الذي سيسبقه مباشرة...",
+            "githubProject": {
+              "projectTitle": "اسم المشروع العملي الخاص بهذا الكورس",
+              "projectSummary": "وصف بناء المشروع بمساعدة AI Agent ورفعه على GitHub"
+            },
+            "skills": ["مهارة 1", "مهارة 2", "مهارة 3", "مهارة 4"]
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `صمم الكراش كورس المخصص "${customTopic}" وحدد مكانه الأنسب في السلسلة بصيغة JSON.`,
+            0.7,
+            10000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في حقن الكورس المخصص:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء إضافة الكراش كورس المخصص.' });
+    }
+});
+
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));
