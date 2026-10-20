@@ -4802,6 +4802,621 @@ app.post('/api/academy2/inject-custom-course', async (req, res) => {
 });
 
 
+// ============================================================================
+// 🎯 12. مسار توليد ملخصات جميع وحدات الكراش كورس دفعة واحدة (Batch Units Summarizer)
+// يتم استدعاؤه مرة واحدة فقط في نهاية صناعة الكراش كورس داخل AcademyLab2
+// ============================================================================
+app.post('/api/academy2/batch-course-units-summary', async (req, res) => {
+    try {
+        const { courseTitle, sectionsData } = req.body;
+
+        console.log(`\n📦 [Batch Unit Summaries] جاري توليد ملخصات جميع وحدات الكورس: "${courseTitle}" في طلب واحد...`);
+
+        const systemPrompt = `أنت عميد أكاديمية هندسة برمجيات ومؤلف مناهج عالمي بأسلوب التبسيط المطلق (ELI5).
+        لدينا الكراش كورس التالي: "${courseTitle}"
+        وهذه قائمة بجميع الوحدات الدراسية (Sections) الموجودة فيه مع عناوين الدروس الفعلية داخل كل وحدة:
+        ${JSON.stringify(sectionsData)}
+
+        مهمتك:
+        كتابة ملخص تشويقي وتطبيقي مخصص لكل وحدة بناءً على اسمها وعناوين دروسها الفعلية، ليُحفظ في قاعدة البيانات ويُعرض للطلاب في صفحة الكورس.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي (حيث يحتوي المصفوفة unitsSummaries على نفس عدد الوحدات بنفس الترتيب):
+        {
+          "unitsSummaries": [
+            {
+              "sectionName": "اسم الوحدة كما ورد تماماً",
+              "unitSummary": "ملخص مشوق في سطرين يشرح الفكرة الجوهرية لهذه الوحدة بتشبيه قصصي مبسط...",
+              "whatYouLearn": "شرح مفصل (2-3 جمل) يوضح بدقة ماذا سيتعلم الطالب ويطبقه عملياً في دروس هذه الوحدة تحديداً...",
+              "whyItMatters": "شرح قوي يضرب الدوبامين (2-3 جمل) يوضح في ماذا ستفيده هذه الوحدة في بناء المشاريع، العمل الحر، أو اجتياز المقابلات التقنية...",
+              "keyHighlights": ["مهارة عملية 1", "مهارة عملية 2", "مهارة عملية 3"]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `قم بتوليد ملخصات جميع الوحدات (${sectionsData?.length || 0} وحدات) للكورس "${courseTitle}" بصيغة JSON الآن.`,
+            0.7,
+            8000
+        );
+
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({
+            success: true,
+            data: parsedContent
+        });
+    } catch (error) {
+        console.error('❌ خطأ في توليد ملخصات الوحدات المجمعة:', error.message);
+        res.status(500).json({
+            success: false,
+            error: 'حدث خطأ أثناء توليد ملخصات الوحدات.'
+        });
+    }
+});
+
+
+
+
+// ============================================================================
+// 🏗️ 13. مسارات "الشهادة المهنية لبناء المشاريع الكاملة من الصفر" (بدون اختبارات)
+// معزولة بالكامل تحت بادئة: /api/academy2/project-cert/...
+// ============================================================================
+
+// أ) مسار إلهام أفكار المشاريع الضخمة (بزنس، دوبامين، ديسكتوب، نماذج AI)
+app.post('/api/academy2/project-cert/suggest-idea', async (req, res) => {
+    const { projectCategory } = req.body;
+
+    try {
+        let categoryInstruction = '';
+        if (projectCategory === 'business_saas') {
+            categoryInstruction = 'أعطني عنواناً لمشروع "بزنس وتجارة إلكترونية أو SaaS" ضخم وعالي العائد المادي (مثال: شهادة مهنية في بناء منصة تجارة إلكترونية متعددة البائعين Multi-Vendor E-Commerce مع بوابات دفع ولوحة تحكم، أو نظام ERP سحابي للشركات).';
+        } else if (projectCategory === 'dopamine_app') {
+            categoryInstruction = 'أعطني عنواناً لمشروع "تطبيق يضرب الدوبامين وتريند" (مثال: تطبيق مهام ولياقة بدنية بنظام التلعيب Gamified Solo-Leveling Style، أو منصة أتمتة محتوى فيروسي بالذكاء الاصطناعي، أو لوحة تداول خوارزمي حية).';
+        } else if (projectCategory === 'desktop_app') {
+            categoryInstruction = 'أعطني عنواناً لمشروع "تطبيق سطح مكتب احترافي Desktop App" (باستخدام Electron وReact وSQLite أو Python، مثل نظام نقاط بيع ومخازن POS متكامل يدعم الطابعات الحرارية والعمل بدون إنترنت، أو استوديو معالجة صوتيات بالذكاء الاصطناعي).';
+        } else if (projectCategory === 'ai_model_scratch') {
+            categoryInstruction = 'أعطني عنواناً لمشروع "بناء وتدريب نموذج ذكاء اصطناعي أو وكيل مستقل AI Model & Agent من الصفر" (باستخدام Python وPyTorch/TensorFlow أو LLMs & RAG وربطه بواجهة ويب متكاملة).';
+        } else {
+            categoryInstruction = 'أعطني عنواناً لشهادة مهنية لبناء مشروع برمجي متكامل من الصفر للنهاية (Full-Stack أو AI أو Desktop).';
+        }
+
+        const systemPrompt = `أنت كبير مهندسي المنتجات التقنية (Chief Product Architect).
+        المطلوب منك إعطاء "عنوان شهادة مهنية لبناء مشروع عملي من الصفر للنهاية" باللغة العربية (مع ذكر التقنيات الأساسية بين قوسين).
+        لا تكتب أي مقدمات أو شروحات، فقط العنوان الجذاب الذي يصلح ليكون شهادة بناء مشروع كامل.
+        رد بصيغة JSON فقط بهذا الهيكل:
+        { "topic": "الشهادة المهنية العملية: بناء [اسم المشروع] من الصفر للإطلاق باستخدام [التقنيات]" }`;
+
+        const currentGroq = getGroqClient();
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: categoryInstruction }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9,
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const data = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
+
+        res.json({ success: true, idea: data.topic });
+    } catch (error) {
+        console.error('❌ خطأ في إلهام المشاريع:', error.message);
+        res.status(500).json({ success: false, error: 'فشل في توليد فكرة المشروع.' });
+    }
+});
+
+// ب) مسار هندسة هيكل الشهادة المهنية للمشروع (تقسيم المشروع الضخم إلى 9-15 كراش كورس / مراحل بناء)
+app.post('/api/academy2/project-cert/blueprint-series', async (req, res) => {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع المشروع.' });
+
+    try {
+        console.log(`\n🏗️ [Project Certificate Architect] جاري تفكيك المشروع الضخم إلى سلسلة كراش كورسات بناء من الصفر: ${topic}...`);
+
+        const systemPrompt = `أنت أعظم مهندس معماري للبرمجيات (Principal Systems Architect) وصانع كورسات بناء المشاريع العملاقة (مثل فيديوهات اليوتيوب التي تمتد لـ 20 ساعة لبناء مشروع ضخم من الصفر From Scratch، ولكن بشكل مكتوب ومفصل للغاية).
+
+        المطلوب: تصميم هيكل **"شهادة مهنية لبناء مشروع كامل من الصفر للنهاية (بدون أي اختبارات)"** حول المشروع التالي:
+        "${topic}"
+
+        🚨 القواعد الهندسية الصارمة:
+        1. قسّم بناء هذا المشروع الضخم من اللحظة الصفرية (تهيئة المجلد الفارغ وتصميم المعمارية) وحتى الإطلاق النهائي إلى **سلسلة من (9 إلى 15 كراش كورس متسلسل)**.
+        2. كل "كراش كورس" في هذه السلسلة يمثل **"مرحلة بناء نظام فرعي كامل من المشروع" (Build Phase)**، بحيث ينتهي الطالب من الكورس الأول وقد بنى الأساس، وفي الثاني بنى قاعدة البيانات والمصادقة، وفي الثالث بنى النظام الأساسي... وهكذا حتى يكتمل المشروع العملاق في الكورس الأخير!
+        3. وضّح في كل كراش كورس كيف سنستخدم **الـ AI Agent (مثل Cursor / Copilot / Claude)** لتسريع كتابة الكود وما الذي سنبنيه يدوياً.
+        4. هذه الشهادة خالية تماماً من الاختبارات؛ التركيز 100% على الكود، الملفات، الربط البرمجي، والأوامر.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "isCertificateSeries": true,
+          "isProjectScratchSeries": true,
+          "certificateTitle": "الشهادة المهنية العملية: ${topic}",
+          "courseTitle": "الشهادة المهنية العملية: ${topic}",
+          "courseDescription": "دليل بناء هندسي شامل يأخذك خطوة بخطوة وملفاً بملف لبناء هذا المشروع الضخم من الصفر المطلق وحتى الإطلاق الإنتاجي بمساعدة وكلاء الذكاء الاصطناعي (AI Agents) وبدون أي حشو نظري أو اختبارات.",
+          "mainAnalogy": "خريطة معمارية متكاملة (Architecture Blueprint): نبدأ بحفر الأساسات وتجهيز بيئة المشروع، ثم نشيد الخوادم وقواعد البيانات، ثم نبني الواجهات التفاعلية ونربط الذكاء الاصطناعي وصولاً للإطلاق.",
+          "superCertificate": {
+            "title": "شهادة كبير مهندسي بناء الأنظمة والمشاريع المتكاملة (From-Scratch Project Architect)",
+            "badgeText": "S-Rank Project Builder Certificate",
+            "careerOutcomes": ["Full-Stack Project Architect", "AI-Augmented Product Builder", "SaaS & Systems Founder"]
+          },
+          "courses": [
+            {
+              "courseOrder": 1,
+              "coursePrefix": "المرحلة 1 (كراش كورس 1)",
+              "difficultyLevel": "مرحلة التأسيس المعماري وتجهيز المشروع",
+              "courseTitle": "كراش كورس 1: هندسة معمارية المشروع، هيكلة المجلدات، وإعداد بيئة العمل والـ AI Agent",
+              "description": "وصف دقيق للملفات والمكونات التي سنقوم ببرمجتها وبنائها في هذه المرحلة من المشروع...",
+              "courseDescription": "وصف دقيق للملفات والمكونات التي سنقوم ببرمجتها وبنائها في هذه المرحلة من المشروع...",
+              "estimatedHours": "12 ساعة بناء عملي",
+              "certificateBadge": "شهادة إتمام المرحلة 1 من بناء المشروع",
+              "connectionToPrevious": "نقطة الصفر: إنشاء المجلد الفارغ وتثبيت الحزم الأساسية.",
+              "cliffhangerToNext": "بعد تجهيز البنية التحتية، سننتقل في الكورس القادم لبناء...",
+              "githubProject": {
+                "projectTitle": "الجزء الذي سيكتمل في مستودع GitHub بنهاية هذا الكورس",
+                "projectSummary": "الملفات والميزات التي ستكون شغالة في مشروعك بعد إنهاء هذه المرحلة"
+              },
+              "skills": ["System Architecture", "AI Agent Prompting", "Project Setup", "Git Workflow"]
+            }
+            // ⚠️ استمر في توليد من 9 إلى 15 كراش كورس متسلسل يبني المشروع قطعة قطعة حتى الإطلاق النهائي!
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `قم بهندسة خارطة بناء المشروع الكامل "${topic}" عبر 9 إلى 15 كراش كورس متسلسل بصيغة JSON.`,
+            0.75,
+            25000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        parsedContent.isCertificateSeries = true;
+        parsedContent.isProjectScratchSeries = true;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في هندسة شهادة المشروع:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء هندسة شهادة المشروع.' });
+    }
+});
+
+// ج) مسار تفكيك مرحلة البناء (الكراش كورس) إلى وحدات وخطوات تنفيذية عملية (بدون أي اختبارات)
+app.post('/api/academy2/project-cert/blueprint-phase-units', async (req, res) => {
+    const {
+        certificateTitle,
+        courseOrder,
+        totalCourses,
+        currentCourseTitle,
+        currentCourseDescription,
+        previousCourseTitle,
+        nextCourseTitle
+    } = req.body;
+
+    if (!currentCourseTitle) {
+        return res.status(400).json({ error: 'عنوان مرحلة المشروع مطلوب.' });
+    }
+
+    try {
+        console.log(`\n🛠️ [Project Phase Units] جاري تفكيك (${currentCourseTitle}) إلى وحدات وخطوات برمجية...`);
+
+        const systemPrompt = `أنت كبير مهندسي البرمجيات تبني مشروعاً حقيقياً أمام الطالب خطوة بخطوة (مثل سلاسل البناء الطويلة على يوتيوب ولكن بشكل مكتوب ومنظم للغاية).
+        نحن الآن في: "${currentCourseTitle}" (المرحلة ${courseOrder || 1} من ${totalCourses || 10} ضمن مشروع "${certificateTitle}").
+        - تفاصيل هذه المرحلة: "${currentCourseDescription || ''}"
+        - ما بنيناه في الكورس السابق: "${previousCourseTitle || 'بداية المشروع من الصفر'}"
+        - ما سنبنيه في الكورس القادم: "${nextCourseTitle || 'الإطلاق النهائي'}"
+
+        🚨 القواعد الصارمة:
+        1. قسّم هذه المرحلة إلى **(6 إلى 10 وحدات عملية / Sections)**.
+        2. داخل كل وحدة، ضع **(5 إلى 8 دروس عملية تطبيقية)** تمثل خطوات بناء حقيقية متسلسلة (إنشاء ملف كذا، كتابة مودل كذا، توجيه الـ AI Agent لبناء مكون كذا، ربط الـ API بالواجهة، اختبار الميزة في التيرمينال/المتصفح).
+        3. 🚫 **ممنوع وجود أي اختبارات أو امتحانات!** كل الدروس هي خطوات بناء كودية وعملية (lessonCategory: "project_step").
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "${currentCourseTitle}",
+          "subCertificateTitle": "شهادة إنجاز ${currentCourseTitle}",
+          "blueprint": [
+            {
+              "sectionOrder": 1,
+              "sectionName": "الوحدة 1: ...",
+              "isProjectUnit": true,
+              "lessons": [
+                {
+                  "title": "الخطوة 1: إنشاء وهيكلة ملفات ... وتثبيت المكاتب اللازمة",
+                  "description": "ماذا سنبرمج في هذه الخطوة وأي ملفات سنعدلها",
+                  "lessonCategory": "project_step"
+                }
+                // 5 إلى 8 خطوات عملية في كل وحدة
+              ]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `فكك المرحلة "${currentCourseTitle}" إلى 6-10 وحدات بناء عملي متسلسلة بصيغة JSON.`,
+            0.75,
+            22000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في تفكيك وحدات المشروع:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تفكيك وحدات المشروع.' });
+    }
+});
+
+// د) مسار تأليف خطوة البناء التفصيلية (كود كامل + أوامر AI Agent + أين تضع الكود + بدون اختبارات)
+app.post('/api/academy2/project-cert/forge-build-step', async (req, res) => {
+    const { courseTopic, sectionName, lessonTitle } = req.body;
+    if (!lessonTitle) return res.status(400).json({ error: 'عنوان خطوة البناء مفقود.' });
+
+    try {
+        console.log(`\n🔨 [Project Step Forge] جاري كتابة دليل البناء والأكواد للخطوة: "${lessonTitle}"...`);
+
+        const systemPrompt = `أنت كبير مهندسي البرمجيات (Principal Full-Stack & AI Architect) تسجل دورة بناء مشروع ضخم من الصفر (From Scratch Build-Along) ولكن بصيغة مكتوبة فائقة الدقة والتفصيل.
+        هدفك أن يقرأ الطالب هذا الدرس فيعرف **بالضبط** أي ملف يفتح، ماذا يكتب لـ AI Agent، أي كود يضعه بيده هنا وهناك، وكيف يربط الملفات ببعضها حتى يشتغل المشروع أمامه.
+
+        - المشروع والمرحلة الحالية: "${courseTopic}"
+        - الوحدة الحالية: "${sectionName}"
+        - 📌 الخطوة المطلوب بناؤها الآن: "${lessonTitle}"
+
+        🚨 يجب أن يكون حقل "content" غنياً ومفصلاً جداً (900 إلى 1400 كلمة) ويلتزم حرفياً بهذا الهيكل في Markdown:
+
+        ### 🗺️ 1. موقعنا في خريطة المشروع وشجرة الملفات (File Tree & Context)
+        (اشرح للطالب أين نحن الآن في المشروع، وما هي الملفات الجديدة التي سننشئها أو الملفات السابقة التي سنفتحها ونعدل عليها في هذه الخطوة، واعرض شجرة مجلدات مصغرة بعلامات \`\`\`).
+
+        ### 🤖 2. ورشة الـ AI Agent: ماذا تكتب للوكيل الذكي وكيف توجهه؟
+        (أعطِ الطالب **الـ Prompt الحرفي الجاهز للنسخ** ليضعه في Cursor أو GitHub Copilot أو Claude Code أو ChatGPT لبناء هذه الجزئية، ثم اشرح له: ماذا سيولّد لك الـ AI؟ وما هي النقاط الحرجة التي يجب أن تراجعها وتعدلها بيدك خلف الـ AI لكي لا يحدث تعارض مع باقي ملفات المشروع؟).
+
+        ### 🛠️ 3. التنفيذ البرمجي خطوة بخطوة (أين تضع الكود هنا وهناك؟)
+        (اشرح بالتفصيل الممل: افتح الملف الفلاني، أضف هذا الكود في الأعلى، ثم اذهب للملف الفلاني واستورد هذه الدالة.. أكثر من مقتطفات الكود التوضيحية وأوامر التيرمينال اللازمة).
+
+        ### 🔗 4. الربط المعماري واختبار الميزة حياً (Wiring & Live Verification)
+        (كيف تتصل هذه القطعة التي بنيناها بقاعدة البيانات أو الواجهة؟ وكيف يختبر الطالب الآن على جهازه أن هذه الخطوة تعمل بنجاح 100% قبل الانتقال للخطوة التالية؟).
+
+        ### ⚠️ 5. أخطاء شائعة أثناء بناء هذه الخطوة وكيف تصلحها فوراً (Troubleshooting)
+        (اذكر أشهر 2-3 أخطاء برمجية قد تظهر للطالب في الكونسول أو التيرمينال أثناء تنفيذ هذه الخطوة وكيف يحلها في ثوانٍ).
+
+        🚨 قواعد الحقول الإضافية في الـ JSON:
+        - "codeSnippet": ضع فيه الكود الكامل النهائي الجاهز للنسخ والتشغيل للملف الرئيسي في هذه الخطوة (مع كتابة مسار الملف كتعليق في السطر الأول مثل: // filepath: src/...).
+        - "codeExplanation": تشريح دقيق سطراً بسطر وكتلة بكتلة للكود الموجود في codeSnippet ولماذا كتبناه بهذه الطريقة.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "content": "الشرح الهندسي التفصيلي الكامل بصيغة Markdown مع مسافات \\n\\n بين الفقرات...",
+          "codeSnippet": "// filepath: ...\n// الكود البرمجي الكامل والجاهز للتشغيل هنا...",
+          "codeExplanation": "🔬 تشريح الكود التفصيلي:\n- ..."
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `اكتب دليل البناء العملي الكامل والأكواد للخطوة: "${lessonTitle}" بصيغة JSON.`,
+            0.75,
+            16000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        // تأكيد عدم وجود أي اختبارات في هذا النمط
+        res.json({
+            success: true,
+            data: {
+                content: parsedContent.content || '',
+                codeSnippet: parsedContent.codeSnippet || '',
+                codeExplanation: parsedContent.codeExplanation || '',
+                codingPractice: null,
+                dailyQuest: null
+            }
+        });
+    } catch (error) {
+        console.error(`❌ خطأ في تأليف خطوة المشروع (${lessonTitle}):`, error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تأليف خطوة المشروع.' });
+    }
+});
+
+
+
+// ============================================================================
+// 🌍🎙️ 14. مسارات "الشهادة المهنية للغات الأجنبية والاختبارات العالمية" (صوتيات + نطق + IELTS/JLPT)
+// معزولة بالكامل تحت بادئة: /api/academy2/language-cert/...
+// ============================================================================
+
+// أ) مسار إلهام شهادات اللغات والاختبارات العالمية (IELTS, JLPT, TCF/DELF, TestDaF)
+app.post('/api/academy2/language-cert/suggest-idea', async (req, res) => {
+    const { langCategory } = req.body;
+
+    try {
+        let promptInstruction = '';
+        if (langCategory === 'english_ielts') {
+            promptInstruction = 'أعطني عنواناً فخماً لشهادة مهنية شاملة لتعلم اللغة الإنجليزية من الصفر المطلق (A0) وحتى الاحتراف واجتياز اختبار IELTS الأكاديمي بدرجة Band 8.0+ مع إتقان النطق الصوتي (Phonetics & Shadowing) والاستماع السريع.';
+        } else if (langCategory === 'japanese_jlpt') {
+            promptInstruction = 'أعطني عنواناً فخماً لشهادة مهنية شاملة لتعلم اللغة اليابانية من الصفر المطلق (الأبجديات والنطق الصوتي Pitch Accent) وحتى اجتياز اختبارات الكفاءة اليابانية JLPT (من N5 إلى N1) واليابانية التقنية لبيئة العمل في شركات التكنولوجيا.';
+        } else if (langCategory === 'french_tcf_delf') {
+            promptInstruction = 'أعطني عنواناً فخماً لشهادة مهنية شاملة لإتقان اللغة الفرنسية من الصفر (A1) إلى المستوى المتقدم (C1/C2) واجتياز اختبارات TCF و DELF/DALF بأعلى الدرجات مع إتقان الصوتيات والربط الصوتي (Liaison).';
+        } else if (langCategory === 'german_spanish_global') {
+            promptInstruction = 'أعطني عنواناً فخماً لشهادة مهنية شاملة لإتقان اللغة الألمانية (من الصفر لاجتياز Goethe / TestDaF) أو الإسبانية (DELE) بأسلوب الانغماس السمعي والنطقي الحديث.';
+        } else {
+            promptInstruction = 'أعطني عنواناً لشهادة مهنية شاملة لتعلم لغة أجنبية من الصفر المطلق إلى اجتياز اختباراتها العالمية المعتمدة.';
+        }
+
+        const systemPrompt = `أنت عميد معهد عالمي لتعليم اللغات والاختبارات الدولية (مثل IELTS و JLPT و TOEFL و DELF).
+        أعطني عنواناً عربياً فخماً ومغرياً لشهادة مهنية لغوية شاملة بناءً على طلب المستخدم.
+        رد بصيغة JSON فقط بهذا الهيكل:
+        { "topic": "الشهادة المهنية الشاملة: ..." }`;
+
+        const currentGroq = getGroqClient();
+        const chatCompletion = await currentGroq.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: promptInstruction }
+            ],
+            model: 'qwen/qwen3.8-27b',
+            temperature: 0.9,
+            response_format: { type: "json_object" }
+        });
+
+        const rawContent = chatCompletion.choices[0].message.content;
+        const data = JSON.parse(rawContent.match(/\{[\s\S]*\}/) ? rawContent.match(/\{[\s\S]*\}/)[0] : rawContent);
+
+        res.json({ success: true, idea: data.topic });
+    } catch (error) {
+        console.error('❌ خطأ في إلهام اللغات:', error.message);
+        res.status(500).json({ success: false, error: 'فشل في توليد فكرة شهادة اللغة.' });
+    }
+});
+
+// ب) مسار هندسة هيكل الشهادة المهنية للغات والاختبارات الدولية (من المستوى 0 إلى المستوى الأخير C2 / Band 8.5)
+app.post('/api/academy2/language-cert/blueprint-series', async (req, res) => {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع شهادة اللغة.' });
+
+    try {
+        console.log(`\n🌍 [Language & Exam Architect] جاري هندسة شهادة اللغة والاختبارات العالمية من الصفر للاحتراف: ${topic}...`);
+
+        const systemPrompt = `أنت أعظم بروفيسور في اللسانيات التطبيقية (Applied Linguistics) وتدريس اللغات الأجنبية والتحضير للاختبارات الدولية (IELTS / TOEFL / JLPT / DELF / TestDaF).
+        مهمتك تصميم هيكل **"شهادة مهنية شاملة لتعلم اللغة من الصفر المطلق إلى القمة واجتياز الاختبار العالمي"** حول:
+        "${topic}"
+
+        🚨 القواعد المعمارية الصارمة لتصميم شهادة اللغة (من المستوى 0 إلى الاحتراف):
+        1. قسّم الشهادة إلى **سلسلة من (10 إلى 15 كراش كورس متسلسل)** تغطي جميع المستويات الأوروبية/العالمية بالتدريج:
+           - **الكراش كورسات 1 - 2 (المستوى 0 التأسيسي وعضلات النطق - Phonetics & A0):** الحروف، الأصوات المخفية، مخارج الحروف ومكان اللسان، الإيقاع الصوتي (Intonation/Pitch)، والجمل البسيطة للحياة اليومية.
+           - **الكراش كورسات 3 - 4 (المستوى المبتدئ A1 - A2):** بناء الجمل التلقائي بدون ترجمة ذهنية، القواعد الأساسية بالسياق، والاستماع البطيء والمتوسط.
+           - **الكراش كورسات 5 - 7 (المستوى المتوسط B1 - B2):** طلاقة التحدث (Shadowing)، فهم الكلام السريع والمتصل (Connected Speech)، كتابة المقالات، والمفردات الأكاديمية والمهنية.
+           - **الكراش كورسات 8 - 10 (المستوى المتقدم C1 - C2):** التفكير باللغة، المصطلحات المتقدمة (Idioms & Collocations)، والنقاشات المعقدة.
+           - **الكراش كورسات 11 - 15 (معسكر تدمير الاختبار العالمي - Exam Mastery: IELTS / JLPT / TCF):**
+             * كورس مخصص لاستراتيجيات وأسرار قسم **الاستماع (Listening Hacks & Traps)**.
+             * كورس مخصص لقسم **القراءة السريعة واقتناص الإجابات (Reading Skimming & Scanning)**.
+             * كورس مخصص لقسم **الكتابة الأكاديمية وقوالب الدرجة الكاملة (Writing Task 1 & Task 2 Templates)**.
+             * كورس مخصص لقسم **المحادثة والامتحان الشفهي (Speaking Mock Interviews & Cue Cards)**.
+
+        2. في كل كراش كورس، استبدل مشروع GitHub بـ **"مشروع التحدث والتقييم الصوتي والكتابي للمرحلة"** داخل حقل "githubProject" ليتوافق مع واجهة المنصة.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "isCertificateSeries": true,
+          "isLanguageSeries": true,
+          "certificateTitle": "${topic}",
+          "courseTitle": "${topic}",
+          "courseDescription": "مسار لغوي وصوتي متكامل يأخذك من الصفر المطلق (مخارج الحروف والنطق الصحيح) عبر جميع المستويات المعيارية (A1 -> C2) مع مختبرات استماع وترديد صوتي (Shadowing) وتحضير كامل لاجتياز الاختبارات العالمية بأعلى الدرجات.",
+          "mainAnalogy": "منهجية الانغماس السمعي والنطقي التدريجي (Natural Immersion & Shadowing): نبدأ بضبط الأذن وعضلات الفم كما يتعلم الطفل لغته الأم، ثم نبني القواعد والمفردات بالسياق، ونختتم بمحاكاة دقيقة للامتحان الدولي.",
+          "superCertificate": {
+            "title": "الشهادة المهنية الدولية في الطلاقة اللغوية واجتياز الاختبارات المعتمدة",
+            "badgeText": "C2 / Band 8.5+ Global Language Master",
+            "careerOutcomes": ["اجتياز اختبار IELTS / JLPT / TCF بدرجة امتياز", "العمل والدراسة في الشركات والجامعات العالمية", "الطلاقة الصوتية والكتابية في بيئات العمل الدولية"]
+          },
+          "courses": [
+            {
+              "courseOrder": 1,
+              "coursePrefix": "الكراش كورس 1",
+              "difficultyLevel": "المستوى 0 (A0): تأسيس النطق ومخارج الحروف والأذن الموسيقية",
+              "courseTitle": "كراش كورس 1: ...",
+              "description": "وصف دقيق لما سيتقنه الطالب سمعياً ونطقياً وكتابياً في هذا الكورس...",
+              "courseDescription": "وصف دقيق لما سيتقنه الطالب سمعياً ونطقياً وكتابياً في هذا الكورس...",
+              "estimatedHours": "15 ساعة تدريب سمعي ونطقي",
+              "certificateBadge": "شهادة إتقان المستوى ...",
+              "connectionToPrevious": "نقطة الانطلاق من الصفر المطلق وضبط مخارج الأصوات الأساسية.",
+              "cliffhangerToNext": "كيف يمهد هذا الكورس للمستوى التالي؟",
+              "githubProject": {
+                "projectTitle": "التحدي الصوتي والكتابي التطبيقي للمرحلة (Speaking & Writing Milestone)",
+                "projectSummary": "تسجيل محادثة كاملة بصوتك مع تطبيق قواعد النطق والـ Shadowing وكتابة نص متكامل."
+              },
+              "skills": ["Phonetics & IPA", "Active Listening", "Shadowing Technique", "Core Vocabulary"]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `صمم الشهادة المهنية اللغوية الكاملة لموضوع "${topic}" (من 10 إلى 15 كراش كورس متدرج من الصفر A0 إلى C2 واجتياز الاختبار العالمي) بصيغة JSON.`,
+            0.75,
+            25000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        parsedContent.isCertificateSeries = true;
+        parsedContent.isLanguageSeries = true;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في هندسة شهادة اللغة:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء هندسة شهادة اللغة.' });
+    }
+});
+
+// ج) مسار تفكيك كراش كورس اللغة إلى وحدات شاملة (استماع + نطق وصوتيات + قواعد بالسياق + محاكاة اختبار)
+app.post('/api/academy2/language-cert/blueprint-course-units', async (req, res) => {
+    const {
+        certificateTitle,
+        courseOrder,
+        totalCourses,
+        currentCourseTitle,
+        currentCourseDescription,
+        previousCourseTitle,
+        nextCourseTitle
+    } = req.body;
+
+    if (!currentCourseTitle) {
+        return res.status(400).json({ error: 'عنوان كراش كورس اللغة مطلوب.' });
+    }
+
+    try {
+        console.log(`\n🎙️ [Language Units Architect] جاري تفكيك كورس اللغة (${currentCourseTitle}) إلى وحدات سمعية ونطقية...`);
+
+        const systemPrompt = `أنت خبير عالمي في تصميم المناهج اللغوية التفاعلية والتحضير للامتحانات الدولية (IELTS / JLPT / TCF).
+        نحن الآن نبني الوحدات التفصيلية لـ: "${currentCourseTitle}" (الكورس ${courseOrder || 1} من ${totalCourses || 12} ضمن "${certificateTitle}").
+        - وصف الكورس: "${currentCourseDescription || ''}"
+
+        🚨 القواعد الإجبارية لتوزيع الوحدات والدروس:
+        1. قسّم هذا الكراش كورس إلى **(6 إلى 10 وحدات متكاملة / Sections)**.
+        2. يجب أن تغطي الوحدات والدروس **الأركان الخمسة للغة**:
+           - 👄 **مختبر الصوتيات والنطق (Phonetics, Mouth Mechanics & Connected Speech):** كيف تنطق الأصوات الصعبة وكيف تدمج الكلمات كالناطق الأصلي.
+           - 🎧 **مختبر الاستماع وفك الشفرات الصوتية (Active Listening & Ear Training):** حوارات واقعية وتسجيلات على طراز الامتحانات الدولية.
+           - 🧠 **المفردات والقواعد الوظيفية بالسياق (Contextual Vocabulary, Idioms & Grammar in Action).**
+           - 🎙️ **ورشة التحدث والترديد الظلي (Shadowing & Speaking Cue Cards).**
+           - ✍️ **ورشة القراءة السريعة والكتابة الأكاديمية (Reading & Writing Exam Mastery).**
+        3. ضع في كل وحدة من 5 إلى 8 دروس عملية واضحة.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "courseTitle": "${currentCourseTitle}",
+          "subCertificateTitle": "شهادة إتقان ${currentCourseTitle}",
+          "blueprint": [
+            {
+              "sectionOrder": 1,
+              "sectionName": "الوحدة 1: ...",
+              "isProjectUnit": false,
+              "lessons": [
+                {
+                  "title": "الدرس 1: [نطق وصوتيات] ...",
+                  "description": "وصف دقيق لما سيتدرب عليه الطالب سمعياً ونطقياً في هذا الدرس",
+                  "lessonCategory": "language_step"
+                }
+              ]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `فكك كورس اللغة "${currentCourseTitle}" إلى 6-10 وحدات لغوية وسمعية ونطقية متكاملة بصيغة JSON.`,
+            0.75,
+            22000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error('❌ خطأ في تفكيك وحدات كورس اللغة:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تفكيك وحدات اللغة.' });
+    }
+});
+
+// د) مسار تأليف الدرس اللغوي الشامل (شرح + صوتيات IPA + نصوص استماع للمشغل الصوتي + جمل تدريب المايكروفون + تقييم الاختبار العالمي)
+app.post('/api/academy2/language-cert/forge-language-lesson', async (req, res) => {
+    const { courseTopic, sectionName, lessonTitle } = req.body;
+    if (!lessonTitle) return res.status(400).json({ error: 'عنوان درس اللغة مفقود.' });
+
+    try {
+        console.log(`\n🔊🎙️ [Language Lesson Forge] جاري تأليف الدرس اللغوي والسمعي: "${lessonTitle}"...`);
+
+        const systemPrompt = `أنت أعظم معلم لغات أجنبية وممتحن دولي معتمد (IELTS / JLPT / TCF / TOEFL Master Trainer).
+        مهمتك تأليف درس لغوي تفاعلي شامل (سمعي + نطقي + قرائي + كتابي) حول:
+        - المسار والكورس: "${courseTopic}"
+        - الوحدة الحالية: "${sectionName}"
+        - 📌 عنوان الدرس: "${lessonTitle}"
+
+        🚨 أولاً: حدد رمز اللغة البرمجي الصحيح في حقل "langCode" داخل "audioLab":
+        - إذا كانت اللغة إنجليزية: "en-GB" أو "en-US"
+        - إذا كانت يابانية: "ja-JP"
+        - إذا كانت فرنسية: "fr-FR"
+        - إذا كانت ألمانية: "de-DE"
+        - إذا كانت إسبانية: "es-ES"
+
+        🚨 ثانياً: يجب أن يكون حقل "content" (الشرح الرئيسي بـ Markdown) غنياً ومفصلاً جداً (900 إلى 1400 كلمة) ويلتزم بهذا الهيكل الإبداعي:
+
+        ### 🎯 1. الفكرة الجوهرية للدرس ومفتاح الفهم السريع (ELI5 Language Hook)
+        (اشرح قاعدة أو فكرة الدرس بأسلوب مبسط وشيق، وكيف يستخدمها المتحدث الأصلي في حياته اليومية وفي الامتحانات الدولية).
+
+        ### 👄 2. مختبر الصوتيات ومخارج الحروف والربط الصوتي (Phonetics, IPA & Connected Speech)
+        (اشرح بالتفصيل الدقيق كيف ينطق الطالب مفردات وجمل هذا الدرس:
+        - أين يضع لسانه؟ كيف يخرج الصوت؟
+        - الرمز الصوتي الدولي (IPA) + تقريب النطق بالحروف العربية.
+        - **السر السمعي:** كيف تُنطق الجملة بشكل منفصل (بطيء) vs كيف يدمجها المتحدث الأصلي بسرعة (Connected Speech / Liaison / Pitch Accent) ولماذا يخدع هذا الدمج الطلاب في اختبار الاستماع!).
+
+        ### 🎧 3. سيناريو الاستماع والمحادثة الواقعية (Real-Life & Exam Listening Dialogue)
+        (اكتب حواراً واقعياً أو مقطع استماع على طراز الاختبارات الدولية باللغة المستهدفة، وتحت كل سطر ترجمته الدقيقة والمفردات الذهبية المستخلصة منه).
+
+        ### 🏆 4. أسرار الاختبار العالمي: الفرق بين المبتدئ والمحترف (Band 6.0 vs Band 8.5+ / N1 Secret)
+        (اعرض مقارنة جدولية أو نقطية واضحة بين كيف يعبر طالب عادي عن هذه الفكرة، وكيف يعبر عنها طالب يحصل على الدرجة الكاملة Band 8.5+ أو C2، وما هي الأخطاء القاتلة التي تخصم الدرجات).
+
+        ### 🤖 5. ورشة المحادثة الصوتية مع الـ AI (Voice Mode Practice Prompt)
+        (أعطِ الطالب **Prompt حرفي جاهز للنسخ** ليضعه في تطبيق المحادثة الصوتية للذكاء الاصطناعي ليتدرب معه صوتياً على محتوى هذا الدرس ويجري معه مقابلة محاكاة).
+
+        🚨 ثالثاً: املأ حقل "audioLab" بدقة عالية ليعمل المشغل الصوتي ومصحح النطق بالمايكروفون في الواجهة:
+        - ضع في "shadowingSentences" من 4 إلى 6 جمل أساسية من الدرس باللغة المستهدفة فقط في حقل "targetText"، مع "ipa" (النطق الصوتي)، و"arabicMeaning" (المعنى بالعربية)، و"mouthTip" (نصيحة سريعة للنطق السليم).
+        - ضع في "listeningPassage" فقرة استماع متكاملة باللغة المستهدفة (4-6 جمل مترابطة) ليتمكن الطالب من الاستماع إليها بالسرعة الطبيعية (1.0x) والبطيئة (0.7x).
+
+        🚨 رابعاً: املأ الحقول المساندة:
+        - "codeSnippet": ضع فيه ملخص الجمل الصوتية ورموز الـ IPA والمصطلحات الذهبية (Collocations & Idioms) بشكل منظم.
+        - "codeExplanation": ضع فيه تشريح الممتحن الدولي (Examiner Anatomy) لماذا هذه التراكيب ترفع الدرجة في التحدث والكتابة.
+        - "codingPractice": تمرين تطبيقي (Speaking Cue Card أو Writing Task) يكتبه أو ينطقه الطالب مع 3 تلميحات متدرجة.
+        - "dailyQuest": سؤال خيارات متعددة (4 خيارات مسطحة) يختبر الفهم الدقيق للدرس.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "content": "الشرح الكامل والغني بصيغة Markdown...",
+          "codeSnippet": "📜 بطاقة الصوتيات والـ IPA والتراكيب الذهبية...",
+          "codeExplanation": "🔬 تشريح الممتحن الدولي للنطق والتراكيب...",
+          "audioLab": {
+            "langCode": "en-US",
+            "langLabel": "English (US/UK)",
+            "listeningPassage": {
+              "title": "عنوان مقطع الاستماع التدريبي",
+              "script": "النص الكامل لمقطع الاستماع باللغة المستهدفة ليقرأه الناطق الصوتي...",
+              "arabicTranslation": "الترجمة العربية الكاملة لمقطع الاستماع..."
+            },
+            "shadowingSentences": [
+              {
+                "targetText": "الجملة باللغة الأجنبية المستهدفة فقط بدون رموز إضافية",
+                "ipa": "/.../",
+                "arabicMeaning": "المعنى بالعربية",
+                "mouthTip": "نصيحة وضع اللسان أو دمج الكلمات (Connected Speech)"
+              }
+            ]
+          },
+          "codingPractice": {
+            "hasPractice": true,
+            "taskQuestion": "🎙️✍️ تحدي التحدث والكتابة (Speaking & Writing Task): ...",
+            "starterCode": "اكتب إجابتك أو النص الذي ستتدرب على نطقه هنا...",
+            "hints": [
+              "💡 تلميح المفردات (Lexical Resource): استخدم المصطلح ...",
+              "🛠️ تلميح القواعد والربط (Coherence & Grammar): ابدأ جملتك بـ ...",
+              "🔓 تلميح النطق والطلاقة (Pronunciation): ركز على دمج صوت ..."
+            ],
+            "solutionCode": "الإجابة النموذجية ذات الدرجة الكاملة (Band 8.5+ / C2 Model Answer)..."
+          },
+          "dailyQuest": {
+            "question": "سؤال ذكي على طراز الاختبارات العالمية...",
+            "options": ["خيار 1", "خيار 2", "خيار 3", "خيار 4"],
+            "correctAnswerIndex": 1,
+            "explanation": "شرح لماذا هذه الإجابة هي الصحيحة..."
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `ألّف الدرس اللغوي والسمعي والنطقي المتكامل: "${lessonTitle}" بصيغة JSON.`,
+            0.75,
+            16000
+        );
+        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+
+        res.json({ success: true, data: parsedContent });
+    } catch (error) {
+        console.error(`❌ خطأ في تأليف درس اللغة (${lessonTitle}):`, error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تأليف درس اللغة.' });
+    }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));

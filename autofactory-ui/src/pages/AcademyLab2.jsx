@@ -6,7 +6,7 @@ import {
   Microscope, Award, Flame, Link2, Sparkles, Trophy, GitBranch, Bot, 
   Save, Clock, Trash2, RefreshCw, Briefcase, DollarSign, CheckCircle2, Eye,
   History, FolderClock, BookmarkPlus, Star, Edit3, Upload, Search, Database, X,
-  PlusCircle, ArrowUp, ArrowDown, Compass
+  PlusCircle, ArrowUp, ArrowDown, Compass, Target, Terminal, Monitor, Cpu
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -101,7 +101,6 @@ const dbClearActiveDraft = async () => {
   });
 };
 
-// دالة مساعدة لإعادة ترقيم وضبط تسلسل الكراش كورسات بعد أي إضافة أو تعديل
 const reindexCoursesSequence = (coursesArray) => {
   if (!Array.isArray(coursesArray)) return [];
   return coursesArray.map((c, idx) => ({
@@ -109,6 +108,45 @@ const reindexCoursesSequence = (coursesArray) => {
     courseOrder: idx + 1,
     coursePrefix: `الكراش كورس ${idx + 1}`
   }));
+};
+
+const buildFallbackUnitSummary = (courseTitle, sec) => {
+  const cleanLessons = (sec.lessons || [])
+    .filter(l => l.type !== 'red_gate' && l.type !== 'boss_quiz' && l.type !== 'unit_exam')
+    .map(l => l.title);
+  const isProj = sec.isProjectUnit || (sec.sectionName || '').includes('مشروع') || (sec.sectionName || '').includes('GitHub');
+
+  if (isProj) {
+    return {
+      sectionName: sec.sectionName,
+      unitSummary: `ورشة بناء عملي مباشر في (${sec.sectionName}) ضمن مشروع (${courseTitle}) خطوة بخطوة مع الـ AI Agent.`,
+      whatYouLearn: cleanLessons.length > 0
+        ? `ستقوم ببرمجة وتنفيذ: ${cleanLessons.slice(0, 5).join('، ')}، مع كتابة الكود الكامل وربط الملفات.`
+        : `بناء وهيكلة الملفات البرمجية الخاصة بـ (${sec.sectionName}).`,
+      whyItMatters: `تخرج من هذه الوحدة بجزء شغال فعلياً من مشروعك الكامل وجاهز للرفع على GitHub وعرضه للعملاء والشركات.`,
+      keyHighlights: cleanLessons.slice(0, 3)
+    };
+  }
+
+  return {
+    sectionName: sec.sectionName,
+    unitSummary: `وحدة تأسيسية وتطبيقية مركزة في (${sec.sectionName}) بأسلوب التبسيط القصصي (ELI5) مع مختبرات كود تفاعلية.`,
+    whatYouLearn: cleanLessons.length > 0
+      ? `ستتقن وتطبق في هذه الوحدة: ${cleanLessons.slice(0, 5).join('، ')}، مع تشريح الكود سطراً بسطر.`
+      : `إتقان الركائز الهندسية والعملية الخاصة بـ (${sec.sectionName}).`,
+    whyItMatters: `تمنحك هذه الوحدة الفهم الهندسي العميق الذي يجعلك تكتب الكود بثقة وتبني مشاريع حقيقية.`,
+    keyHighlights: cleanLessons.slice(0, 3)
+  };
+};
+
+const extractUnitSummariesMapFromSections = (courseTitle, sections = []) => {
+  const map = {};
+  sections.forEach(sec => {
+    if (sec.sectionName) {
+      map[sec.sectionName] = sec.unitDeepSummary || buildFallbackUnitSummary(courseTitle, sec);
+    }
+  });
+  return map;
 };
 
 const AcademyLab2 = () => {
@@ -127,17 +165,24 @@ const AcademyLab2 = () => {
   const [syncingCourseIdx, setSyncingCourseIdx] = useState(null);
   const [autoPilotRunning, setAutoPilotRunning] = useState(false);
 
-  // حالات خاصة بتجميع الشهادة المهنية ومعاينتها التفصيلية
-  const [previewMode, setPreviewMode] = useState('lesson'); // 'lesson' | 'certificate_dossier'
+  const [previewMode, setPreviewMode] = useState('lesson');
   const [generatingDossier, setGeneratingDossier] = useState(false);
   const [bundlingExisting, setBundlingExisting] = useState(false);
 
-  // 🆕 حالات خاصة بترقية الشهادة المهنية وحقن الكراش كورسات المخصصة
   const [enhancingCert, setEnhancingCert] = useState(false);
   const [customCourseTitle, setCustomCourseTitle] = useState('');
-  const [customPlacementMode, setCustomPlacementMode] = useState('auto'); // 'auto' أو رقم الفهرس
+  const [customPlacementMode, setCustomPlacementMode] = useState('auto');
   const [injectingCustom, setInjectingCustom] = useState(false);
   const [aiArchitectReport, setAiArchitectReport] = useState(null);
+
+  const [generatingUnitsSummaryCourseIdx, setGeneratingUnitsSummaryCourseIdx] = useState(null);
+  const [generatingAllUnitsSummaries, setGeneratingAllUnitsSummaries] = useState(false);
+
+  // التحقق مما إذا كان الوضع الحالي هو "بناء مشروع من الصفر بدون اختبارات"
+  const isNoExamProjectMode = 
+    difficulty === 'pro_project_scratch_cert' || 
+    difficulty === 'single_project_scratch' || 
+    Boolean(blueprint?.isProjectScratchSeries);
 
   // ==========================================
   // 🏛️ 0. نظام الحفظ المحلي + سجل المشاريع الشامل (Save & History Vault)
@@ -149,7 +194,7 @@ const AcademyLab2 = () => {
   const [projectHistory, setProjectHistory] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
-  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'starred' | 'certificate' | 'single'
+  const [historyFilter, setHistoryFilter] = useState('all');
   const [saveToast, setSaveToast] = useState(null);
   const importFileInputRef = useRef(null);
 
@@ -465,9 +510,12 @@ const AcademyLab2 = () => {
       try {
         const parsed = JSON.parse(event.target.result);
         const importedTitle = parsed.courseTitle || parsed.certificateTitle || file.name.replace('.json', '');
+        const resolvedDiff = parsed.isProjectScratchSeries 
+          ? 'pro_project_scratch_cert' 
+          : (parsed.isCertificateSeries ? 'pro_certificate_eli5' : 'crash_eli5');
 
         setTopic(importedTitle);
-        setDifficulty(parsed.isCertificateSeries ? 'pro_certificate_eli5' : 'crash_eli5');
+        setDifficulty(resolvedDiff);
         setBlueprint(parsed);
         setSelectedLesson(null);
         setAiArchitectReport(null);
@@ -479,7 +527,7 @@ const AcademyLab2 = () => {
           id: newId,
           name: importedTitle,
           topic: importedTitle,
-          difficulty: parsed.isCertificateSeries ? 'pro_certificate_eli5' : 'crash_eli5',
+          difficulty: resolvedDiff,
           isCertificateSeries: Boolean(parsed.isCertificateSeries),
           isStarred: true,
           createdAt: nowStr,
@@ -504,7 +552,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // 💡 1. محرك الإلهامات الذكي V2
+  // 💡 1. محرك الإلهامات الذكي V2 + محرك إلهام المشاريع من الصفر (بزنس & دوبامين)
   // ==========================================
   const generateIdea = async (type) => {
     setLoadingIdea(true);
@@ -527,36 +575,69 @@ const AcademyLab2 = () => {
     }
   };
 
+  // 🆕 دالة إلهام المشاريع الضخمة (بزنس، دوبامين، ديسكتوب، نماذج AI) عبر المسار الجديد المعزول
+  const generateProjectFromScratchIdea = async (projectCategory) => {
+    setLoadingIdea(true);
+    setDifficulty('pro_project_scratch_cert');
+    setTopic('جاري هندسة فكرة مشروع ضخم من الصفر للنهاية... 🏗️');
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/academy2/project-cert/suggest-idea', { projectCategory });
+      if (res.data?.success && res.data.idea) {
+        setTopic(res.data.idea);
+      } else {
+        throw new Error('Fallback');
+      }
+    } catch (err) {
+      const projectFallbacks = {
+        business_saas: 'الشهادة المهنية العملية: بناء منصة تجارة إلكترونية متعددة البائعين (Multi-Vendor E-Commerce SaaS) من الصفر للإطلاق باستخدام MERN Stack وStripe وAI Agent',
+        dopamine_app: 'الشهادة المهنية العملية: بناء تطبيق مهام ولياقة بدنية تفاعلي بنظام التلعيب والرؤية الحاسوبية (Solo-Leveling Gamified App) من الصفر باستخدام React وNode.js وMediaPipe',
+        desktop_app: 'الشهادة المهنية العملية: بناء نظام نقاط بيع ومخازن احترافي لسطح المكتب (Desktop POS & Inventory ERP) من الصفر باستخدام Electron وReact وSQLite ودعم الطابعات الحرارية',
+        ai_model_scratch: 'الشهادة المهنية العملية: بناء وتدريب نموذج ذكاء اصطناعي ووكيل مستقل (Custom AI Model & Autonomous Agent) من الصفر بـ Python وPyTorch وربطه بواجهة ويب متكاملة'
+      };
+      setTopic(projectFallbacks[projectCategory] || projectFallbacks.business_saas);
+    } finally {
+      setLoadingIdea(false);
+    }
+  };
+
   // ==========================================
-  // 📐 2. هندسة الهيكل V2 
+  // 📐 2. هندسة الهيكل V2 (يدعم مسارات الشهادة العادية + المسارات الجديدة لبناء المشاريع بدون اختبارات)
   // ==========================================
   const handleGenerateBlueprint = async () => {
-    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة!');
+    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة أو المشروع!');
     setLoadingBlueprint(true);
     setSelectedLesson(null);
     setForgingStatus('idle');
     setAiArchitectReport(null);
 
     try {
-      const endpoint = difficulty === 'pro_certificate_eli5' 
-        ? 'http://localhost:5000/api/academy2/blueprint-certificate'
-        : 'http://localhost:5000/api/academy2/blueprint1';
+      let endpoint = 'http://localhost:5000/api/academy2/blueprint1';
+      if (difficulty === 'pro_project_scratch_cert') {
+        endpoint = 'http://localhost:5000/api/academy2/project-cert/blueprint-series';
+      } else if (difficulty === 'pro_certificate_eli5') {
+        endpoint = 'http://localhost:5000/api/academy2/blueprint-certificate';
+      }
 
       const res = await axios.post(endpoint, { topic, difficulty });
       if (res.data.success) {
-        setBlueprint(res.data.data);
+        const receivedData = res.data.data;
+        if (difficulty === 'pro_project_scratch_cert' || difficulty === 'single_project_scratch') {
+          receivedData.isProjectScratchSeries = true;
+        }
+        setBlueprint(receivedData);
         setActiveProjectId(null);
-        setActiveProjectName(res.data.data.courseTitle || res.data.data.certificateTitle || topic);
+        setActiveProjectName(receivedData.courseTitle || receivedData.certificateTitle || topic);
       }
     } catch (err) {
-      alert('حدث خطأ أثناء هندسة الهيكل.');
+      alert('حدث خطأ أثناء هندسة الهيكل. تأكد من إضافة المسارات الجديدة في server.js وإعادة تشغيل السيرفر.');
     } finally {
       setLoadingBlueprint(false);
     }
   };
 
   // ============================================================================
-  // 🚀 2.1 جديد: زر تحسين عناوين الشهادة المهنية وإضافة الكراش كورسات الناقصة (AI Gap Filler & Optimizer)
+  // 🚀 2.1 زر تحسين عناوين الشهادة المهنية وإضافة الكراش كورسات الناقصة
   // ============================================================================
   const handleEnhanceAndExpandCertificate = async () => {
     if (!blueprint || !blueprint.courses || blueprint.courses.length === 0) {
@@ -582,7 +663,6 @@ const AcademyLab2 = () => {
       if (res.data?.success && Array.isArray(res.data.data?.courses)) {
         const aiCourses = res.data.data.courses;
 
-        // 🛡️ دمج غير مدمّر: الاحتفاظ بوحدات ودروس الكورسات المؤلفة مسبقاً!
         const mergedCourses = aiCourses.map((aiCourse) => {
           const matchedOld = 
             (typeof aiCourse.originalIndex === 'number' && blueprint.courses[aiCourse.originalIndex]) ||
@@ -603,7 +683,6 @@ const AcademyLab2 = () => {
             };
           }
 
-          // كراش كورس جديد كلياً أضافه الذكاء الاصطناعي لسد الفجوات
           return {
             ...aiCourse,
             courseDescription: aiCourse.description || aiCourse.courseDescription,
@@ -637,7 +716,6 @@ const AcademyLab2 = () => {
       }
       throw new Error('Fallback to local intelligent optimizer');
     } catch (err) {
-      // 🧠 محرك ذكي مدمج يعمل فوراً في حال لم يكن مسار السيرفر مفعلاً بعد
       const existingText = blueprint.courses.map(c => c.courseTitle + ' ' + (c.description || '')).join(' ').toLowerCase();
       const missingCandidates = [];
 
@@ -689,7 +767,6 @@ const AcademyLab2 = () => {
         });
       }
 
-      // إذا كانت كل هذه موجودة، نضيف كورس هندسة الأنظمة العملاقة System Design
       if (missingCandidates.length === 0) {
         missingCandidates.push({
           insertRatio: 0.85,
@@ -706,7 +783,6 @@ const AcademyLab2 = () => {
         });
       }
 
-      // تحسين عناوين الكورسات الحالية + حقن الكورسات الناقصة في مواقعها المنطقية
       let workingCourses = blueprint.courses.map((c) => ({
         ...c,
         isUpgradedByAI: true
@@ -755,7 +831,7 @@ const AcademyLab2 = () => {
   };
 
   // ============================================================================
-  // 🎯 2.15 جديد: حقن كراش كورس مخصص من اختيار المستخدم في المكان المناسب تماماً
+  // 🎯 2.15 حقن كراش كورس مخصص من اختيار المستخدم في المكان المناسب تماماً
   // ============================================================================
   const handleInjectCustomCrashCourse = async (e, overrideTopic = null) => {
     if (e) e.preventDefault();
@@ -827,9 +903,8 @@ const AcademyLab2 = () => {
       }
       throw new Error('Fallback to smart local placement');
     } catch (err) {
-      // 🧠 تحديد الموقع الذكي محلياً إذا لم يكن مسار السيرفر متصلاً
       const lower = targetCustomTopic.toLowerCase();
-      let autoIndex = Math.max(1, blueprint.courses.length - 1); // افتراضياً قبل مشروع التخرج النهائي
+      let autoIndex = Math.max(1, blueprint.courses.length - 1);
       let reason = 'تم وضعه في المرحلة المتقدمة قبل كورس التخرج النهائي ليبني الطالب على كافة الأساسيات السابقة.';
 
       if (lower.includes('مقدمة') || lower.includes('أساسيات') || lower.includes('مدخل') || lower.includes('html') || lower.includes('مبتدئ')) {
@@ -850,18 +925,18 @@ const AcademyLab2 = () => {
       const prevCourse = finalIndex > 0 ? blueprint.courses[finalIndex - 1] : null;
 
       const craftedCourse = {
-        courseTitle: `${targetCustomTopic} (بأسلوب التبسيط القصصي الشيق 👶)`,
-        courseDescription: `كراش كورس مخصص يأخذك من الصفر في (${targetCustomTopic}) بأسلوب مبدأ فاينمان المبسط، مع تطبيقات كودية تفاعلية ومشروع عملي متكامل يربطه بمسار الشهادة المهنية.`,
-        description: `كراش كورس مخصص يأخذك من الصفر في (${targetCustomTopic}) بأسلوب مبدأ فاينمان المبسط، مع تطبيقات كودية تفاعلية ومشروع عملي متكامل يربطه بمسار الشهادة المهنية.`,
+        courseTitle: `${targetCustomTopic} (تطبيق وبناء عملي خطوة بخطوة 🛠️)`,
+        courseDescription: `كراش كورس مخصص يأخذك خطوة بخطوة لبناء ودمج (${targetCustomTopic}) داخل المشروع بالاستعانة بـ AI Agent.`,
+        description: `كراش كورس مخصص يأخذك خطوة بخطوة لبناء ودمج (${targetCustomTopic}) داخل المشروع بالاستعانة بـ AI Agent.`,
         difficultyLevel: finalIndex < 3 ? 'المستوى التأسيسي المبسط' : 'المستوى التطبيقي المتقدم',
         estimatedHours: '16 ساعة',
         certificateBadge: `شهادة إتقان: ${targetCustomTopic}`,
         connectionToPrevious: prevCourse 
-          ? `يبني مباشرة على ما أنجزناه في (${prevCourse.courseTitle}) ليضيف مهارة (${targetCustomTopic}) إلى ترسانتك.` 
+          ? `يبني مباشرة على ما أنجزناه في (${prevCourse.courseTitle}) ليضيف (${targetCustomTopic}) إلى المشروع.` 
           : 'نقطة انطلاق تأسيسية مميزة في بداية الشهادة المهنية.',
         githubProject: {
           projectTitle: `مشروع تطبيقي متكامل في ${targetCustomTopic}`,
-          projectSummary: `بناء مشروع عملي يطبق مفاهيم (${targetCustomTopic}) خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.`
+          projectSummary: `بناء ودمج (${targetCustomTopic}) خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.`
         },
         skills: [targetCustomTopic, 'Practical Implementation', 'AI-Assisted Coding', 'GitHub Portfolio'],
         isBlueprintReady: false,
@@ -893,7 +968,6 @@ const AcademyLab2 = () => {
     }
   };
 
-  // تحريك كراش كورس لأعلى أو لأسفل يدوياً أو حذفه من السلسلة
   const handleMoveCoursePosition = (cIdx, direction) => {
     if (!blueprint || !blueprint.courses) return;
     const targetIdx = direction === 'up' ? cIdx - 1 : cIdx + 1;
@@ -918,6 +992,116 @@ const AcademyLab2 = () => {
     const reindexed = reindexCoursesSequence(updated);
     setBlueprint({ ...blueprint, courses: reindexed });
     triggerToast('🗑️ تم حذف الكراش كورس وإعادة ترقيم السلسلة.');
+  };
+
+  // ============================================================================
+  // 🎯 2.18 دالة توليد وحقن ملخصات جميع الوحدات لكراش كورس واحد في طلب مجمّع واحد
+  // ============================================================================
+  const forgeCourseUnitsSummaries = async (cIdx, customBlueprintState = null, silent = false) => {
+    const workingCert = JSON.parse(JSON.stringify(customBlueprintState || blueprint));
+    if (!workingCert || !workingCert.courses || !workingCert.courses[cIdx]) return workingCert;
+
+    const targetCourse = workingCert.courses[cIdx];
+    if (!targetCourse.sections || targetCourse.sections.length === 0) {
+      if (!silent) alert('يرجى هندسة وحدات هذا الكراش كورس أولاً!');
+      return workingCert;
+    }
+
+    setGeneratingUnitsSummaryCourseIdx(cIdx);
+
+    const sectionsPayload = targetCourse.sections.map(sec => ({
+      sectionName: sec.sectionName,
+      isProjectUnit: Boolean(sec.isProjectUnit || (sec.sectionName || '').includes('مشروع')),
+      lessonsTitles: (sec.lessons || [])
+        .filter(l => l.type !== 'red_gate' && l.type !== 'boss_quiz' && l.type !== 'unit_exam')
+        .map(l => l.title)
+    }));
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/academy2/batch-course-units-summary', {
+        courseTitle: targetCourse.courseTitle,
+        sectionsData: sectionsPayload
+      });
+
+      const returnedList = res.data?.data?.unitsSummaries || [];
+      const unitSummariesMap = {};
+
+      workingCert.courses[cIdx].sections = targetCourse.sections.map((sec, sIdx) => {
+        const matchedAi = returnedList[sIdx] || returnedList.find(u => u.sectionName === sec.sectionName);
+        const finalSummary = (matchedAi && matchedAi.whatYouLearn)
+          ? {
+              sectionName: sec.sectionName,
+              unitSummary: matchedAi.unitSummary || '',
+              whatYouLearn: matchedAi.whatYouLearn || '',
+              whyItMatters: matchedAi.whyItMatters || '',
+              keyHighlights: matchedAi.keyHighlights || []
+            }
+          : buildFallbackUnitSummary(targetCourse.courseTitle, sec);
+
+        unitSummariesMap[sec.sectionName] = finalSummary;
+        return {
+          ...sec,
+          unitDeepSummary: finalSummary
+        };
+      });
+
+      workingCert.courses[cIdx].unitSummariesMap = unitSummariesMap;
+      workingCert.courses[cIdx].areUnitSummariesReady = true;
+      setBlueprint({ ...workingCert });
+
+      if (!silent) {
+        await handleSaveProjectToHistory(false, true, workingCert);
+        triggerToast(`🎯 تم توليد وحفظ ملخصات جميع وحدات الكورس ${cIdx + 1} بنجاح!`);
+      }
+      return workingCert;
+    } catch (error) {
+      const unitSummariesMap = {};
+      workingCert.courses[cIdx].sections = targetCourse.sections.map((sec) => {
+        const fallbackSum = buildFallbackUnitSummary(targetCourse.courseTitle, sec);
+        unitSummariesMap[sec.sectionName] = fallbackSum;
+        return {
+          ...sec,
+          unitDeepSummary: fallbackSum
+        };
+      });
+      workingCert.courses[cIdx].unitSummariesMap = unitSummariesMap;
+      workingCert.courses[cIdx].areUnitSummariesReady = true;
+      setBlueprint({ ...workingCert });
+
+      if (!silent) {
+        await handleSaveProjectToHistory(false, true, workingCert);
+        triggerToast(`🎯 تم تجهيز ملخصات وحدات الكورس ${cIdx + 1} بنجاح!`);
+      }
+      return workingCert;
+    } finally {
+      setGeneratingUnitsSummaryCourseIdx(null);
+    }
+  };
+
+  const handleBatchGenerateAllUnitsSummaries = async () => {
+    if (!blueprint || !blueprint.courses) return;
+    const readyCourses = blueprint.courses.filter(c => c.sections && c.sections.length > 0);
+    if (readyCourses.length === 0) {
+      return alert('لا توجد كورسات تحتوي على وحدات حالياً. قم بهندسة وحدات الكورس أولاً!');
+    }
+
+    setGeneratingAllUnitsSummaries(true);
+    let workingState = JSON.parse(JSON.stringify(blueprint));
+
+    try {
+      for (let i = 0; i < workingState.courses.length; i++) {
+        if (workingState.courses[i].sections && workingState.courses[i].sections.length > 0) {
+          workingState = await forgeCourseUnitsSummaries(i, workingState, true);
+        }
+      }
+      setBlueprint({ ...workingState });
+      await handleSaveProjectToHistory(false, true, workingState);
+      alert(`🎉 اكتمل توليد وحقن ملخصات الوحدات لجميع الكورسات (${readyCourses.length} كراش كورس) وحفظها في السجل!`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGeneratingAllUnitsSummaries(false);
+    }
   };
 
   // ==========================================
@@ -970,8 +1154,8 @@ const AcademyLab2 = () => {
 
     let masterDossier = {
       certificateTitle: certTitle,
-      executiveVision: `${blueprint.courseDescription || ''}\n\nصُممت هذه الشهادة المهنية الخارقة لتكون بديلاً عملياً ومكثفاً عن سنوات من التشتت الأكاديمي؛ حيث تم تفكيك التخصص بالكامل إلى (${blueprint.courses.length}) كراش كورس متسلسل يعتمد على مبدأ فاينمان (التبسيط لطفل صغير 👶) مع الغوص الهندسي العميق، بحيث يخرج الطالب من كل كراش كورس بشهادة فرعية موثقة ومشروع حقيقي مرفوع على GitHub بمساعدة وكلاء الذكاء الاصطناعي (AI Agents).`,
-      mainAnalogy: blueprint.mainAnalogy || 'تشبيه قصصي متكامل يربط المفاهيم التقنية المعقدة بالحياة الواقعية من أول كورس حتى مشروع التخرج.',
+      executiveVision: `${blueprint.courseDescription || ''}\n\nصُممت هذه الشهادة المهنية الخارقة لتكون دليلاً هندسياً وعملياً متكاملاً؛ حيث تم تفكيك التخصص أو المشروع بالكامل إلى (${blueprint.courses.length}) كراش كورس متسلسل يخرج الطالب من كل مرحلة فيه بكود إنتاجي حقيقي مرفوع على GitHub بمساعدة وكلاء الذكاء الاصطناعي (AI Agents).`,
+      mainAnalogy: blueprint.mainAnalogy || 'تشبيه قصصي ومعماري متكامل يربط جميع مراحل البناء من أول سطر كود حتى الإطلاق.',
       timePlan: {
         totalHours: `${totalHoursNum} ساعة تدريبية وتطبيقية`,
         totalCourses: blueprint.courses.length,
@@ -988,23 +1172,23 @@ const AcademyLab2 = () => {
           'Freelance Technical Consultant & SaaS Builder'
         ],
         freelanceServices: [
-          'بناء وتطوير تطبيقات ومنصات ويب متكاملة للعملاء والشركات على منصات العمل الحر ($800 - $2,500 للمشروع).',
+          'بناء وتطوير تطبيقات ومنصات ويب وديسكتوب متكاملة للعملاء والشركات ($800 - $3,500 للمشروع).',
           'ربط الأنظمة بـ APIs ووكلاء الذكاء الاصطناعي لأتمتة المهام البرمجية بسرعة 10x.',
           'إعادة هيكلة قواعد البيانات وتحسين أداء التطبيقات ونشرها سحابياً.'
         ],
         saasOpportunities: [
-          'تحويل مشاريع التخرج الـ ' + blueprint.courses.length + ' إلى منتجات رقمية قابلة للبيع كاشتراكات شهرية (Micro-SaaS).',
-          'إطلاق أدوات برمجية مؤتمتة بالذكاء الاصطناعي تخدم قطاعات الأعمال.'
+          'إطلاق المشروع الكامل الذي بنيته في هذه الشهادة كمنتج SaaS جاهز للاشتراكات الشهرية.',
+          'بيع نسخ مخصصة من النظام للشركات والمؤسسات.'
         ]
       },
       allSkills: Array.from(allSkillsSet),
       detailedCoursesGuide: coursesSummary.map(cs => ({
         ...cs,
-        deepExplanation: `${cs.description} — في هذا الكراش كورس رقم (${cs.courseOrder}) يدرس الطالب (${cs.unitsCount} وحدات تفصيلية تضم ${cs.lessonsCount} درساً وتحدياً)، تتناوب بين الشرح القصصي المبسط، وتدريبات كتابة الكود التفاعلية المزودة بـ 3 تلميحات، وبوابات الزعماء والبوابات الحمراء، وصولاً إلى الاختبار النهائي المختلط لكل وحدة.`,
+        deepExplanation: `${cs.description} — في هذه المرحلة رقم (${cs.courseOrder}) يبني الطالب (${cs.unitsCount} وحدات تفصيلية تضم ${cs.lessonsCount} خطوة برمجية)، مع أوامر AI Agent الجاهزة والأكواد الكاملة.`,
         keyTakeaways: cs.unitsList.length > 0 
           ? cs.unitsList.slice(0, 6) 
-          : ['إتقان المفاهيم الأساسية بأسلوب ELI5', 'التطبيق العملي عبر مختبر الكود', 'اجتياز البوابات الحمراء واختبارات الوحدات', 'بناء ورفع مشروع الكورس على GitHub'],
-        projectAndAiRole: `في الوحدة النهائية من هذا الكراش كورس، يقوم الطالب ببناء (${cs.githubProject.projectTitle}) من الصفر، ويتعلم كيف يوجه الأوامر الاحترافية (Prompts) لـ AI Agent لكتابة ومراجعة الكود وإصلاح الأخطاء، ثم يرفعه خطوة بخطوة على حسابه في GitHub.`
+          : ['هيكلة الملفات والمعمارية', 'كتابة الكود مع AI Agent', 'ربط الواجهات والخوادم', 'رفع التحديثات على GitHub'],
+        projectAndAiRole: `يقوم الطالب في هذه المرحلة ببناء (${cs.githubProject.projectTitle}) وتوجيه الأوامر الاحترافية (Prompts) لـ AI Agent لكتابة ومراجعة الكود وربطه بالملفات السابقة.`
       }))
     };
 
@@ -1047,7 +1231,7 @@ const AcademyLab2 = () => {
     setGeneratingDossier(false);
 
     await handleSaveProjectToHistory(false, true, updatedBlueprint);
-    alert('👑 تم إنشاء وتجميع الوثيقة التفصيلية الشاملة للشهادة المهنية وحفظها في سجل المشاريع! يمكنك مراجعتها الآن في شاشة المعاينة على اليسار.');
+    alert('👑 تم إنشاء وتجميع الوثيقة التفصيلية الشاملة للشهادة المهنية وحفظها في سجل المشاريع!');
   };
 
   // ==========================================
@@ -1079,7 +1263,7 @@ const AcademyLab2 = () => {
       }
 
       const convertedCourses = platformCourses.map((pc, idx) => {
-        const cleanDesc = (pc.description || '').replace(/\|\s*🏆\s*يمنح:.*$/, '').trim();
+        const cleanDesc = (pc.description || '').split('|||UNITS_MAP:')[0].replace(/\|\s*🏆\s*يمنح:.*$/, '').trim();
         return {
           _id: pc._id,
           courseOrder: idx + 1,
@@ -1105,7 +1289,7 @@ const AcademyLab2 = () => {
         isCertificateSeries: true,
         courseTitle: customCertName,
         certificateTitle: customCertName,
-        courseDescription: `برنامج شهادة مهنية متكامل يضم (${convertedCourses.length}) كراش كورسات متدرجة من الصفر المطلق بأسلوب التبسيط (ELI5) وحتى الاحتراف وبناء المشاريع الحقيقية بمساعدة وكلاء الذكاء الاصطناعي.`,
+        courseDescription: `برنامج شهادة مهنية متكامل يضم (${convertedCourses.length}) كراش كورسات متدرجة من الصفر المطلق وحتى الاحتراف وبناء المشاريع الحقيقية بمساعدة وكلاء الذكاء الاصطناعي.`,
         mainAnalogy: 'رحلة بناء مدينة رقمية ذكية متكاملة؛ يبدأ الطالب بتشييد المباني الأساسية ثم يربطها بشبكات الطاقة والبيانات والذكاء الاصطناعي.',
         superCertificate: {
           title: `الشهادة المهنية الخارقة المعتمدة: ${customCertName}`,
@@ -1120,7 +1304,7 @@ const AcademyLab2 = () => {
       setActiveProjectId(null);
       setActiveProjectName(customCertName);
       setPreviewMode('certificate_dossier');
-      alert(`🎉 تم استيراد وتجميع (${convertedCourses.length}) كراش كورس داخل الشهادة المهنية! اضغط الآن على زر "👑 تأليف الوثيقة التفصيلية للشهادة" لتوليد الشرح الكامل.`);
+      alert(`🎉 تم استيراد وتجميع (${convertedCourses.length}) كراش كورس داخل الشهادة المهنية!`);
     } catch (err) {
       console.error(err);
       alert('❌ تعذر الاتصال بسيرفر المنصة (5001) لجلب الكورسات.');
@@ -1130,7 +1314,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // 🗺️ 2.5 هندسة وحدات كراش كورس واحد
+  // 🗺️ 2.5 هندسة وحدات كراش كورس واحد (يختار تلقائياً مسار المشاريع بدون اختبارات أو المسار العادي)
   // ==========================================
   const handleGenerateSingleCrashBlueprint = async (cIdx, currentBlueprintState = blueprint) => {
     const targetCert = currentBlueprintState || blueprint;
@@ -1143,8 +1327,13 @@ const AcademyLab2 = () => {
     setActiveCourseIndex(cIdx);
     setForgingStatus('generating_sub_blueprint');
 
+    const isScratchProject = targetCert.isProjectScratchSeries || difficulty === 'pro_project_scratch_cert';
+    const targetEndpoint = isScratchProject
+      ? 'http://localhost:5000/api/academy2/project-cert/blueprint-phase-units'
+      : 'http://localhost:5000/api/academy2/blueprint-crash-course';
+
     try {
-      const res = await axios.post('http://localhost:5000/api/academy2/blueprint-crash-course', {
+      const res = await axios.post(targetEndpoint, {
         certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
         mainAnalogy: targetCert.mainAnalogy,
         courseOrder: cIdx + 1,
@@ -1196,7 +1385,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // ✍️ 4. تأليف الدروس (كراش كورس ضمن شهادة)
+  // ✍️ 4. تأليف الدروس (إذا كان مشروعاً من الصفر: يؤلف خطوات البناء والأكواد وAI Agent فقط بدون أي اختبارات!)
   // ==========================================
   const handleForgeCrashCourseLessons = async (cIdx, customBlueprintState = null) => {
     const currentState = customBlueprintState || blueprint;
@@ -1208,19 +1397,24 @@ const AcademyLab2 = () => {
       return null;
     }
 
+    const isScratchProject = Boolean(currentState.isProjectScratchSeries || difficulty === 'pro_project_scratch_cert');
+
     let totalSteps = 0;
     targetCourse.sections.forEach(sec => {
       totalSteps += sec.lessons.length;
-      totalSteps += Math.floor(sec.lessons.length / 2); 
-      totalSteps += 1; 
+      if (!isScratchProject) {
+        totalSteps += Math.floor(sec.lessons.length / 2); // بوابات الزعماء (فقط في الكورسات العادية)
+        totalSteps += 1; // اختبار نهاية الوحدة (فقط في الكورسات العادية)
+      }
     });
+    totalSteps += 1; // خطوة توليد ملخصات الوحدات في النهاية
 
     setActiveCourseIndex(cIdx);
     setForgingStatus('forging');
     let completedCount = 0;
     let updatedCert = JSON.parse(JSON.stringify(currentState));
 
-    const contextualCourseTopic = `${targetCourse.courseTitle} (الكورس ${cIdx + 1} من شهادة: ${updatedCert.courseTitle || updatedCert.certificateTitle} | التشبيه القصصي: ${updatedCert.mainAnalogy || 'تبسيط مطلق'} | الربط السابق: ${targetCourse.connectionToPrevious || 'بداية المسار'})`;
+    const contextualCourseTopic = `${targetCourse.courseTitle} (المرحلة ${cIdx + 1} من: ${updatedCert.courseTitle || updatedCert.certificateTitle} | الربط السابق: ${targetCourse.connectionToPrevious || 'بداية المشروع'})`;
 
     for (let sIdx = 0; sIdx < updatedCert.courses[cIdx].sections.length; sIdx++) {
       const section = updatedCert.courses[cIdx].sections[sIdx];
@@ -1236,13 +1430,18 @@ const AcademyLab2 = () => {
         });
 
         try {
-          const res = await axios.post('http://localhost:5000/api/academy2/forge-lesson', {
+          // توجيه الطلب للمسار الجديد المعزول إذا كنا في نمط "بناء مشروع بدون اختبارات"
+          const lessonEndpoint = isScratchProject
+            ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
+            : 'http://localhost:5000/api/academy2/forge-lesson';
+
+          const res = await axios.post(lessonEndpoint, {
             courseTopic: contextualCourseTopic,
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
             lessonCategory: lesson.lessonCategory || 'code',
-            isProjectUnit: section.isProjectUnit || false,
-            difficulty: 'crash_eli5'
+            isProjectUnit: section.isProjectUnit || isScratchProject,
+            difficulty: isScratchProject ? 'pro_project_scratch_cert' : 'crash_eli5'
           });
 
           if (res.data.success) {
@@ -1252,10 +1451,10 @@ const AcademyLab2 = () => {
               content: res.data.data.content,
               codeSnippet: res.data.data.codeSnippet || "",
               codeExplanation: res.data.data.codeExplanation || "",
-              codingPractice: res.data.data.codingPractice || null, 
-              dailyQuest: res.data.data.dailyQuest 
+              codingPractice: isScratchProject ? null : (res.data.data.codingPractice || null), 
+              dailyQuest: isScratchProject ? null : (res.data.data.dailyQuest 
                 ? { ...res.data.data.dailyQuest, isMandatory: false, bonusExp: 50 } 
-                : null,
+                : null),
               isForged: true
             });
             lessonsSinceLastBoss++;
@@ -1267,7 +1466,8 @@ const AcademyLab2 = () => {
             });
           }
 
-          if (lessonsSinceLastBoss === 2) {
+          // 🚫 إذا كان نمط "شهادة بناء المشروع بدون اختبارات" نتخطى بوابات الزعماء والبوابات الحمراء تماماً!
+          if (!isScratchProject && lessonsSinceLastBoss === 2) {
             const prevLesson1 = newLessonsArray[newLessonsArray.length - 2];
             const prevLesson2 = newLessonsArray[newLessonsArray.length - 1];
 
@@ -1305,32 +1505,44 @@ const AcademyLab2 = () => {
         } catch (error) { console.error(`خطأ في تأليف درس: ${lesson.title}`); }
       }
 
-      setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: `[كورس ${cIdx + 1}] تجهيز الاختبار النهائي للوحدة ${sIdx + 1}...` });
+      // 🚫 إذا كان نمط "شهادة بناء المشروع بدون اختبارات" نتخطى الاختبار النهائي للوحدة أيضاً!
+      if (!isScratchProject) {
+        setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: `[كورس ${cIdx + 1}] تجهيز الاختبار النهائي للوحدة ${sIdx + 1}...` });
 
-      try {
-        const unitLessonsTitles = section.lessons.map(l => l.title).join('، ');
-        const unitExamRes = await axios.post('http://localhost:5000/api/academy2/forge-unit-exam', {
-          courseTopic: contextualCourseTopic,
-          sectionName: section.sectionName,
-          unitLessonsSummary: unitLessonsTitles
-        });
-
-        if (unitExamRes.data.success) {
-          newLessonsArray.push({
-            title: unitExamRes.data.data.examTitle || `🏆 الاختبار النهائي: ${section.sectionName}`,
-            description: "اختبار نهائي مختلط (نظري + كودي + تحدي كتابة كود) لاجتياز هذه الوحدة بالكامل.",
-            type: "unit_exam", content: "", codeSnippet: "",
-            bossQuiz: unitExamRes.data.data.bossQuiz || [],
-            codingPractice: unitExamRes.data.data.unitCodingChallenge || null,
-            isForged: true
+        try {
+          const unitLessonsTitles = section.lessons.map(l => l.title).join('، ');
+          const unitExamRes = await axios.post('http://localhost:5000/api/academy2/forge-unit-exam', {
+            courseTopic: contextualCourseTopic,
+            sectionName: section.sectionName,
+            unitLessonsSummary: unitLessonsTitles
           });
-          completedCount++;
-        }
-      } catch (examErr) { console.error("خطأ في توليد اختبار نهاية الوحدة"); }
+
+          if (unitExamRes.data.success) {
+            newLessonsArray.push({
+              title: unitExamRes.data.data.examTitle || `🏆 الاختبار النهائي: ${section.sectionName}`,
+              description: "اختبار نهائي مختلط (نظري + كودي + تحدي كتابة كود) لاجتياز هذه الوحدة بالكامل.",
+              type: "unit_exam", content: "", codeSnippet: "",
+              bossQuiz: unitExamRes.data.data.bossQuiz || [],
+              codingPractice: unitExamRes.data.data.unitCodingChallenge || null,
+              isForged: true
+            });
+            completedCount++;
+          }
+        } catch (examErr) { console.error("خطأ في توليد اختبار نهاية الوحدة"); }
+      }
 
       updatedCert.courses[cIdx].sections[sIdx].lessons = newLessonsArray;
       setBlueprint({ ...updatedCert });
     }
+
+    // توليد ملخصات جميع الوحدات لهذا الكراش كورس دفعة واحدة وحفظها داخله
+    setForgeProgress({ 
+      current: completedCount, 
+      total: totalSteps, 
+      currentLessonName: `[كورس ${cIdx + 1}] 🎯 توليد ملخصات جميع الوحدات وفوائدها العملية دفعة واحدة...` 
+    });
+    updatedCert = await forgeCourseUnitsSummaries(cIdx, updatedCert, true);
+    completedCount++;
 
     updatedCert.courses[cIdx].isForgedComplete = true;
     setBlueprint({ ...updatedCert });
@@ -1338,14 +1550,18 @@ const AcademyLab2 = () => {
     setActiveCourseIndex(null);
 
     await handleSaveProjectToHistory(false, true, updatedCert);
-    triggerToast(`✅ اكتمل تأليف الكورس ${cIdx + 1} وتم حفظ تقدمك في سجل المشاريع!`);
+    triggerToast(
+      isScratchProject 
+        ? `🏗️ اكتمل تأليف خطوات وأكواد المرحلة ${cIdx + 1} (بدون اختبارات) وتم حفظها في السجل!` 
+        : `✅ اكتمل تأليف الكورس ${cIdx + 1} مع ملخصات جميع وحداته وتم حفظه في السجل!`
+    );
     return updatedCert;
   };
 
   // الطيار الآلي
   const handleAutoPilotAllCourses = async () => {
     if (!blueprint || !blueprint.courses) return;
-    const confirmAuto = window.confirm(`سيقوم النظام بهندسة وتأليف دروس جميع الكورسات (${blueprint.courses.length} كراش كورس). هل تريد الانطلاق؟`);
+    const confirmAuto = window.confirm(`سيقوم النظام بهندسة وتأليف دروس وملخصات وحدات جميع الكورسات (${blueprint.courses.length} كراش كورس). هل تريد الانطلاق؟`);
     if (!confirmAuto) return;
 
     setAutoPilotRunning(true);
@@ -1364,7 +1580,7 @@ const AcademyLab2 = () => {
           workingState = afterForge;
         }
       }
-      alert('🎉 اكتمل بناء وتأليف جميع الكراش كورسات في الشهادة المهنية بنجاح!');
+      alert('🎉 اكتمل بناء وتأليف جميع الكراش كورسات وملخصات وحداتها في الشهادة المهنية بنجاح!');
     } catch (error) {
       alert(`توقف الطيار الآلي: ${error.message}`);
     } finally {
@@ -1372,16 +1588,21 @@ const AcademyLab2 = () => {
     }
   };
 
-  // تأليف الكورس المنفرد
+  // تأليف الكورس المنفرد (يدعم أيضاً نمط المشروع بدون اختبارات)
   const handleForgeAllLessons = async () => {
     if (!blueprint || !blueprint.blueprint) return;
+
+    const isScratchSingle = difficulty === 'single_project_scratch' || Boolean(blueprint.isProjectScratchSeries);
 
     let totalSteps = 0;
     blueprint.blueprint.forEach(sec => {
       totalSteps += sec.lessons.length;
-      totalSteps += Math.floor(sec.lessons.length / 2);
-      totalSteps += 1; 
+      if (!isScratchSingle) {
+        totalSteps += Math.floor(sec.lessons.length / 2);
+        totalSteps += 1; 
+      }
     });
+    totalSteps += 1;
 
     setForgingStatus('forging');
     let completedCount = 0;
@@ -1397,11 +1618,15 @@ const AcademyLab2 = () => {
         setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: lesson.title });
 
         try {
-          const res = await axios.post('http://localhost:5000/api/academy2/forge-lesson', {
+          const targetEndpoint = isScratchSingle
+            ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
+            : 'http://localhost:5000/api/academy2/forge-lesson';
+
+          const res = await axios.post(targetEndpoint, {
             courseTopic: updatedBlueprint.courseTitle,
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
-            isProjectUnit: section.isProjectUnit || false,
+            isProjectUnit: section.isProjectUnit || isScratchSingle,
             difficulty: difficulty
           });
 
@@ -1409,8 +1634,8 @@ const AcademyLab2 = () => {
             newLessonsArray.push({
               ...lesson, type: "video", content: res.data.data.content,
               codeSnippet: res.data.data.codeSnippet || "", codeExplanation: res.data.data.codeExplanation || "",
-              codingPractice: res.data.data.codingPractice || null,
-              dailyQuest: res.data.data.dailyQuest ? { ...res.data.data.dailyQuest, isMandatory: false, bonusExp: 50 } : null,
+              codingPractice: isScratchSingle ? null : (res.data.data.codingPractice || null),
+              dailyQuest: isScratchSingle ? null : (res.data.data.dailyQuest ? { ...res.data.data.dailyQuest, isMandatory: false, bonusExp: 50 } : null),
               isForged: true
             });
             lessonsSinceLastBoss++;
@@ -1418,7 +1643,7 @@ const AcademyLab2 = () => {
             setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: lesson.title });
           }
 
-          if (lessonsSinceLastBoss === 2) {
+          if (!isScratchSingle && lessonsSinceLastBoss === 2) {
              const prevLesson1 = newLessonsArray[newLessonsArray.length - 2];
              const prevLesson2 = newLessonsArray[newLessonsArray.length - 1];
              const hasCode = (prevLesson1.codeSnippet && prevLesson1.codeSnippet.length > 10) || 
@@ -1449,49 +1674,112 @@ const AcademyLab2 = () => {
         } catch (error) {}
       }
 
-      try {
-        const unitLessonsTitles = section.lessons.map(l => l.title).join('، ');
-        const unitExamRes = await axios.post('http://localhost:5000/api/academy2/forge-unit-exam', {
-          courseTopic: updatedBlueprint.courseTitle, sectionName: section.sectionName, unitLessonsSummary: unitLessonsTitles
-        });
-        if (unitExamRes.data.success) {
-          newLessonsArray.push({
-            title: unitExamRes.data.data.examTitle || `🏆 الاختبار النهائي: ${section.sectionName}`,
-            description: "اختبار نهائي مختلط (نظري + كودي).",
-            type: "unit_exam", content: "", codeSnippet: "",
-            bossQuiz: unitExamRes.data.data.bossQuiz || [],
-            codingPractice: unitExamRes.data.data.unitCodingChallenge || null, isForged: true
+      if (!isScratchSingle) {
+        try {
+          const unitLessonsTitles = section.lessons.map(l => l.title).join('، ');
+          const unitExamRes = await axios.post('http://localhost:5000/api/academy2/forge-unit-exam', {
+            courseTopic: updatedBlueprint.courseTitle, sectionName: section.sectionName, unitLessonsSummary: unitLessonsTitles
           });
-          completedCount++;
-        }
-      } catch (examErr) {}
+          if (unitExamRes.data.success) {
+            newLessonsArray.push({
+              title: unitExamRes.data.data.examTitle || `🏆 الاختبار النهائي: ${section.sectionName}`,
+              description: "اختبار نهائي مختلط (نظري + كودي).",
+              type: "unit_exam", content: "", codeSnippet: "",
+              bossQuiz: unitExamRes.data.data.bossQuiz || [],
+              codingPractice: unitExamRes.data.data.unitCodingChallenge || null, isForged: true
+            });
+            completedCount++;
+          }
+        } catch (examErr) {}
+      }
 
       updatedBlueprint.blueprint[sIdx].lessons = newLessonsArray;
       setBlueprint({...updatedBlueprint});
     }
 
+    setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: '🎯 توليد ملخصات جميع الوحدات دفعة واحدة...' });
+    try {
+      const sectionsPayload = updatedBlueprint.blueprint.map(sec => ({
+        sectionName: sec.sectionName,
+        isProjectUnit: Boolean(sec.isProjectUnit || (sec.sectionName || '').includes('مشروع')),
+        lessonsTitles: (sec.lessons || []).filter(l => l.type === 'video').map(l => l.title)
+      }));
+      const sumRes = await axios.post('http://localhost:5000/api/academy2/batch-course-units-summary', {
+        courseTitle: updatedBlueprint.courseTitle,
+        sectionsData: sectionsPayload
+      });
+      const returnedList = sumRes.data?.data?.unitsSummaries || [];
+      const unitSummariesMap = {};
+      updatedBlueprint.blueprint = updatedBlueprint.blueprint.map((sec, idx) => {
+        const matched = returnedList[idx] || buildFallbackUnitSummary(updatedBlueprint.courseTitle, sec);
+        unitSummariesMap[sec.sectionName] = matched;
+        return { ...sec, unitDeepSummary: matched };
+      });
+      updatedBlueprint.unitSummariesMap = unitSummariesMap;
+    } catch (e) {
+      updatedBlueprint.unitSummariesMap = extractUnitSummariesMapFromSections(updatedBlueprint.courseTitle, updatedBlueprint.blueprint);
+    }
+
+    setBlueprint({...updatedBlueprint});
     setForgingStatus('complete');
     await handleSaveProjectToHistory(false, true, updatedBlueprint);
-    alert('🎉 اكتمل تأليف الكورس وبوابات الزعماء واختبارات الوحدات بالكامل وتم حفظه في السجل!');
+    alert('🎉 اكتمل تأليف جميع خطوات الكورس وملخصات الوحدات بالكامل وتم حفظه في السجل!');
   };
 
   // ==========================================
-  // 🚀 5. المزامنة الموحدة (تجميع الكراش كورسات مع الوثيقة التفصيلية للشهادة المهنية)
+  // 🚀 5. المزامنة الموحدة (تحقن ملخصات الوحدات في courseDescription وفي الدروس لضمان حفظها 100% في سيرفر 5001)
   // ==========================================
+  const injectUnitSummariesIntoSections = (courseTitle, sections = [], unitSummariesMap = {}) => {
+    return (sections || []).map(sec => {
+      const summaryObj = 
+        sec.unitDeepSummary || 
+        unitSummariesMap?.[sec.sectionName] || 
+        buildFallbackUnitSummary(courseTitle, sec);
+
+      const serializedSummary = JSON.stringify({
+        unitSummary: summaryObj.unitSummary || '',
+        whatYouLearn: summaryObj.whatYouLearn || '',
+        whyItMatters: summaryObj.whyItMatters || '',
+        keyHighlights: summaryObj.keyHighlights || []
+      });
+
+      const updatedLessons = (sec.lessons || []).map((lesson, lIdx) => {
+        const cleanDesc = (lesson.description || '').split('|||UNIT_SUMMARY:')[0].trim();
+        if (lIdx === 0) {
+          return {
+            ...lesson,
+            description: `${cleanDesc} |||UNIT_SUMMARY:${serializedSummary}`
+          };
+        }
+        return { ...lesson, description: cleanDesc };
+      });
+
+      return {
+        ...sec,
+        unitDeepSummary: summaryObj,
+        lessons: updatedLessons
+      };
+    });
+  };
+
   const handleSyncSingleCrashCourse = async (courseObj, cIdx) => {
     const parentCertTitle = blueprint.courseTitle || blueprint.certificateTitle;
-    const confirmSync = window.confirm(`هل تريد رفع "${courseObj.courseTitle}" وربطه بالشهادة المهنية "${parentCertTitle}" في CherifPlatform؟`);
+    const confirmSync = window.confirm(`هل تريد رفع "${courseObj.courseTitle}" (مع ملخصات جميع وحداته) إلى CherifPlatform؟`);
     if (!confirmSync) return;
 
     setSyncingCourseIdx(cIdx);
     try {
       const detailedCourseInfo = blueprint.masterDossier?.detailedCoursesGuide?.[cIdx];
-      const enrichedDescription = `${detailedCourseInfo?.deepExplanation || courseObj.courseDescription || courseObj.description} | 🏆 يمنح: ${courseObj.certificateBadge || 'شهادة إتمام الكراش كورس'} (ضمن ${parentCertTitle})`;
+      const unitSummariesMap = courseObj.unitSummariesMap || extractUnitSummariesMapFromSections(courseObj.courseTitle, courseObj.sections);
+      const sectionsWithEmbeddedSummaries = injectUnitSummariesIntoSections(courseObj.courseTitle, courseObj.sections, unitSummariesMap);
+
+      const baseDescription = `${detailedCourseInfo?.deepExplanation || courseObj.courseDescription || courseObj.description} | 🏆 يمنح: ${courseObj.certificateBadge || 'شهادة إتمام الكراش كورس'} (ضمن ${parentCertTitle})`;
+      const enrichedDescription = `${baseDescription} |||UNITS_MAP:${JSON.stringify(unitSummariesMap)}`;
 
       const res = await axios.post('http://localhost:5001/api/courses/auto-import', {
         courseTitle: `${courseObj.coursePrefix || `الكورس ${cIdx + 1}`}: ${courseObj.courseTitle}`,
         courseDescription: enrichedDescription,
-        difficulty: courseObj.difficultyLevel || 'كراش كورس مبسط (ELI5)',
+        difficulty: courseObj.difficultyLevel || 'بناء مشروع متكامل من الصفر (مع AI Agent)',
         certificateMeta: {
           parentCertificateTitle: parentCertTitle,
           parentCertificateDescription: blueprint.masterDossier?.executiveVision || blueprint.courseDescription,
@@ -1503,11 +1791,12 @@ const AcademyLab2 = () => {
           courseOrder: cIdx + 1,
           totalCoursesInSeries: blueprint.courses?.length || 1,
           skills: courseObj.skills || [],
-          githubProject: courseObj.githubProject || null
+          githubProject: courseObj.githubProject || null,
+          unitSummariesMap
         },
-        blueprint: courseObj.sections
+        blueprint: sectionsWithEmbeddedSummaries
       });
-      if (res.data.success) alert(`🎉 تم رفع وربط "${courseObj.courseTitle}" بالشهادة المهنية بنجاح!`);
+      if (res.data.success) alert(`🎉 تم رفع "${courseObj.courseTitle}" ونقل ملخصات جميع وحداته بنجاح!`);
     } catch (error) { alert('❌ حدث خطأ في المزامنة.'); } finally { setSyncingCourseIdx(null); }
   };
 
@@ -1518,7 +1807,7 @@ const AcademyLab2 = () => {
     if (forgedCourses.length === 0) return alert('يرجى تأليف كراش كورس واحد على الأقل قبل المزامنة!');
 
     const confirmSync = window.confirm(
-      `سيتم تجميع ورفع (${forgedCourses.length}) كراش كورسات وربطها معاً تحت مظلة الشهادة المهنية:\n"${parentCertTitle}"\nمع كامل الشرح التفصيلي للشهادة والكورسات. هل أنت متأكد؟`
+      `سيتم تجميع ورفع (${forgedCourses.length}) كراش كورسات مع نقل ملخصات جميع وحداتها إلى CherifPlatform.\nهل أنت متأكد؟`
     );
     if (!confirmSync) return;
 
@@ -1529,12 +1818,16 @@ const AcademyLab2 = () => {
         if (!courseObj.isForgedComplete) continue;
 
         const detailedCourseInfo = blueprint.masterDossier?.detailedCoursesGuide?.[i];
-        const enrichedDescription = `${detailedCourseInfo?.deepExplanation || courseObj.courseDescription || courseObj.description} | 🏆 يمنح: ${courseObj.certificateBadge || `شهادة إتمام الكورس ${i + 1}`} (ضمن ${parentCertTitle})`;
+        const unitSummariesMap = courseObj.unitSummariesMap || extractUnitSummariesMapFromSections(courseObj.courseTitle, courseObj.sections);
+        const sectionsWithEmbeddedSummaries = injectUnitSummariesIntoSections(courseObj.courseTitle, courseObj.sections, unitSummariesMap);
+
+        const baseDescription = `${detailedCourseInfo?.deepExplanation || courseObj.courseDescription || courseObj.description} | 🏆 يمنح: ${courseObj.certificateBadge || `شهادة إتمام الكورس ${i + 1}`} (ضمن ${parentCertTitle})`;
+        const enrichedDescription = `${baseDescription} |||UNITS_MAP:${JSON.stringify(unitSummariesMap)}`;
 
         await axios.post('http://localhost:5001/api/courses/auto-import', {
           courseTitle: `${courseObj.coursePrefix || `الكورس ${i + 1}`}: ${courseObj.courseTitle}`,
           courseDescription: enrichedDescription,
-          difficulty: courseObj.difficultyLevel || 'كراش كورس مبسط (ELI5)',
+          difficulty: courseObj.difficultyLevel || 'بناء مشروع متكامل من الصفر (مع AI Agent)',
           certificateMeta: {
             parentCertificateTitle: parentCertTitle,
             parentCertificateDescription: blueprint.masterDossier?.executiveVision || blueprint.courseDescription,
@@ -1546,12 +1839,13 @@ const AcademyLab2 = () => {
             courseOrder: i + 1,
             totalCoursesInSeries: blueprint.courses.length,
             skills: courseObj.skills || [],
-            githubProject: courseObj.githubProject || null
+            githubProject: courseObj.githubProject || null,
+            unitSummariesMap
           },
-          blueprint: courseObj.sections
+          blueprint: sectionsWithEmbeddedSummaries
         });
       }
-      alert(`🎉 تم تجميع ورفع جميع الكراش كورسات (${forgedCourses.length}) وربطها بالشهادة المهنية "${parentCertTitle}" بنجاح في CherifPlatform!`);
+      alert(`🎉 تم رفع جميع الكراش كورسات (${forgedCourses.length}) مع ملخصات وحداتها بنجاح إلى CherifPlatform!`);
     } catch (err) { alert('❌ حدث خطأ أثناء المزامنة الجماعية.'); } finally { setSyncing(false); }
   };
 
@@ -1562,11 +1856,18 @@ const AcademyLab2 = () => {
 
     setSyncing(true);
     try {
+      const unitSummariesMap = blueprint.unitSummariesMap || extractUnitSummariesMapFromSections(blueprint.courseTitle, blueprint.blueprint);
+      const sectionsWithEmbeddedSummaries = injectUnitSummariesIntoSections(blueprint.courseTitle, blueprint.blueprint, unitSummariesMap);
+      const baseDesc = (blueprint.courseDescription || '').split('|||UNITS_MAP:')[0].trim();
+
       const res = await axios.post('http://localhost:5001/api/courses/auto-import', {
-        courseTitle: blueprint.courseTitle, courseDescription: blueprint.courseDescription,
-        difficulty: difficulty, blueprint: blueprint.blueprint
+        courseTitle: blueprint.courseTitle,
+        courseDescription: `${baseDesc} |||UNITS_MAP:${JSON.stringify(unitSummariesMap)}`,
+        difficulty: difficulty,
+        certificateMeta: { unitSummariesMap },
+        blueprint: sectionsWithEmbeddedSummaries
       });
-      if (res.data.success) alert('🎉 تم إطلاق الكورس بنجاح!');
+      if (res.data.success) alert('🎉 تم إطلاق الكورس مع ملخصات وحداته بنجاح!');
     } catch (error) { alert('❌ حدث خطأ في المزامنة.'); } finally { setSyncing(false); }
   };
 
@@ -1592,7 +1893,6 @@ const AcademyLab2 = () => {
     return true;
   });
 
-  // اقتراحات سريعة لإضافة كراش كورسات بضغطة زر
   const quickGapSuggestions = [
     'أمن التطبيقات وحماية الـ APIs (Cybersecurity)',
     'الاختبارات الآلية وضمان الجودة (Automated Testing)',
@@ -1612,18 +1912,18 @@ const AcademyLab2 = () => {
         </div>
       )}
 
-      {/* 🎨 الهيدر مع لوحة الحفظ وسجل المشاريع (Save & History Vault Bar) */}
+      {/* 🎨 الهيدر مع لوحة الحفظ وسجل المشاريع */}
       <div className="mb-10 flex flex-col xl:flex-row xl:items-center justify-between border-b border-slate-800 pb-6 gap-5">
         <div>
           <h1 className="text-4xl font-black text-white flex items-center gap-3">
             <BrainCircuit className="text-indigo-500" size={40} /> مختبر الأكاديمية <span className="text-indigo-500 bg-indigo-500/10 text-lg px-3 py-1 rounded-lg border border-indigo-500/20">V2 (SUPER ARCHITECT)</span>
           </h1>
           <p className="text-slate-400 mt-2 font-bold">
-            مصنع الشهادات المهنية الخارقة (9-15+ كراش كورس 👶) + مُرقّي المناهج الذكي وحاقن الكورسات + خزنة المشاريع 🗄️
+            مصنع الشهادات المهنية الخارقة + شهادات بناء المشاريع الكاملة من الصفر (مع AI Agent وبدون اختبارات 🛠️)
           </p>
         </div>
 
-        {/* 🛡️ شريط التحكم في الحفظ، النسخ، استيراد JSON، وسجل التاريخ (History) */}
+        {/* 🛡️ شريط التحكم في الحفظ، النسخ، استيراد JSON، وسجل التاريخ */}
         <div className="flex flex-wrap items-center gap-2.5 bg-slate-900/95 border border-slate-800 p-3 rounded-2xl shadow-xl">
           
           <div className="flex flex-col text-right ml-3 pl-3 border-l border-slate-800">
@@ -1643,7 +1943,6 @@ const AcademyLab2 = () => {
             onClick={() => handleSaveProjectToHistory(false)} 
             disabled={!blueprint}
             className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.25)] disabled:opacity-30 disabled:cursor-not-allowed"
-            title="حفظ هذا المشروع في سجل المشاريع"
           >
             <Save size={16} />
             <span>{activeProjectId ? 'حفظ التعديلات' : 'حفظ في السجل'}</span>
@@ -1653,7 +1952,6 @@ const AcademyLab2 = () => {
             <button 
               onClick={() => handleSaveProjectToHistory(true)} 
               className="bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/40 text-indigo-300 hover:text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
-              title="حفظ كنسخة جديدة مستقلة في السجل (Snapshot)"
             >
               <BookmarkPlus size={16} />
               <span className="hidden sm:inline">نسخة جديدة</span>
@@ -1663,7 +1961,6 @@ const AcademyLab2 = () => {
           <button 
             onClick={() => setShowHistoryModal(true)}
             className="bg-amber-500/15 hover:bg-amber-500 border border-amber-500/40 text-amber-300 hover:text-slate-950 font-black text-xs px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
-            title="تصفح واسترجاع جميع المشاريع السابقة"
           >
             <History size={16} />
             <span>سجل المشاريع ({projectHistory.length})</span>
@@ -1679,7 +1976,6 @@ const AcademyLab2 = () => {
           <button 
             onClick={() => importFileInputRef.current?.click()}
             className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold text-xs px-3 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
-            title="استيراد ملف JSON محفوظ على جهازك"
           >
             <Upload size={15} />
             <span className="hidden md:inline">استيراد JSON</span>
@@ -1689,7 +1985,6 @@ const AcademyLab2 = () => {
             <button 
               onClick={loadDraft}
               className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
-              title="استرجاع آخر مسودة طوارئ"
             >
               <RefreshCw size={15} /> استرجاع المسودة
             </button>
@@ -1699,7 +1994,6 @@ const AcademyLab2 = () => {
             <button 
               onClick={clearDraft}
               className="bg-red-500/10 hover:bg-red-600 border border-red-500/30 text-red-400 hover:text-white p-2.5 rounded-xl transition-all"
-              title="إفراغ مساحة العمل الحالية لبدء مشروع جديد"
             >
               <Trash2 size={16} />
             </button>
@@ -1719,6 +2013,7 @@ const AcademyLab2 = () => {
               <Layers className="text-indigo-500" /> هندسة المنهج والشهادات
             </h2>
 
+            {/* أزرار الإلهام الأكاديمي التقليدي */}
             <div className="flex gap-2 mb-3 flex-wrap">
               <button onClick={() => { generateIdea('crash'); setDifficulty('crash_eli5'); }} className="flex-1 bg-slate-800 hover:bg-yellow-900/30 border border-slate-700 hover:border-yellow-500/50 text-slate-400 hover:text-yellow-400 text-xs font-bold py-2 px-1 rounded-lg transition-colors flex items-center justify-center gap-1">
                 <Zap size={14}/> كراش كورس
@@ -1742,6 +2037,56 @@ const AcademyLab2 = () => {
               استلهام فكرة "شهادة مهنية خارقة" (9 - 15+ كراش كورس)
             </button>
 
+            {/* 🆕🏗️ صندوق إلهام المشاريع العملاقة من الصفر للنهاية (بدون اختبارات - YouTube Build Style) */}
+            <div className="bg-slate-950/90 border-2 border-emerald-500/30 rounded-2xl p-3.5 mb-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
+                  <Terminal size={14} /> استلهام شهادة "بناء مشروع ضخم من الصفر" (بدون اختبارات):
+                </span>
+                <span className="text-[10px] bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                  كود + AI Agent 🛠️
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => generateProjectFromScratchIdea('business_saas')}
+                  className="bg-slate-900 hover:bg-emerald-950/50 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-300 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Briefcase size={13} className="text-emerald-400 shrink-0" />
+                  <span>💼 مشروع بزنس وSaaS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateProjectFromScratchIdea('dopamine_app')}
+                  className="bg-slate-900 hover:bg-amber-950/50 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Flame size={13} className="text-amber-400 shrink-0" />
+                  <span>🔥 مشروع يضرب الدوبامين</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateProjectFromScratchIdea('desktop_app')}
+                  className="bg-slate-900 hover:bg-indigo-950/50 border border-slate-800 hover:border-indigo-500/40 text-slate-300 hover:text-indigo-300 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Monitor size={13} className="text-indigo-400 shrink-0" />
+                  <span>🖥️ تطبيق Desktop وPOS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateProjectFromScratchIdea('ai_model_scratch')}
+                  className="bg-slate-900 hover:bg-purple-950/50 border border-slate-800 hover:border-purple-500/40 text-slate-300 hover:text-purple-300 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Cpu size={13} className="text-purple-400 shrink-0" />
+                  <span>🧠 بناء نموذج AI وAgent</span>
+                </button>
+              </div>
+            </div>
+
             <button 
               onClick={handleBundleExistingPlatformCourses}
               disabled={bundlingExisting}
@@ -1753,13 +2098,15 @@ const AcademyLab2 = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-400 mb-2">الموضوع المراد تدريسه</label>
-                <input type="text" placeholder="مثال: الشهادة المهنية في تطوير الويب الشامل MERN Stack" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white transition-colors" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                <label className="block text-sm font-bold text-slate-400 mb-2">الموضوع أو المشروع المراد تدريسه وبناؤه</label>
+                <input type="text" placeholder="مثال: شهادة مهنية في بناء مشروع Full-Stack Multi-Seller E-Commerce" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white transition-colors" value={topic} onChange={(e) => setTopic(e.target.value)} />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-400 mb-2">مستوى الصعوبة وأسلوب الشرح</label>
                 <select className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white appearance-none cursor-pointer" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
                   <option value="pro_certificate_eli5">🎓 شهادة مهنية خارقة (9-15+ كراش كورس مترابط - تبسيط كأنك طفل 👶)</option>
+                  <option value="pro_project_scratch_cert">🏗️ شهادة مهنية لبناء مشروع كامل من الصفر للنهاية (تطبيقات / مواقع / Desktop / AI - بدون اختبارات 🛠️)</option>
+                  <option value="single_project_scratch">🛠️ كراش كورس عملي لبناء مشروع من الصفر للنهاية (مع AI Agent - بدون اختبارات)</option>
                   <option value="crash_eli5">كراش كورس منفرد (تبسيط مطلق - اشرح لي كأني طفل 👶)</option>
                   <option value="مبتدئ تماماً (E-Rank)">مبتدئ تماماً (E-Rank)</option>
                   <option value="متوسط (B-Rank)">متوسط (B-Rank)</option>
@@ -1769,20 +2116,31 @@ const AcademyLab2 = () => {
               </div>
 
               <button onClick={handleGenerateBlueprint} disabled={loadingBlueprint || forgingStatus === 'forging' || autoPilotRunning} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] disabled:opacity-50 flex items-center justify-center gap-2">
-                {loadingBlueprint ? <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-white"></div> : <><Wand2 size={20} /> هندسة خريطة المنهج (V2)</>}
+                {loadingBlueprint ? (
+                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-white"></div>
+                ) : (
+                  <><Wand2 size={20} /> {difficulty === 'pro_project_scratch_cert' ? 'هندسة خريطة بناء المشروع الكامل (بدون اختبارات)' : 'هندسة خريطة المنهج (V2)'}</>
+                )}
               </button>
             </div>
           </div>
 
           {/* ============================================================== */}
-          {/* 🎓 العرض الأول: إذا كان المنهج "شهادة مهنية شاملة" */}
+          {/* 🎓 العرض الأول: إذا كان المنهج "شهادة مهنية شاملة" (أكاديمية أو بناء مشروع) */}
           {/* ============================================================== */}
           {blueprint && blueprint.isCertificateSeries && (
             <div className="bg-[#0b1120] border border-slate-800 rounded-3xl shadow-2xl animate-fade-in-up overflow-hidden">
 
               <div className="bg-gradient-to-r from-indigo-950 via-[#0b1120] to-[#0b1120] p-6 border-b border-slate-800 relative">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold mb-3">
-                  <Award size={16} /> شهادة مهنية متكاملة ({blueprint.courses?.length} كراش كورسات)
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold">
+                    <Award size={16} /> شهادة مهنية متكاملة ({blueprint.courses?.length} كراش كورسات)
+                  </div>
+                  {isNoExamProjectMode && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
+                      <Terminal size={14} /> نمط بناء مشروع من الصفر (بدون اختبارات 🛠️)
+                    </div>
+                  )}
                 </div>
 
                 <h2 className="text-2xl font-black text-white mb-3 leading-tight">{blueprint.courseTitle || blueprint.certificateTitle}</h2>
@@ -1800,15 +2158,13 @@ const AcademyLab2 = () => {
                 {blueprint.mainAnalogy && (
                   <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 mb-4">
                     <p className="text-xs font-black text-indigo-400 mb-1 flex items-center gap-1.5">
-                      <Sparkles size={14}/> القصة والتشبيه الموحد للشهادة (ELI5 Storyline):
+                      <Sparkles size={14}/> {isNoExamProjectMode ? 'المعمارية الهندسية للمشروع (Architecture Flow):' : 'القصة والتشبيه الموحد للشهادة (ELI5 Storyline):'}
                     </p>
                     <p className="text-xs text-slate-300 leading-relaxed">{blueprint.mainAnalogy}</p>
                   </div>
                 )}
 
-                {/* ===================================================================== */}
-                {/* 🆕🧠 قسم الترقية الذكية وحقن الكراش كورسات المخصصة في المكان المناسب */}
-                {/* ===================================================================== */}
+                {/* مختبر تطوير وتوسيع الشهادة المهنية */}
                 <div className="bg-slate-950/90 border-2 border-indigo-500/30 rounded-2xl p-4 mb-5 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs sm:text-sm font-black text-indigo-300 flex items-center gap-2">
@@ -1819,7 +2175,6 @@ const AcademyLab2 = () => {
                     </span>
                   </div>
 
-                  {/* الميزة 1: زر تحسين العناوين وإضافة الكراش كورسات الناقصة تلقائياً */}
                   <button
                     type="button"
                     onClick={handleEnhanceAndExpandCertificate}
@@ -1836,16 +2191,15 @@ const AcademyLab2 = () => {
                       : '🚀 تحسين عناوين الشهادة + إضافة الكراش كورسات الناقصة تلقائياً'}
                   </button>
 
-                  {/* الميزة 2: خانة إضافة كراش كورس مخصص من اختيارك ووضعه في المكان المناسب */}
                   <form onSubmit={handleInjectCustomCrashCourse} className="space-y-2.5 pt-3 border-t border-slate-800/80">
                     <label className="block text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Compass size={14} className="text-emerald-400" /> أضف عنوان كراش كورس من عندك وسيضعه الذكاء الاصطناعي في مكانه المنطقي:
+                      <Compass size={14} className="text-emerald-400" /> أضف عنوان كراش كورس أو ميزة للمشروع وسيضعها الذكاء الاصطناعي في مكانها المنطقي:
                     </label>
 
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
-                        placeholder="مثال: GraphQL، أو WebSockets، أو أتمتة الاختبارات..."
+                        placeholder="مثال: لوحة تحكم البائعين، أو الدردشة الحية WebSockets، أو بوابة دفع..."
                         value={customCourseTitle}
                         onChange={(e) => setCustomCourseTitle(e.target.value)}
                         className="flex-1 bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
@@ -1855,7 +2209,6 @@ const AcademyLab2 = () => {
                         value={customPlacementMode}
                         onChange={(e) => setCustomPlacementMode(e.target.value)}
                         className="bg-slate-900 border border-slate-700 text-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold outline-none cursor-pointer"
-                        title="أين تريد وضع هذا الكراش كورس؟"
                       >
                         <option value="auto">🤖 المكان الأنسب تلقائياً (AI)</option>
                         <option value="0">في البداية (كورس 1)</option>
@@ -1880,9 +2233,8 @@ const AcademyLab2 = () => {
                       {injectingCustom ? 'جاري هندسة الكراش كورس ودمجه في المسار...' : 'إضافة الكراش كورس ووضعه في المكان المناسب'}
                     </button>
 
-                    {/* شرائح اقتراحات سريعة بضغطة واحدة */}
                     <div className="pt-1">
-                      <span className="text-[10px] text-slate-500 font-bold block mb-1.5">⚡ أو اضغط لإضافة كورس متخصص فوراً:</span>
+                      <span className="text-[10px] text-slate-500 font-bold block mb-1.5">⚡ أو اضغط لإضافة مرحلة متخصصة فوراً:</span>
                       <div className="flex flex-wrap gap-1.5">
                         {quickGapSuggestions.map((sug, sIdx) => (
                           <button
@@ -1899,7 +2251,6 @@ const AcademyLab2 = () => {
                     </div>
                   </form>
 
-                  {/* تقرير المهندس الذكي بعد الإضافة أو التحسين */}
                   {aiArchitectReport && (
                     <div className="bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-3 text-xs space-y-1.5 animate-fade-in-up">
                       <div className="flex items-center justify-between">
@@ -1922,7 +2273,7 @@ const AcademyLab2 = () => {
                   )}
                 </div>
 
-                {/* الأزرار الاستراتيجية لتجميع الشهادة وتوليد شرحها التفصيلي */}
+                {/* الأزرار الاستراتيجية لتجميع الشهادة وتوليد ملخصات الوحدات المسبقة */}
                 <div className="flex flex-col gap-2.5 mt-4">
 
                   <button 
@@ -1938,6 +2289,22 @@ const AcademyLab2 = () => {
                     {generatingDossier 
                       ? 'جاري تأليف الوثيقة التفصيلية وتجميع الكراش كورسات...' 
                       : '👑 إنشاء وتجميع الوثيقة التفصيلية للشهادة المهنية والكورسات'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBatchGenerateAllUnitsSummaries}
+                    disabled={generatingAllUnitsSummaries || forgingStatus === 'forging'}
+                    className="w-full bg-teal-500/15 hover:bg-teal-500 border border-teal-500/40 text-teal-300 hover:text-slate-950 font-black text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {generatingAllUnitsSummaries ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-current"></div>
+                    ) : (
+                      <Target size={16} />
+                    )}
+                    {generatingAllUnitsSummaries
+                      ? 'جاري توليد وحقن ملخصات الوحدات لجميع الكورسات...'
+                      : '🎯 توليد وحقن ملخصات الوحدات لجميع الكورسات مسبقاً (حماية لحصة الـ AI)'}
                   </button>
 
                   <div className="flex gap-2">
@@ -1962,7 +2329,7 @@ const AcademyLab2 = () => {
                     disabled={syncing}
                     className="w-full bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white font-black text-xs py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                   >
-                    <Server size={15} /> ربط ومزامنة الشهادة وجميع الكراش كورسات لـ CherifPlatform
+                    <Server size={15} /> ربط ومزامنة الشهادة وجميع الكراش كورسات (مع ملخصات الوحدات) لـ CherifPlatform
                   </button>
                 </div>
               </div>
@@ -1983,21 +2350,19 @@ const AcademyLab2 = () => {
                         <span className="text-indigo-400 font-black text-xs bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20">
                           {course.coursePrefix || `Crash Course ${cIdx + 1}`} • {course.estimatedHours || '15 Hours'}
                         </span>
-                        {course.isNewlyAdded && (
-                          <span className="text-[10px] font-black bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Sparkles size={11} /> مضاف حديثاً
+                        {course.areUnitSummariesReady && (
+                          <span className="text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full">
+                            ✓ ملخصات الوحدات جاهزة
                           </span>
                         )}
                       </div>
 
-                      {/* أزرار تحريك الكورس لأعلى أو أسفل أو حذفه من السلسلة */}
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => handleMoveCoursePosition(cIdx, 'up')}
                           disabled={cIdx === 0}
                           className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30"
-                          title="تحريك الكورس لأعلى"
                         >
                           <ArrowUp size={13} />
                         </button>
@@ -2006,7 +2371,6 @@ const AcademyLab2 = () => {
                           onClick={() => handleMoveCoursePosition(cIdx, 'down')}
                           disabled={cIdx === blueprint.courses.length - 1}
                           className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white disabled:opacity-30"
-                          title="تحريك الكورس لأسفل"
                         >
                           <ArrowDown size={13} />
                         </button>
@@ -2014,53 +2378,14 @@ const AcademyLab2 = () => {
                           type="button"
                           onClick={() => handleDeleteCourseFromSeries(cIdx)}
                           className="p-1 rounded bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white"
-                          title="حذف هذا الكورس من السلسلة"
                         >
                           <Trash2 size={13} />
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                      {course.difficultyLevel && (
-                        <span className="inline-block text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
-                          📈 {course.difficultyLevel}
-                        </span>
-                      )}
-                      <span className="text-emerald-400 font-bold text-[11px] bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
-                        <Award size={12}/> {course.certificateBadge || `شهادة إتمام الكورس ${cIdx + 1}`}
-                      </span>
-                    </div>
-
                     <h4 className="text-lg font-black text-white mb-2">{course.courseTitle}</h4>
                     <p className="text-xs text-slate-400 leading-relaxed mb-3">{course.courseDescription || course.description}</p>
-
-                    {course.connectionToPrevious && (
-                      <div className="bg-slate-950/80 border-r-2 border-amber-500 p-2.5 rounded-lg mb-3 text-[11px] text-amber-300/90 flex items-start gap-2">
-                        <Link2 size={14} className="shrink-0 mt-0.5 text-amber-400" />
-                        <span><strong>الربط مع الكورس السابق:</strong> {course.connectionToPrevious}</span>
-                      </div>
-                    )}
-
-                    {course.githubProject && (
-                      <div className="bg-emerald-950/25 border border-emerald-500/30 p-3 rounded-xl mb-4 text-[11px] text-emerald-300 space-y-1">
-                        <div className="font-black flex items-center gap-1.5 text-emerald-400">
-                          <GitBranch size={13}/> مشروع الوحدة النهائية (GitHub + AI Agent):
-                        </div>
-                        <p className="font-bold text-white">{course.githubProject.projectTitle}</p>
-                        <p className="text-slate-400">{course.githubProject.projectSummary}</p>
-                      </div>
-                    )}
-
-                    {course.skills && course.skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-4">
-                        {course.skills.map((skill, skIdx) => (
-                          <span key={skIdx} className="bg-slate-800 border border-slate-700 text-slate-300 text-[10px] px-2.5 py-1 rounded-full font-semibold">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    )}
 
                     {!course.isBlueprintReady ? (
                       <button 
@@ -2071,33 +2396,60 @@ const AcademyLab2 = () => {
                         {activeCourseIndex === cIdx && forgingStatus === 'generating_sub_blueprint' ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
                         ) : (
-                          <><Layers size={15} /> 1. هندسة وحدات هذا الكراش كورس (5-10+ وحدات + وحدة مشروع GitHub)</>
+                          <><Layers size={15} /> {isNoExamProjectMode ? '1. هندسة وحدات وخطوات البناء لهذه المرحلة (بدون اختبارات)' : '1. هندسة وحدات هذا الكراش كورس (5-10+ وحدات + وحدة مشروع GitHub)'}</>
                         )}
                       </button>
                     ) : (
                       <div className="space-y-4 mt-4 pt-4 border-t border-slate-800">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
                           <span className="text-xs font-black text-emerald-400">
                             📚 وحدات الكراش كورس ({course.sections?.length} وحدات):
                           </span>
 
-                          <button 
-                            onClick={() => handleResetAndReforgeCrashCourse(cIdx)}
-                            disabled={forgingStatus === 'forging' || forgingStatus === 'generating_sub_blueprint'}
-                            className="text-[10px] bg-red-900/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 px-2 py-1 rounded flex items-center gap-1 transition-all disabled:opacity-50"
-                          >
-                            <RefreshCw size={12} className={activeCourseIndex === cIdx && forgingStatus !== 'idle' ? "animate-spin" : ""} /> 
-                            إعادة التأليف (إصلاح الخلل)
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => forgeCourseUnitsSummaries(cIdx)}
+                              disabled={generatingUnitsSummaryCourseIdx === cIdx}
+                              className="text-[10px] bg-teal-900/30 hover:bg-teal-600 text-teal-300 hover:text-white border border-teal-500/40 px-2.5 py-1 rounded flex items-center gap-1 transition-all disabled:opacity-50"
+                              title="توليد ملخصات جميع وحدات هذا الكورس في طلب واحد"
+                            >
+                              <Target size={11} className={generatingUnitsSummaryCourseIdx === cIdx ? 'animate-spin' : ''} />
+                              {course.areUnitSummariesReady ? 'تحديث ملخصات الوحدات' : 'توليد ملخصات الوحدات'}
+                            </button>
+
+                            <button 
+                              onClick={() => handleResetAndReforgeCrashCourse(cIdx)}
+                              disabled={forgingStatus === 'forging' || forgingStatus === 'generating_sub_blueprint'}
+                              className="text-[10px] bg-red-900/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/40 px-2 py-1 rounded flex items-center gap-1 transition-all disabled:opacity-50"
+                            >
+                              <RefreshCw size={11} /> إعادة التأليف
+                            </button>
+                          </div>
                         </div>
 
                         <div className="space-y-3 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
                           {course.sections?.map((sec, sIdx) => (
                             <div key={sIdx} className={`border rounded-xl p-3 ${sec.isProjectUnit ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-slate-950 border-slate-800/90'}`}>
-                              <h5 className={`font-bold text-xs mb-2 flex items-center gap-1.5 ${sec.isProjectUnit ? 'text-emerald-400' : 'text-indigo-300'}`}>
-                                {sec.isProjectUnit ? <Bot size={15} /> : <ChevronLeft size={14} />} 
-                                {sec.sectionName}
+                              <h5 className={`font-bold text-xs mb-1.5 flex items-center justify-between gap-1.5 ${sec.isProjectUnit ? 'text-emerald-400' : 'text-indigo-300'}`}>
+                                <span className="flex items-center gap-1.5">
+                                  {sec.isProjectUnit ? <Bot size={15} /> : <ChevronLeft size={14} />} 
+                                  {sec.sectionName}
+                                </span>
+                                {sec.unitDeepSummary && (
+                                  <span className="text-[9px] bg-teal-500/15 text-teal-300 px-2 py-0.5 rounded border border-teal-500/30">
+                                    ملخص الوحدة جاهز ✓
+                                  </span>
+                                )}
                               </h5>
+
+                              {sec.unitDeepSummary && (
+                                <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-2 mb-2 text-[10px] text-slate-300 space-y-1">
+                                  <p><strong className="text-amber-400">ماذا ستبني:</strong> {sec.unitDeepSummary.whatYouLearn}</p>
+                                  <p><strong className="text-emerald-400">الفائدة:</strong> {sec.unitDeepSummary.whyItMatters}</p>
+                                </div>
+                              )}
+
                               <div className="space-y-1.5">
                                 {sec.lessons?.map((lesson, lIdx) => (
                                   <div 
@@ -2141,7 +2493,10 @@ const AcademyLab2 = () => {
                             disabled={forgingStatus === 'forging'}
                             className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black text-xs py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)] flex items-center justify-center gap-2 disabled:opacity-50"
                           >
-                            <BrainCircuit size={16} /> 2. تأليف الدروس + التمارين الكودية + اختبارات الوحدات (ELI5 👶)
+                            <BrainCircuit size={16} /> 
+                            {isNoExamProjectMode 
+                              ? '2. تأليف خطوات البناء + أكواد الملفات + أوامر الـ AI Agent (بدون اختبارات 🛠️)' 
+                              : '2. تأليف الدروس + الاختبارات + ملخصات الوحدات تلقائياً (ELI5 👶)'}
                           </button>
                         ) : (
                           <div className="flex gap-2 pt-2">
@@ -2213,7 +2568,7 @@ const AcademyLab2 = () => {
               {forgingStatus === 'idle' && (
                 <div className="p-6 border-t border-slate-800 bg-slate-900/30">
                   <button onClick={handleForgeAllLessons} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-base py-4 rounded-xl transition-all shadow-[0_10px_30px_rgba(99,102,241,0.3)] flex items-center justify-center gap-3">
-                    <BrainCircuit size={22} /> تأليف محتوى جميع الدروس
+                    <BrainCircuit size={22} /> تأليف محتوى جميع الدروس + ملخصات الوحدات
                   </button>
                 </div>
               )}
@@ -2222,7 +2577,7 @@ const AcademyLab2 = () => {
         </div>
 
         {/* ================================================== */}
-        {/* العمود الأيسر: شاشة المعاينة المزدوجة (معاينة الدرس + وثيقة الشهادة المهنية المفصلة) */}
+        {/* العمود الأيسر: شاشة المعاينة المزدوجة */}
         {/* ================================================== */}
         <div className="lg:col-span-7 flex flex-col space-y-6">
 
@@ -2230,7 +2585,9 @@ const AcademyLab2 = () => {
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 {forgingStatus === 'forging' ? <div className="animate-pulse w-3 h-3 bg-purple-500 rounded-full"></div> : <CheckCircle className="text-emerald-500" />}
-                {forgingStatus === 'forging' ? 'الذكاء الاصطناعي يقوم بالتأليف الآن (دروس + تمارين كودية + اختبارات وحدات)...' : 'تم اكتمال التأليف بنجاح'}
+                {forgingStatus === 'forging' 
+                  ? (isNoExamProjectMode ? 'الذكاء الاصطناعي يبني الآن خطوات المشروع وأكواد الملفات وبرومبتات الـ AI Agent (بدون اختبارات)...' : 'الذكاء الاصطناعي يقوم بالتأليف الآن (دروس + اختبارات + ملخصات الوحدات)...') 
+                  : 'تم اكتمال التأليف بنجاح'}
               </h3>
 
               <div className="w-full bg-slate-950 rounded-full h-4 mb-2 overflow-hidden border border-slate-800">
@@ -2238,13 +2595,12 @@ const AcademyLab2 = () => {
               </div>
 
               <div className="flex justify-between text-sm font-bold text-slate-400">
-                <span className="truncate w-3/4">{forgingStatus === 'forging' ? `جاري تأليف: ${forgeProgress.currentLessonName}` : 'جميع الدروس جاهزة!'}</span>
+                <span className="truncate w-3/4">{forgingStatus === 'forging' ? `جاري تأليف: ${forgeProgress.currentLessonName}` : 'جميع الخطوات وملخصات الوحدات جاهزة!'}</span>
                 <span>{forgeProgress.current} / {forgeProgress.total}</span>
               </div>
             </div>
           )}
 
-          {/* نافذة المعاينة ذات التبويبين */}
           <div className="flex-1 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl flex flex-col max-h-[820px]">
 
             <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4 flex-wrap">
@@ -2257,7 +2613,7 @@ const AcademyLab2 = () => {
                       : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                   }`}
                 >
-                  <BookOpen size={15} /> معاينة محتوى الدرس
+                  <BookOpen size={15} /> معاينة محتوى الدرس / خطوة البناء
                 </button>
                 <button
                   onClick={() => setPreviewMode('certificate_dossier')}
@@ -2272,9 +2628,6 @@ const AcademyLab2 = () => {
               </div>
             </div>
 
-            {/* ============================================================== */}
-            {/* 👑 التبويب الأول للمعاينة: الوثيقة التفصيلية للشهادة المهنية والكورسات */}
-            {/* ============================================================== */}
             {previewMode === 'certificate_dossier' ? (
               !blueprint?.masterDossier ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-4 py-16 text-center px-6">
@@ -2380,7 +2733,7 @@ const AcademyLab2 = () => {
 
                         {cg.keyTakeaways && cg.keyTakeaways.length > 0 && (
                           <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                            <p className="text-[11px] font-bold text-indigo-300 mb-1.5">📚 الوحدات والمحاور التي يدرسها الطالب في هذا الكورس:</p>
+                            <p className="text-[11px] font-bold text-indigo-300 mb-1.5">📚 الوحدات والمحاور التي يبنيها الطالب في هذا الكورس:</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {cg.keyTakeaways.map((kt, kIdx) => (
                                 <div key={kIdx} className="text-[11px] text-slate-300 flex items-center gap-1.5">
@@ -2403,13 +2756,10 @@ const AcademyLab2 = () => {
                 </div>
               )
             ) : (
-              /* ============================================================== */
-              /* 📖 التبويب الثاني للمعاينة: معاينة الدرس الفردي */
-              /* ============================================================== */
               !selectedLesson ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-4 py-20">
                   <BookOpen size={64} className="opacity-20" />
-                  <p className="font-bold">اضغط على أي درس أو اختبار وحدة (مكتمل باللون الأخضر) لرؤية محتواه هنا.</p>
+                  <p className="font-bold">اضغط على أي درس أو خطوة بناء (مكتملة باللون الأخضر) لرؤية محتواها وأكوادها هنا.</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 space-y-6 custom-scrollbar">
@@ -2424,7 +2774,7 @@ const AcademyLab2 = () => {
 
                   {selectedLesson.content && (
                     <div className="bg-slate-950 border border-slate-800 p-5 rounded-xl">
-                      <h4 className="text-emerald-400 font-bold mb-3 flex items-center gap-2"><FileText size={16}/> الشرح التفصيلي (ELI5 & AI Agent Prompts)</h4>
+                      <h4 className="text-emerald-400 font-bold mb-3 flex items-center gap-2"><FileText size={16}/> دليل البناء التفصيلي وبرومبتات الـ AI Agent</h4>
                       <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                         {selectedLesson.content}
                       </div>
@@ -2433,7 +2783,7 @@ const AcademyLab2 = () => {
 
                   {selectedLesson.codeSnippet && selectedLesson.codeSnippet.trim() !== '' && (
                     <div className="bg-[#0d1117] border border-slate-800 p-5 rounded-xl">
-                      <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2"><Code size={16}/> الكود البرمجي</h4>
+                      <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2"><Code size={16}/> الكود البرمجي الكامل للملف</h4>
                       <pre className="text-emerald-400 text-sm overflow-x-auto" dir="ltr">
                         <code>{selectedLesson.codeSnippet}</code>
                       </pre>
@@ -2647,14 +2997,12 @@ const AcademyLab2 = () => {
                               <button
                                 onClick={(e) => handleToggleStarProject(project, e)}
                                 className={`p-1.5 rounded-lg transition-colors ${project.isStarred ? 'text-amber-400 bg-amber-500/10' : 'text-slate-500 hover:text-amber-400'}`}
-                                title="تثبيت في المفضلة"
                               >
                                 <Star size={15} fill={project.isStarred ? 'currentColor' : 'none'} />
                               </button>
                               <button
                                 onClick={(e) => handleRenameProjectInHistory(project, e)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                                title="إعادة تسمية المشروع"
                               >
                                 <Edit3 size={14} />
                               </button>
@@ -2697,7 +3045,6 @@ const AcademyLab2 = () => {
                           <button 
                             onClick={() => handleDownloadJSON(project.blueprint, `VaultExport_${project.name}`)}
                             className="bg-slate-800 hover:bg-slate-700 text-blue-400 p-2.5 rounded-xl border border-slate-700 transition-colors"
-                            title="تحميل كملف JSON"
                           >
                             <Download size={15} />
                           </button>
@@ -2705,7 +3052,6 @@ const AcademyLab2 = () => {
                           <button 
                             onClick={(e) => handleDeleteProjectFromHistory(project, e)}
                             className="bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white p-2.5 rounded-xl transition-colors"
-                            title="حذف من السجل"
                           >
                             <Trash2 size={15} />
                           </button>
