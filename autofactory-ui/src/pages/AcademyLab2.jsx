@@ -6,7 +6,8 @@ import {
   Microscope, Award, Flame, Link2, Sparkles, Trophy, GitBranch, Bot, 
   Save, Clock, Trash2, RefreshCw, Briefcase, DollarSign, CheckCircle2, Eye,
   History, FolderClock, BookmarkPlus, Star, Edit3, Upload, Search, Database, X,
-  PlusCircle, ArrowUp, ArrowDown, Compass, Target, Terminal, Monitor, Cpu
+  PlusCircle, ArrowUp, ArrowDown, Compass, Target, Terminal, Monitor, Cpu,
+  Globe, Volume2, Mic, Headphones, Square
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -101,13 +102,25 @@ const dbClearActiveDraft = async () => {
   });
 };
 
+// دالة ذكية لإعادة ترقيم وضبط تسلسل الكراش كورسات وتنظيف العناوين من الأرقام العشرية القديمة (مثل 3.1)
 const reindexCoursesSequence = (coursesArray) => {
   if (!Array.isArray(coursesArray)) return [];
-  return coursesArray.map((c, idx) => ({
-    ...c,
-    courseOrder: idx + 1,
-    coursePrefix: `الكراش كورس ${idx + 1}`
-  }));
+  return coursesArray.map((c, idx) => {
+    const trueOrder = idx + 1;
+    let cleanTitle = (c.courseTitle || '')
+      .replace(/^(?:كراش كورس إضافي|كراش كورس|المرحلة|الكورس|Course)\s*\d+(?:\.\d+)?\s*[:-]\s*/i, '')
+      .replace(/^(?:كراش كورس إضافي|كراش كورس|المرحلة|الكورس|Course)\s*\d+(?:\.\d+)?\s*[:-]\s*/i, '')
+      .trim();
+
+    if (!cleanTitle) cleanTitle = c.courseTitle || `المرحلة ${trueOrder}`;
+
+    return {
+      ...c,
+      courseOrder: trueOrder,
+      coursePrefix: `الكراش كورس ${trueOrder}`,
+      courseTitle: `كراش كورس ${trueOrder}: ${cleanTitle}`
+    };
+  });
 };
 
 const buildFallbackUnitSummary = (courseTitle, sec) => {
@@ -119,22 +132,22 @@ const buildFallbackUnitSummary = (courseTitle, sec) => {
   if (isProj) {
     return {
       sectionName: sec.sectionName,
-      unitSummary: `ورشة بناء عملي مباشر في (${sec.sectionName}) ضمن مشروع (${courseTitle}) خطوة بخطوة مع الـ AI Agent.`,
+      unitSummary: `ورشة تطبيقية شاملة في (${sec.sectionName}) ضمن (${courseTitle}) خطوة بخطوة مع الـ AI.`,
       whatYouLearn: cleanLessons.length > 0
-        ? `ستقوم ببرمجة وتنفيذ: ${cleanLessons.slice(0, 5).join('، ')}، مع كتابة الكود الكامل وربط الملفات.`
-        : `بناء وهيكلة الملفات البرمجية الخاصة بـ (${sec.sectionName}).`,
-      whyItMatters: `تخرج من هذه الوحدة بجزء شغال فعلياً من مشروعك الكامل وجاهز للرفع على GitHub وعرضه للعملاء والشركات.`,
+        ? `ستقوم بتطبيق وتنفيذ: ${cleanLessons.slice(0, 5).join('، ')}.`
+        : `التطبيق العملي الشامل لمحاور (${sec.sectionName}).`,
+      whyItMatters: `تخرج من هذه الوحدة بتطبيق عملي حقيقي يرسخ كل المهارات التي اكتسبتها ويجهزك للاختبارات وسوق العمل.`,
       keyHighlights: cleanLessons.slice(0, 3)
     };
   }
 
   return {
     sectionName: sec.sectionName,
-    unitSummary: `وحدة تأسيسية وتطبيقية مركزة في (${sec.sectionName}) بأسلوب التبسيط القصصي (ELI5) مع مختبرات كود تفاعلية.`,
+    unitSummary: `وحدة تأسيسية وتطبيقية مركزة في (${sec.sectionName}) تجمع بين الشرح المبسط والتدريب العملي.`,
     whatYouLearn: cleanLessons.length > 0
-      ? `ستتقن وتطبق في هذه الوحدة: ${cleanLessons.slice(0, 5).join('، ')}، مع تشريح الكود سطراً بسطر.`
-      : `إتقان الركائز الهندسية والعملية الخاصة بـ (${sec.sectionName}).`,
-    whyItMatters: `تمنحك هذه الوحدة الفهم الهندسي العميق الذي يجعلك تكتب الكود بثقة وتبني مشاريع حقيقية.`,
+      ? `ستتقن وتطبق في هذه الوحدة: ${cleanLessons.slice(0, 5).join('، ')}.`
+      : `إتقان الركائز الأساسية والعملية الخاصة بـ (${sec.sectionName}).`,
+    whyItMatters: `تمنحك هذه الوحدة الفهم العميق والتدريب المباشر الذي يجعلك تتقن المهارة بثقة كاملة.`,
     keyHighlights: cleanLessons.slice(0, 3)
   };
 };
@@ -152,6 +165,7 @@ const extractUnitSummariesMapFromSections = (courseTitle, sections = []) => {
 const AcademyLab2 = () => {
   const [topic, setTopic] = useState('');
   const [difficulty, setDifficulty] = useState('pro_certificate_eli5');
+  const [targetLanguage, setTargetLanguage] = useState('الإنجليزية (English - IELTS/TOEFL)');
   const [blueprint, setBlueprint] = useState(null);
   const [loadingBlueprint, setLoadingBlueprint] = useState(false);
   const [loadingIdea, setLoadingIdea] = useState(false);
@@ -178,11 +192,77 @@ const AcademyLab2 = () => {
   const [generatingUnitsSummaryCourseIdx, setGeneratingUnitsSummaryCourseIdx] = useState(null);
   const [generatingAllUnitsSummaries, setGeneratingAllUnitsSummaries] = useState(false);
 
-  // التحقق مما إذا كان الوضع الحالي هو "بناء مشروع من الصفر بدون اختبارات"
+  // 🔊 حالة مشغل الصوتيات والنطق التفاعلي (Interactive TTS & Shadowing Player)
+  const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
+  const [speakingRate, setSpeakingRate] = useState(1.0);
+
+  // التحقق من نوع المسار الحالي (بناء مشروع بدون اختبارات vs شهادة لغات واختبارات دولية)
   const isNoExamProjectMode = 
     difficulty === 'pro_project_scratch_cert' || 
     difficulty === 'single_project_scratch' || 
     Boolean(blueprint?.isProjectScratchSeries);
+
+  const isLanguageMasteryMode =
+    difficulty === 'lang_a0_to_c2_cert' ||
+    difficulty === 'lang_exam_prep_cert' ||
+    difficulty === 'lang_mega_a0_c2_exam' ||
+    Boolean(blueprint?.isLanguageSeries);
+
+  // ============================================================================
+  // 🔊 دالة تشغيل النطق الصوتي التفاعلي لنصوص الاستماع والمحادثات (Web Speech Synthesis)
+  // ============================================================================
+  const handlePlayInteractiveAudio = (rawScriptText, rate = 1.0) => {
+    if (!('speechSynthesis' in window)) {
+      return alert('متصفحك لا يدعم محرك النطق الصوتي المباشر.');
+    }
+
+    window.speechSynthesis.cancel();
+
+    // تنظيف النص من الرموز الصوتية IPA والترجمة العربية لقراءة الجمل الأجنبية بوضوح
+    const cleanForeignLines = (rawScriptText || '')
+      .split('\n')
+      .map(line => line.replace(/🔊.*$/g, '').replace(/\|.*$/g, '').replace(/\[.*?\]/g, '').trim())
+      .filter(line => line.length > 2 && !/^[\u0600-\u06FF\s\d.,:!؟-]+$/.test(line))
+      .join('. ');
+
+    const textToSpeak = cleanForeignLines || rawScriptText;
+    if (!textToSpeak) return;
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.rate = rate;
+
+    // كشف تلقائي للغة المستهدفة (يابانية، فرنسية، ألمانية، إسبانية، صينية، أو إنجليزية افتراضياً)
+    const combinedContext = (topic + ' ' + targetLanguage + ' ' + (blueprint?.courseTitle || '') + ' ' + textToSpeak).toLowerCase();
+    if (/[\u3040-\u30ff\u4e00-\u9faf]/.test(textToSpeak) || combinedContext.includes('يابان') || combinedContext.includes('jlpt') || combinedContext.includes('japanese')) {
+      utterance.lang = 'ja-JP';
+    } else if (combinedContext.includes('فرنس') || combinedContext.includes('delf') || combinedContext.includes('dalf') || combinedContext.includes('french')) {
+      utterance.lang = 'fr-FR';
+    } else if (combinedContext.includes('ألمان') || combinedContext.includes('goethe') || combinedContext.includes('testdaf') || combinedContext.includes('german')) {
+      utterance.lang = 'de-DE';
+    } else if (combinedContext.includes('إسبان') || combinedContext.includes('dele') || combinedContext.includes('spanish')) {
+      utterance.lang = 'es-ES';
+    } else if (combinedContext.includes('صين') || combinedContext.includes('hsk') || combinedContext.includes('mandarin')) {
+      utterance.lang = 'zh-CN';
+    } else {
+      utterance.lang = 'en-US';
+    }
+
+    utterance.onstart = () => {
+      setIsSpeakingAudio(true);
+      setSpeakingRate(rate);
+    };
+    utterance.onend = () => setIsSpeakingAudio(false);
+    utterance.onerror = () => setIsSpeakingAudio(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleStopInteractiveAudio = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeakingAudio(false);
+    }
+  };
 
   // ==========================================
   // 🏛️ 0. نظام الحفظ المحلي + سجل المشاريع الشامل (Save & History Vault)
@@ -510,9 +590,11 @@ const AcademyLab2 = () => {
       try {
         const parsed = JSON.parse(event.target.result);
         const importedTitle = parsed.courseTitle || parsed.certificateTitle || file.name.replace('.json', '');
-        const resolvedDiff = parsed.isProjectScratchSeries 
-          ? 'pro_project_scratch_cert' 
-          : (parsed.isCertificateSeries ? 'pro_certificate_eli5' : 'crash_eli5');
+        const resolvedDiff = parsed.isLanguageSeries
+          ? 'lang_mega_a0_c2_exam'
+          : parsed.isProjectScratchSeries 
+            ? 'pro_project_scratch_cert' 
+            : (parsed.isCertificateSeries ? 'pro_certificate_eli5' : 'crash_eli5');
 
         setTopic(importedTitle);
         setDifficulty(resolvedDiff);
@@ -552,7 +634,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // 💡 1. محرك الإلهامات الذكي V2 + محرك إلهام المشاريع من الصفر (بزنس & دوبامين)
+  // 💡 1. محرك الإلهامات الذكي V2 + إلهام المشاريع + إلهام اللغات والاختبارات العالمية
   // ==========================================
   const generateIdea = async (type) => {
     setLoadingIdea(true);
@@ -575,7 +657,6 @@ const AcademyLab2 = () => {
     }
   };
 
-  // 🆕 دالة إلهام المشاريع الضخمة (بزنس، دوبامين، ديسكتوب، نماذج AI) عبر المسار الجديد المعزول
   const generateProjectFromScratchIdea = async (projectCategory) => {
     setLoadingIdea(true);
     setDifficulty('pro_project_scratch_cert');
@@ -601,11 +682,46 @@ const AcademyLab2 = () => {
     }
   };
 
+  // 🌍 دالة إلهام شهادات اللغات الأجنبية والاختبارات العالمية (بمنهجية Cambridge × Feynman ELI5)
+  const generateLanguageMasteryIdea = async (langCategory) => {
+    setLoadingIdea(true);
+    if (langCategory === 'exam_prep') {
+      setDifficulty('lang_exam_prep_cert');
+    } else if (langCategory === 'mega_combined') {
+      setDifficulty('lang_mega_a0_c2_exam');
+    } else {
+      setDifficulty('lang_a0_to_c2_cert');
+    }
+    setTopic(`جاري هندسة شهادة اللغة (${targetLanguage}) من الحروف حتى الطلاقة... 🌍`);
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/academy2/lang-cert/suggest-idea', {
+        langCategory,
+        targetLanguage
+      });
+      if (res.data?.success && res.data.idea) {
+        setTopic(res.data.idea);
+      } else {
+        throw new Error('Fallback');
+      }
+    } catch (err) {
+      const langFallbacks = {
+        a0_to_c2: `الشهادة المهنية الشاملة لإتقان اللغة ${targetLanguage}: من تعلم الحروف والأصوات (Pre-A1/A0) عبر مواقف الحياة اليومية حتى طلاقة المتحدث الأصلي (C2 Native)`,
+        exam_prep: `الشهادة المهنية التكتيكية لاجتياز الاختبار العالمي للغة ${targetLanguage} (IELTS Band 8+ / JLPT / DELF): إتقان الاستماع، القراءة السريعة، الكتابة الأكاديمية، والمحادثة`,
+        mega_combined: `الشهادة الإمبراطورية المدمجة للغة ${targetLanguage} (20 كراش كورس): من الحروف والنطق تحت الصفر (Pre-A1) إلى قمة البلاغة (C2 Native) مع المعسكر الكامل لاجتياز الاختبار العالمي`,
+        tech_business_lang: `الشهادة المهنية للغة ${targetLanguage} الخاصة بالعمل والشركات العالمية: من التأسيس اللغوي وحتى احتراف التفاوض والاجتماعات والمقابلات التقنية`
+      };
+      setTopic(langFallbacks[langCategory] || langFallbacks.mega_combined);
+    } finally {
+      setLoadingIdea(false);
+    }
+  };
+
   // ==========================================
-  // 📐 2. هندسة الهيكل V2 (يدعم مسارات الشهادة العادية + المسارات الجديدة لبناء المشاريع بدون اختبارات)
+  // 📐 2. هندسة الهيكل V2 (يدعم الشهادة العادية + المشاريع بدون اختبارات + شهادات اللغات والاختبارات العالمية)
   // ==========================================
   const handleGenerateBlueprint = async () => {
-    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة أو المشروع!');
+    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة أو المشروع أو اللغة!');
     setLoadingBlueprint(true);
     setSelectedLesson(null);
     setForgingStatus('idle');
@@ -613,7 +729,13 @@ const AcademyLab2 = () => {
 
     try {
       let endpoint = 'http://localhost:5000/api/academy2/blueprint1';
-      if (difficulty === 'pro_project_scratch_cert') {
+      if (
+        difficulty === 'lang_a0_to_c2_cert' ||
+        difficulty === 'lang_exam_prep_cert' ||
+        difficulty === 'lang_mega_a0_c2_exam'
+      ) {
+        endpoint = 'http://localhost:5000/api/academy2/lang-cert/blueprint-series';
+      } else if (difficulty === 'pro_project_scratch_cert') {
         endpoint = 'http://localhost:5000/api/academy2/project-cert/blueprint-series';
       } else if (difficulty === 'pro_certificate_eli5') {
         endpoint = 'http://localhost:5000/api/academy2/blueprint-certificate';
@@ -624,6 +746,16 @@ const AcademyLab2 = () => {
         const receivedData = res.data.data;
         if (difficulty === 'pro_project_scratch_cert' || difficulty === 'single_project_scratch') {
           receivedData.isProjectScratchSeries = true;
+        }
+        if (
+          difficulty === 'lang_a0_to_c2_cert' ||
+          difficulty === 'lang_exam_prep_cert' ||
+          difficulty === 'lang_mega_a0_c2_exam'
+        ) {
+          receivedData.isLanguageSeries = true;
+        }
+        if (Array.isArray(receivedData.courses)) {
+          receivedData.courses = reindexCoursesSequence(receivedData.courses);
         }
         setBlueprint(receivedData);
         setActiveProjectId(null);
@@ -657,7 +789,8 @@ const AcademyLab2 = () => {
       const res = await axios.post('http://localhost:5000/api/academy2/enhance-certificate-courses', {
         certificateTitle: certTitle,
         mainAnalogy: blueprint.mainAnalogy,
-        currentCourses: currentCoursesLight
+        currentCourses: currentCoursesLight,
+        isLanguageSeries: isLanguageMasteryMode
       });
 
       if (res.data?.success && Array.isArray(res.data.data?.courses)) {
@@ -719,68 +852,49 @@ const AcademyLab2 = () => {
       const existingText = blueprint.courses.map(c => c.courseTitle + ' ' + (c.description || '')).join(' ').toLowerCase();
       const missingCandidates = [];
 
-      if (!existingText.includes('أمان') && !existingText.includes('security') && !existingText.includes('حماية')) {
+      if (isLanguageMasteryMode) {
         missingCandidates.push({
-          insertRatio: 0.75,
-          courseTitle: 'الأمن السيبراني التطبيقي وحماية الـ APIs والبيانات (بأسلوب قلعة الحصن 🛡️)',
-          description: 'كراش كورس حاسم يسد فجوة الأمان؛ تتعلم فيه حماية تطبيقاتك من الثغرات الشائعة (XSS, CSRF, SQL/NoSQL Injection) وتأمين الجلسات والتشفير بأسلوب مبسط.',
-          difficultyLevel: 'المستوى المتقدم: حماية وتأمين الأنظمة',
+          insertRatio: 0.4,
+          courseTitle: 'معسكر الصوتيات المتقدم، الربط الصوتي (Connected Speech)، وإتقان النبرة الطبيعية',
+          description: 'كراش كورس صوتي مكثف يركز على مخارج الحروف الدقيقة (IPA)، دمج الكلمات في التحدث السريع، والتخلص من التردد أثناء الكلام.',
+          difficultyLevel: 'تدريب صوتي ونطقي مكثف',
           estimatedHours: '16 ساعة',
-          certificateBadge: 'شهادة مهندس أمن التطبيقات وحماية البيانات',
+          certificateBadge: 'شهادة إتقان النطق الطبيعي والصوتيات',
           githubProject: {
-            projectTitle: 'نظام جدار حماية وتوثيق متقدم (Security Shield API)',
-            projectSummary: 'بناء نظام مصادقة وحماية متكامل بمساعدة AI Agent ورفعه على GitHub'
+            projectTitle: 'تسجيل عرض صوتي ومحادثة كاملة بنطق المتحدث الأصلي',
+            projectSummary: 'تطبيق تقنيات الترديد (Shadowing) واجتياز تقييم النطق مع الـ AI Voice Examiner'
           },
-          skills: ['Cybersecurity Basics', 'API Rate Limiting', 'OWASP Top 10', 'Data Encryption', 'Secure Auth']
+          skills: ['IPA Phonetics', 'Connected Speech', 'Intonation & Stress', 'Shadowing Technique']
         });
-      }
-
-      if (!existingText.includes('اختبار') && !existingText.includes('testing') && !existingText.includes('جودة')) {
-        missingCandidates.push({
-          insertRatio: 0.65,
-          courseTitle: 'هندسة الجودة والاختبارات الآلية الذكية (Automated Testing & AI QA 🧪)',
-          description: 'الفرق بين المبرمج الهاوي والمهندس المحترف هو كتابة الاختبارات؛ ستتعلم كيف تجعل الـ AI Agent يكتب معك اختبارات شاملة تضمن عدم تعطل مشروعك أبداً.',
-          difficultyLevel: 'المستوى المتوسط-المتقدم: ضمان الجودة الهندسية',
-          estimatedHours: '15 ساعة',
-          certificateBadge: 'شهادة إتقان هندسة الاختبارات الآلية (QA & Testing)',
-          githubProject: {
-            projectTitle: 'منظومة اختبارات آلية متكاملة لتطبيق إنتاجي',
-            projectSummary: 'كتابة Unit & Integration Tests بمساعدة AI Agent وتوثيقها على GitHub'
-          },
-          skills: ['Automated Testing', 'TDD', 'AI Bug Hunting', 'Debugging Mastery', 'Clean Architecture']
-        });
-      }
-
-      if (!existingText.includes('saas') && !existingText.includes('دفع') && !existingText.includes('stripe') && !existingText.includes('ربح')) {
-        missingCandidates.push({
-          insertRatio: 0.92,
-          courseTitle: 'تحويل المشاريع إلى منتجات مربحة (Micro-SaaS & Payment Gateways 💰)',
-          description: 'كيف تحول ما بنيته في هذه الشهادة إلى مصدر دخل؟ شرح مبسط لربط بوابات الدفع، إدارة الاشتراكات الشهرية، وإطلاق منتجك الرقمي للعملاء.',
-          difficultyLevel: 'المستوى الاحترافي: هندسة المنتجات والربح',
-          estimatedHours: '18 ساعة',
-          certificateBadge: 'شهادة مطور ومؤسس منتجات Micro-SaaS',
-          githubProject: {
-            projectTitle: 'منصة SaaS متكاملة مع نظام اشتراكات ولوحة تحكم',
-            projectSummary: 'بناء وإطلاق قالب SaaS جاهز للبيع بمساعدة AI Agent على GitHub'
-          },
-          skills: ['Micro-SaaS Architecture', 'Payment Integration', 'Subscription Logic', 'Product Launch', 'Monetization']
-        });
-      }
-
-      if (missingCandidates.length === 0) {
         missingCandidates.push({
           insertRatio: 0.85,
-          courseTitle: 'تصميم الأنظمة العملاقة والتوسع المليوني (System Design & Scalability 🚀)',
-          description: 'كيف تصمم نظاماً يتحمل ملايين المستخدمين دون أن ينهار؟ شرح الكاش (Caching)، موازنة الأحمال، والطوابير بأسلوب قصصي مبسط.',
-          difficultyLevel: 'مستوى S-Rank: معمارية الأنظمة الكبرى',
+          courseTitle: 'محاكي الاختبار العالمي الكامل (Full Mock Exams: Listening, Reading, Writing & Speaking)',
+          description: 'كراش كورس تطبيقي يحاكي بيئة الاختبار الرسمي تحت ضغط الوقت مع تفكيك كل سؤال واستراتيجيات حصد أعلى الدرجات.',
+          difficultyLevel: 'المستوى الاحترافي للاختبارات الدولية',
           estimatedHours: '20 ساعة',
-          certificateBadge: 'شهادة معماري الأنظمة عالية الأداء (System Architect)',
+          certificateBadge: 'شهادة الجاهزية القصوى للاختبار العالمي',
           githubProject: {
-            projectTitle: 'محاكي نظام موزع عالي السرعة مع Caching',
-            projectSummary: 'بناء بنية عالية الأداء بمساعدة AI Agent ورفعها على GitHub'
+            projectTitle: 'اجتياز 3 اختبارات محاكاة شاملة (Full Mock Tests)',
+            projectSummary: 'إتمام اختبارات الاستماع والقراءة والكتابة والمحادثة مع تصحيح تفصيلي بالذكاء الاصطناعي'
           },
-          skills: ['System Design', 'Redis Caching', 'Load Balancing', 'High Availability', 'Scalability']
+          skills: ['Time Management', 'Academic Writing Task 1 & 2', 'Speaking Band 8+ Strategies', 'Active Listening']
         });
+      } else {
+        if (!existingText.includes('أمان') && !existingText.includes('security') && !existingText.includes('حماية')) {
+          missingCandidates.push({
+            insertRatio: 0.75,
+            courseTitle: 'الأمن السيبراني التطبيقي وحماية الـ APIs والبيانات (بأسلوب قلعة الحصن 🛡️)',
+            description: 'كراش كورس حاسم يسد فجوة الأمان؛ تتعلم فيه حماية تطبيقاتك من الثغرات الشائعة (XSS, CSRF, SQL/NoSQL Injection) وتأمين الجلسات والتشفير بأسلوب مبسط.',
+            difficultyLevel: 'المستوى المتقدم: حماية وتأمين الأنظمة',
+            estimatedHours: '16 ساعة',
+            certificateBadge: 'شهادة مهندس أمن التطبيقات وحماية البيانات',
+            githubProject: {
+              projectTitle: 'نظام جدار حماية وتوثيق متقدم (Security Shield API)',
+              projectSummary: 'بناء نظام مصادقة وحماية متكامل بمساعدة AI Agent ورفعه على GitHub'
+            },
+            skills: ['Cybersecurity Basics', 'API Rate Limiting', 'OWASP Top 10', 'Data Encryption', 'Secure Auth']
+          });
+        }
       }
 
       let workingCourses = blueprint.courses.map((c) => ({
@@ -799,7 +913,7 @@ const AcademyLab2 = () => {
           difficultyLevel: cand.difficultyLevel,
           estimatedHours: cand.estimatedHours,
           certificateBadge: cand.certificateBadge,
-          connectionToPrevious: `يسد الفجوة الهندسية بعد (${prevCourse?.courseTitle || 'الكورس السابق'}) ليضمن جاهزيتك لسوق العمل الاحترافي.`,
+          connectionToPrevious: `يسد الفجوة المهارية بعد (${prevCourse?.courseTitle || 'الكورس السابق'}) ليضمن جاهزيتك الكاملة.`,
           githubProject: cand.githubProject,
           skills: cand.skills,
           isBlueprintReady: false,
@@ -820,7 +934,7 @@ const AcademyLab2 = () => {
       setBlueprint(updatedBlueprint);
       setAiArchitectReport({
         type: 'expansion',
-        summary: `قام المهندس الذكي بفحص الشهادة المهنية وصقل تسلسلها، واكتشف (${addedNames.length}) كراش كورسات جوهرية كانت ناقصة فقام بحقنها في مواقعها المنطقية داخل السلسلة!`,
+        summary: `قام المهندس الذكي بفحص الشهادة المهنية وصقل تسلسلها، وأضاف (${addedNames.length}) كراش كورسات جوهرية في مواقعها المنطقية داخل السلسلة!`,
         addedCourses: addedNames
       });
       await handleSaveProjectToHistory(false, true, updatedBlueprint);
@@ -903,42 +1017,24 @@ const AcademyLab2 = () => {
       }
       throw new Error('Fallback to smart local placement');
     } catch (err) {
-      const lower = targetCustomTopic.toLowerCase();
-      let autoIndex = Math.max(1, blueprint.courses.length - 1);
-      let reason = 'تم وضعه في المرحلة المتقدمة قبل كورس التخرج النهائي ليبني الطالب على كافة الأساسيات السابقة.';
-
-      if (lower.includes('مقدمة') || lower.includes('أساسيات') || lower.includes('مدخل') || lower.includes('html') || lower.includes('مبتدئ')) {
-        autoIndex = Math.min(1, blueprint.courses.length);
-        reason = 'تم وضعه في بداية المسار التأسيسي لأنه يمثل حجر زاوية مبكراً للطالب.';
-      } else if (lower.includes('git') || lower.includes('linux') || lower.includes('terminal') || lower.includes('بيئة')) {
-        autoIndex = Math.min(2, blueprint.courses.length);
-        reason = 'تم وضعه بعد التأسيس الأولي مباشرة ليتقن الطالب أدوات العمل قبل الغوص في المشاريع الكبرى.';
-      } else if (lower.includes('react') || lower.includes('واجهة') || lower.includes('tailwind') || lower.includes('frontend')) {
-        autoIndex = Math.floor(blueprint.courses.length * 0.45);
-        reason = 'تم وضعه في منتصف السلسلة (مرحلة بناء الواجهات والتفاعل) ليتناغم مع التسلسل البيداغوجي.';
-      } else if (lower.includes('database') || lower.includes('قاعدة بيانات') || lower.includes('sql') || lower.includes('mongo') || lower.includes('api') || lower.includes('node')) {
-        autoIndex = Math.floor(blueprint.courses.length * 0.65);
-        reason = 'تم وضعه في مرحلة هندسة الخوادم والبيانات ليربط الواجهات بالمنطق الخلفي.';
-      }
-
-      const finalIndex = customPlacementMode === 'auto' ? autoIndex : parseInt(customPlacementMode, 10);
+      const finalIndex = customPlacementMode === 'auto' ? Math.max(1, blueprint.courses.length - 1) : parseInt(customPlacementMode, 10);
       const prevCourse = finalIndex > 0 ? blueprint.courses[finalIndex - 1] : null;
 
       const craftedCourse = {
-        courseTitle: `${targetCustomTopic} (تطبيق وبناء عملي خطوة بخطوة 🛠️)`,
-        courseDescription: `كراش كورس مخصص يأخذك خطوة بخطوة لبناء ودمج (${targetCustomTopic}) داخل المشروع بالاستعانة بـ AI Agent.`,
-        description: `كراش كورس مخصص يأخذك خطوة بخطوة لبناء ودمج (${targetCustomTopic}) داخل المشروع بالاستعانة بـ AI Agent.`,
+        courseTitle: `${targetCustomTopic}`,
+        courseDescription: `كراش كورس مخصص يأخذك خطوة بخطوة لإتقان (${targetCustomTopic}) وتطبيقه عملياً ضمن مسار الشهادة المهنية.`,
+        description: `كراش كورس مخصص يأخذك خطوة بخطوة لإتقان (${targetCustomTopic}) وتطبيقه عملياً ضمن مسار الشهادة المهنية.`,
         difficultyLevel: finalIndex < 3 ? 'المستوى التأسيسي المبسط' : 'المستوى التطبيقي المتقدم',
         estimatedHours: '16 ساعة',
         certificateBadge: `شهادة إتقان: ${targetCustomTopic}`,
         connectionToPrevious: prevCourse 
-          ? `يبني مباشرة على ما أنجزناه في (${prevCourse.courseTitle}) ليضيف (${targetCustomTopic}) إلى المشروع.` 
+          ? `يبني مباشرة على ما أنجزناه في (${prevCourse.courseTitle}) ليضيف (${targetCustomTopic}).` 
           : 'نقطة انطلاق تأسيسية مميزة في بداية الشهادة المهنية.',
         githubProject: {
           projectTitle: `مشروع تطبيقي متكامل في ${targetCustomTopic}`,
-          projectSummary: `بناء ودمج (${targetCustomTopic}) خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.`
+          projectSummary: `تطبيق عملي شامل لـ (${targetCustomTopic}) خطوة بخطوة بمساعدة الذكاء الاصطناعي.`
         },
-        skills: [targetCustomTopic, 'Practical Implementation', 'AI-Assisted Coding', 'GitHub Portfolio'],
+        skills: [targetCustomTopic, 'Practical Implementation', 'AI-Assisted Learning'],
         isBlueprintReady: false,
         isForgedComplete: false,
         isNewlyAdded: true,
@@ -958,7 +1054,7 @@ const AcademyLab2 = () => {
       setCustomCourseTitle('');
       setAiArchitectReport({
         type: 'custom_injection',
-        summary: reason,
+        summary: `تمت إضافة الكراش كورس في الموضع (${finalIndex + 1}) وإعادة ترقيم السلسلة تلقائياً.`,
         addedCourses: [`الكراش كورس ${finalIndex + 1}: ${craftedCourse.courseTitle}`]
       });
       await handleSaveProjectToHistory(false, true, updatedBlueprint);
@@ -1143,7 +1239,7 @@ const AcademyLab2 = () => {
         connectionToPrevious: c.connectionToPrevious || (idx === 0 ? 'نقطة الانطلاق من الصفر المطلق' : `يبني مباشرة على مهارات الكراش كورس ${idx}`),
         githubProject: c.githubProject || {
           projectTitle: `مشروع تطبيقي متكامل: ${c.courseTitle}`,
-          projectSummary: 'بناء المشروع خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub'
+          projectSummary: 'تطبيق عملي شامل بمساعدة الذكاء الاصطناعي'
         },
         skills: c.skills || [],
         unitsCount: unitsList.length || 8,
@@ -1154,8 +1250,8 @@ const AcademyLab2 = () => {
 
     let masterDossier = {
       certificateTitle: certTitle,
-      executiveVision: `${blueprint.courseDescription || ''}\n\nصُممت هذه الشهادة المهنية الخارقة لتكون دليلاً هندسياً وعملياً متكاملاً؛ حيث تم تفكيك التخصص أو المشروع بالكامل إلى (${blueprint.courses.length}) كراش كورس متسلسل يخرج الطالب من كل مرحلة فيه بكود إنتاجي حقيقي مرفوع على GitHub بمساعدة وكلاء الذكاء الاصطناعي (AI Agents).`,
-      mainAnalogy: blueprint.mainAnalogy || 'تشبيه قصصي ومعماري متكامل يربط جميع مراحل البناء من أول سطر كود حتى الإطلاق.',
+      executiveVision: `${blueprint.courseDescription || ''}\n\nصُممت هذه الشهادة المهنية الخارقة لتكون دليلاً عملياً متكاملاً؛ حيث تم تفكيك المسار بالكامل إلى (${blueprint.courses.length}) كراش كورس متسلسل يخرج الطالب من كل مرحلة فيه بإتقان عملي وتطبيقي حقيقي.`,
+      mainAnalogy: blueprint.mainAnalogy || 'منهجية متكاملة تربط جميع المراحل من التأسيس حتى القمة الاحترافية.',
       timePlan: {
         totalHours: `${totalHoursNum} ساعة تدريبية وتطبيقية`,
         totalCourses: blueprint.courses.length,
@@ -1166,29 +1262,26 @@ const AcademyLab2 = () => {
       },
       careerAndFinancialROI: {
         jobRoles: blueprint.superCertificate?.careerOutcomes || [
-          'Full-Stack Software Engineer',
-          'AI-Augmented Application Developer',
-          'Backend & Cloud Solutions Architect',
-          'Freelance Technical Consultant & SaaS Builder'
+          'International Remote Professional',
+          'Global Exam Top Scorer (IELTS / TOEFL / JLPT)',
+          'Full-Stack & AI Specialist'
         ],
         freelanceServices: [
-          'بناء وتطوير تطبيقات ومنصات ويب وديسكتوب متكاملة للعملاء والشركات ($800 - $3,500 للمشروع).',
-          'ربط الأنظمة بـ APIs ووكلاء الذكاء الاصطناعي لأتمتة المهام البرمجية بسرعة 10x.',
-          'إعادة هيكلة قواعد البيانات وتحسين أداء التطبيقات ونشرها سحابياً.'
+          'العمل مع الشركات والعملاء الدوليين بطلاقة وثقة كاملة.',
+          'اجتياز متطلبات الهجرة والمنح الجامعية والشركات العالمية.'
         ],
         saasOpportunities: [
-          'إطلاق المشروع الكامل الذي بنيته في هذه الشهادة كمنتج SaaS جاهز للاشتراكات الشهرية.',
-          'بيع نسخ مخصصة من النظام للشركات والمؤسسات.'
+          'توسيع نطاق مشاريعك وخدماتك للسوق العالمي متعدد اللغات.'
         ]
       },
       allSkills: Array.from(allSkillsSet),
       detailedCoursesGuide: coursesSummary.map(cs => ({
         ...cs,
-        deepExplanation: `${cs.description} — في هذه المرحلة رقم (${cs.courseOrder}) يبني الطالب (${cs.unitsCount} وحدات تفصيلية تضم ${cs.lessonsCount} خطوة برمجية)، مع أوامر AI Agent الجاهزة والأكواد الكاملة.`,
+        deepExplanation: `${cs.description} — في هذه المرحلة رقم (${cs.courseOrder}) يدرس ويطبق الطالب (${cs.unitsCount} وحدات تفصيلية تضم ${cs.lessonsCount} درساً وتمرينا).`,
         keyTakeaways: cs.unitsList.length > 0 
           ? cs.unitsList.slice(0, 6) 
-          : ['هيكلة الملفات والمعمارية', 'كتابة الكود مع AI Agent', 'ربط الواجهات والخوادم', 'رفع التحديثات على GitHub'],
-        projectAndAiRole: `يقوم الطالب في هذه المرحلة ببناء (${cs.githubProject.projectTitle}) وتوجيه الأوامر الاحترافية (Prompts) لـ AI Agent لكتابة ومراجعة الكود وربطه بالملفات السابقة.`
+          : ['إتقان المفاهيم الأساسية', 'التدريب الصوتي والعملي', 'تطبيقات الذكاء الاصطناعي'],
+        projectAndAiRole: `يقوم الطالب في هذه المرحلة بإنجاز (${cs.githubProject.projectTitle}) بالتعاون مع المساعد الذكي.`
       }))
     };
 
@@ -1314,7 +1407,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // 🗺️ 2.5 هندسة وحدات كراش كورس واحد (يختار تلقائياً مسار المشاريع بدون اختبارات أو المسار العادي)
+  // 🗺️ 2.5 هندسة وحدات كراش كورس واحد (يختار تلقائياً مسار اللغات، أو مسار المشاريع، أو المسار العادي)
   // ==========================================
   const handleGenerateSingleCrashBlueprint = async (cIdx, currentBlueprintState = blueprint) => {
     const targetCert = currentBlueprintState || blueprint;
@@ -1327,10 +1420,19 @@ const AcademyLab2 = () => {
     setActiveCourseIndex(cIdx);
     setForgingStatus('generating_sub_blueprint');
 
-    const isScratchProject = targetCert.isProjectScratchSeries || difficulty === 'pro_project_scratch_cert';
-    const targetEndpoint = isScratchProject
-      ? 'http://localhost:5000/api/academy2/project-cert/blueprint-phase-units'
-      : 'http://localhost:5000/api/academy2/blueprint-crash-course';
+    const isLangCert = Boolean(
+      targetCert.isLanguageSeries ||
+      difficulty === 'lang_a0_to_c2_cert' ||
+      difficulty === 'lang_exam_prep_cert' ||
+      difficulty === 'lang_mega_a0_c2_exam'
+    );
+    const isScratchProject = Boolean(targetCert.isProjectScratchSeries || difficulty === 'pro_project_scratch_cert');
+
+    const targetEndpoint = isLangCert
+      ? 'http://localhost:5000/api/academy2/lang-cert/blueprint-course-units'
+      : isScratchProject
+        ? 'http://localhost:5000/api/academy2/project-cert/blueprint-phase-units'
+        : 'http://localhost:5000/api/academy2/blueprint-crash-course';
 
     try {
       const res = await axios.post(targetEndpoint, {
@@ -1385,7 +1487,7 @@ const AcademyLab2 = () => {
   };
 
   // ==========================================
-  // ✍️ 4. تأليف الدروس (إذا كان مشروعاً من الصفر: يؤلف خطوات البناء والأكواد وAI Agent فقط بدون أي اختبارات!)
+  // ✍️ 4. تأليف الدروس (يدعم: مسار اللغات بالصوتيات + مسار المشاريع بدون اختبارات + المسار الأكاديمي)
   // ==========================================
   const handleForgeCrashCourseLessons = async (cIdx, customBlueprintState = null) => {
     const currentState = customBlueprintState || blueprint;
@@ -1397,32 +1499,45 @@ const AcademyLab2 = () => {
       return null;
     }
 
+    const isLangCert = Boolean(
+      currentState.isLanguageSeries ||
+      difficulty === 'lang_a0_to_c2_cert' ||
+      difficulty === 'lang_exam_prep_cert' ||
+      difficulty === 'lang_mega_a0_c2_exam'
+    );
     const isScratchProject = Boolean(currentState.isProjectScratchSeries || difficulty === 'pro_project_scratch_cert');
 
     let totalSteps = 0;
     targetCourse.sections.forEach(sec => {
-      totalSteps += sec.lessons.length;
+      const rawLessons = isScratchProject
+        ? (sec.lessons || []).filter(l => l.type !== 'red_gate' && l.type !== 'boss_quiz' && l.type !== 'unit_exam')
+        : (sec.lessons || []);
+      totalSteps += rawLessons.length;
       if (!isScratchProject) {
-        totalSteps += Math.floor(sec.lessons.length / 2); // بوابات الزعماء (فقط في الكورسات العادية)
-        totalSteps += 1; // اختبار نهاية الوحدة (فقط في الكورسات العادية)
+        totalSteps += Math.floor(rawLessons.length / 2);
+        totalSteps += 1;
       }
     });
-    totalSteps += 1; // خطوة توليد ملخصات الوحدات في النهاية
+    totalSteps += 1;
 
     setActiveCourseIndex(cIdx);
     setForgingStatus('forging');
     let completedCount = 0;
     let updatedCert = JSON.parse(JSON.stringify(currentState));
 
-    const contextualCourseTopic = `${targetCourse.courseTitle} (المرحلة ${cIdx + 1} من: ${updatedCert.courseTitle || updatedCert.certificateTitle} | الربط السابق: ${targetCourse.connectionToPrevious || 'بداية المشروع'})`;
+    const contextualCourseTopic = `${targetCourse.courseTitle} (الكورس ${cIdx + 1} من: ${updatedCert.courseTitle || updatedCert.certificateTitle} | الربط السابق: ${targetCourse.connectionToPrevious || 'البداية'})`;
 
     for (let sIdx = 0; sIdx < updatedCert.courses[cIdx].sections.length; sIdx++) {
       const section = updatedCert.courses[cIdx].sections[sIdx];
+      const baseLessonsToForge = isScratchProject
+        ? (section.lessons || []).filter(l => l.type !== 'red_gate' && l.type !== 'boss_quiz' && l.type !== 'unit_exam')
+        : (section.lessons || []);
+
       let newLessonsArray = [];
       let lessonsSinceLastBoss = 0;
 
-      for (let lIdx = 0; lIdx < section.lessons.length; lIdx++) {
-        const lesson = section.lessons[lIdx];
+      for (let lIdx = 0; lIdx < baseLessonsToForge.length; lIdx++) {
+        const lesson = baseLessonsToForge[lIdx];
         setForgeProgress({ 
           current: completedCount, 
           total: totalSteps, 
@@ -1430,18 +1545,19 @@ const AcademyLab2 = () => {
         });
 
         try {
-          // توجيه الطلب للمسار الجديد المعزول إذا كنا في نمط "بناء مشروع بدون اختبارات"
-          const lessonEndpoint = isScratchProject
-            ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
-            : 'http://localhost:5000/api/academy2/forge-lesson';
+          const lessonEndpoint = isLangCert
+            ? 'http://localhost:5000/api/academy2/lang-cert/forge-language-lesson'
+            : isScratchProject
+              ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
+              : 'http://localhost:5000/api/academy2/forge-lesson';
 
           const res = await axios.post(lessonEndpoint, {
             courseTopic: contextualCourseTopic,
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
-            lessonCategory: lesson.lessonCategory || 'code',
+            lessonCategory: lesson.lessonCategory || (isLangCert ? 'language_mastery' : 'code'),
             isProjectUnit: section.isProjectUnit || isScratchProject,
-            difficulty: isScratchProject ? 'pro_project_scratch_cert' : 'crash_eli5'
+            difficulty: isLangCert ? difficulty : (isScratchProject ? 'pro_project_scratch_cert' : 'crash_eli5')
           });
 
           if (res.data.success) {
@@ -1466,17 +1582,20 @@ const AcademyLab2 = () => {
             });
           }
 
-          // 🚫 إذا كان نمط "شهادة بناء المشروع بدون اختبارات" نتخطى بوابات الزعماء والبوابات الحمراء تماماً!
           if (!isScratchProject && lessonsSinceLastBoss === 2) {
             const prevLesson1 = newLessonsArray[newLessonsArray.length - 2];
             const prevLesson2 = newLessonsArray[newLessonsArray.length - 1];
 
-            const hasCode = (prevLesson1.codeSnippet && prevLesson1.codeSnippet.length > 10) || 
-                            (prevLesson2.codeSnippet && prevLesson2.codeSnippet.length > 10) ||
-                            prevLesson1.codingPractice?.hasPractice ||
-                            prevLesson2.codingPractice?.hasPractice;
+            const hasCode = !isLangCert && (
+              (prevLesson1.codeSnippet && prevLesson1.codeSnippet.length > 10) || 
+              (prevLesson2.codeSnippet && prevLesson2.codeSnippet.length > 10) ||
+              prevLesson1.codingPractice?.hasPractice ||
+              prevLesson2.codingPractice?.hasPractice
+            );
 
-            const gateType = hasCode ? "البوابة الحمراء (Red Gate)" : "بوابة الزعيم (Boss Dungeon)";
+            const gateType = isLangCert
+              ? "بوابة التحدي اللغوي والسمعي (Language Boss Check)"
+              : (hasCode ? "البوابة الحمراء (Red Gate)" : "بوابة الزعيم (Boss Dungeon)");
             const apiUrl = hasCode ? 'http://localhost:5000/api/academy2/forge-red-gate' : 'http://localhost:5000/api/academy2/forge-boss';
 
             setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: `[كورس ${cIdx + 1}] تجهيز ${gateType}...` });
@@ -1492,7 +1611,9 @@ const AcademyLab2 = () => {
                 const bossQuestions = bossRes.data.data.bossQuiz || [];
                 newLessonsArray.push({
                   title: gateType,
-                  description: hasCode ? "بوابة حمراء مليئة بتحديات الأكواد الدامية. كسر البوابة يتطلب نسبة 70%." : "اختبار شامل لكسر البوابة. يتطلب نسبة نجاح 70% للمرور.",
+                  description: isLangCert
+                    ? "تحدي لغوي يختبر إتقانك للقواعد والمفردات والصوتيات قبل التقدم."
+                    : (hasCode ? "بوابة حمراء مليئة بتحديات الأكواد الدامية. كسر البوابة يتطلب نسبة 70%." : "اختبار شامل لكسر البوابة. يتطلب نسبة نجاح 70% للمرور."),
                   type: hasCode ? "red_gate" : "boss_quiz",
                   content: "", codeSnippet: "", bossQuiz: bossQuestions, isForged: true
                 });
@@ -1505,12 +1626,11 @@ const AcademyLab2 = () => {
         } catch (error) { console.error(`خطأ في تأليف درس: ${lesson.title}`); }
       }
 
-      // 🚫 إذا كان نمط "شهادة بناء المشروع بدون اختبارات" نتخطى الاختبار النهائي للوحدة أيضاً!
       if (!isScratchProject) {
         setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: `[كورس ${cIdx + 1}] تجهيز الاختبار النهائي للوحدة ${sIdx + 1}...` });
 
         try {
-          const unitLessonsTitles = section.lessons.map(l => l.title).join('، ');
+          const unitLessonsTitles = baseLessonsToForge.map(l => l.title).join('، ');
           const unitExamRes = await axios.post('http://localhost:5000/api/academy2/forge-unit-exam', {
             courseTopic: contextualCourseTopic,
             sectionName: section.sectionName,
@@ -1520,7 +1640,9 @@ const AcademyLab2 = () => {
           if (unitExamRes.data.success) {
             newLessonsArray.push({
               title: unitExamRes.data.data.examTitle || `🏆 الاختبار النهائي: ${section.sectionName}`,
-              description: "اختبار نهائي مختلط (نظري + كودي + تحدي كتابة كود) لاجتياز هذه الوحدة بالكامل.",
+              description: isLangCert
+                ? "اختبار شامل للوحدة اللغوية (قواعد + مفردات + صوتيات + مهمة كتابية)."
+                : "اختبار نهائي مختلط (نظري + كودي + تحدي كتابة كود) لاجتياز هذه الوحدة بالكامل.",
               type: "unit_exam", content: "", codeSnippet: "",
               bossQuiz: unitExamRes.data.data.bossQuiz || [],
               codingPractice: unitExamRes.data.data.unitCodingChallenge || null,
@@ -1535,7 +1657,6 @@ const AcademyLab2 = () => {
       setBlueprint({ ...updatedCert });
     }
 
-    // توليد ملخصات جميع الوحدات لهذا الكراش كورس دفعة واحدة وحفظها داخله
     setForgeProgress({ 
       current: completedCount, 
       total: totalSteps, 
@@ -1551,9 +1672,11 @@ const AcademyLab2 = () => {
 
     await handleSaveProjectToHistory(false, true, updatedCert);
     triggerToast(
-      isScratchProject 
-        ? `🏗️ اكتمل تأليف خطوات وأكواد المرحلة ${cIdx + 1} (بدون اختبارات) وتم حفظها في السجل!` 
-        : `✅ اكتمل تأليف الكورس ${cIdx + 1} مع ملخصات جميع وحداته وتم حفظه في السجل!`
+      isLangCert
+        ? `🌍 اكتمل تأليف الكورس اللغوي ${cIdx + 1} (مع نصوص الاستماع والصوتيات والاختبارات) وتم حفظه في السجل!`
+        : isScratchProject 
+          ? `🏗️ اكتمل تأليف خطوات وأكواد المرحلة ${cIdx + 1} (بدون اختبارات) وتم حفظها في السجل!` 
+          : `✅ اكتمل تأليف الكورس ${cIdx + 1} مع ملخصات جميع وحداته وتم حفظه في السجل!`
     );
     return updatedCert;
   };
@@ -1588,7 +1711,7 @@ const AcademyLab2 = () => {
     }
   };
 
-  // تأليف الكورس المنفرد (يدعم أيضاً نمط المشروع بدون اختبارات)
+  // تأليف الكورس المنفرد
   const handleForgeAllLessons = async () => {
     if (!blueprint || !blueprint.blueprint) return;
 
@@ -1779,7 +1902,7 @@ const AcademyLab2 = () => {
       const res = await axios.post('http://localhost:5001/api/courses/auto-import', {
         courseTitle: `${courseObj.coursePrefix || `الكورس ${cIdx + 1}`}: ${courseObj.courseTitle}`,
         courseDescription: enrichedDescription,
-        difficulty: courseObj.difficultyLevel || 'بناء مشروع متكامل من الصفر (مع AI Agent)',
+        difficulty: courseObj.difficultyLevel || 'مسار احترافي متكامل',
         certificateMeta: {
           parentCertificateTitle: parentCertTitle,
           parentCertificateDescription: blueprint.masterDossier?.executiveVision || blueprint.courseDescription,
@@ -1827,7 +1950,7 @@ const AcademyLab2 = () => {
         await axios.post('http://localhost:5001/api/courses/auto-import', {
           courseTitle: `${courseObj.coursePrefix || `الكورس ${i + 1}`}: ${courseObj.courseTitle}`,
           courseDescription: enrichedDescription,
-          difficulty: courseObj.difficultyLevel || 'بناء مشروع متكامل من الصفر (مع AI Agent)',
+          difficulty: courseObj.difficultyLevel || 'مسار احترافي متكامل',
           certificateMeta: {
             parentCertificateTitle: parentCertTitle,
             parentCertificateDescription: blueprint.masterDossier?.executiveVision || blueprint.courseDescription,
@@ -1893,13 +2016,21 @@ const AcademyLab2 = () => {
     return true;
   });
 
-  const quickGapSuggestions = [
-    'أمن التطبيقات وحماية الـ APIs (Cybersecurity)',
-    'الاختبارات الآلية وضمان الجودة (Automated Testing)',
-    'بناء وكلاء الذكاء الاصطناعي (AI Agents & MCP)',
-    'بوابات الدفع وتحويل المشروع لـ SaaS (Stripe & Billing)',
-    'الحاويات والنشر السحابي (Docker & CI/CD)'
-  ];
+  const quickGapSuggestions = isLanguageMasteryMode
+    ? [
+        'الصوتيات ومخارج الحروف والربط الصوتي (IPA & Connected Speech)',
+        'تكتيكات الاستماع السريع وفهم اللهجات (Listening Mastery)',
+        'هندسة المقالات الأكاديمية (Writing Task 1 & Task 2 Band 8+)',
+        'محاكاة مقابلة التحدث الرسمية (Speaking Mock Exams)',
+        'الاختبارات التجريبية الشاملة تحت ضغط الوقت (Full Mock Tests)'
+      ]
+    : [
+        'أمن التطبيقات وحماية الـ APIs (Cybersecurity)',
+        'الاختبارات الآلية وضمان الجودة (Automated Testing)',
+        'بناء وكلاء الذكاء الاصطناعي (AI Agents & MCP)',
+        'بوابات الدفع وتحويل المشروع لـ SaaS (Stripe & Billing)',
+        'الحاويات والنشر السحابي (Docker & CI/CD)'
+      ];
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200 p-8" dir="rtl">
@@ -1919,7 +2050,7 @@ const AcademyLab2 = () => {
             <BrainCircuit className="text-indigo-500" size={40} /> مختبر الأكاديمية <span className="text-indigo-500 bg-indigo-500/10 text-lg px-3 py-1 rounded-lg border border-indigo-500/20">V2 (SUPER ARCHITECT)</span>
           </h1>
           <p className="text-slate-400 mt-2 font-bold">
-            مصنع الشهادات المهنية الخارقة + شهادات بناء المشاريع الكاملة من الصفر (مع AI Agent وبدون اختبارات 🛠️)
+            مصنع الشهادات المهنية الخارقة + شهادات بناء المشاريع من الصفر 🛠️ + أكاديمية اللغات والاختبارات العالمية (A0-C2 & IELTS 🌍)
           </p>
         </div>
 
@@ -2037,8 +2168,8 @@ const AcademyLab2 = () => {
               استلهام فكرة "شهادة مهنية خارقة" (9 - 15+ كراش كورس)
             </button>
 
-            {/* 🆕🏗️ صندوق إلهام المشاريع العملاقة من الصفر للنهاية (بدون اختبارات - YouTube Build Style) */}
-            <div className="bg-slate-950/90 border-2 border-emerald-500/30 rounded-2xl p-3.5 mb-4 space-y-2.5">
+            {/* 🏗️ صندوق إلهام المشاريع العملاقة من الصفر للنهاية (بدون اختبارات) */}
+            <div className="bg-slate-950/90 border-2 border-emerald-500/30 rounded-2xl p-3.5 mb-3 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
                   <Terminal size={14} /> استلهام شهادة "بناء مشروع ضخم من الصفر" (بدون اختبارات):
@@ -2087,6 +2218,65 @@ const AcademyLab2 = () => {
               </div>
             </div>
 
+            {/* 🌍 صندوق إلهام شهادات اللغات الأجنبية والاختبارات العالمية (Cambridge × Feynman ELI5) */}
+            <div className="bg-slate-950/90 border-2 border-purple-500/35 rounded-2xl p-3.5 mb-4 space-y-2.5 shadow-[0_0_25px_rgba(168,85,247,0.1)]">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
+                  <Globe size={14} className="text-amber-400" /> أكاديمية اللغات (من الحروف A0 إلى C2 Native):
+                </span>
+                <select
+                  value={targetLanguage}
+                  onChange={(e) => setTargetLanguage(e.target.value)}
+                  className="bg-slate-900 border border-purple-500/40 text-purple-200 text-[11px] font-bold rounded-lg px-2.5 py-1 outline-none cursor-pointer"
+                >
+                  <option value="الإنجليزية (English - IELTS/TOEFL)">🇬🇧 الإنجليزية (English)</option>
+                  <option value="اليابانية (Japanese - Hiragana/Kanji & JLPT)">🇯🇵 اليابانية (Japanese)</option>
+                  <option value="الفرنسية (French - DELF/DALF)">🇫🇷 الفرنسية (French)</option>
+                  <option value="الألمانية (German - Goethe/TestDaF)">🇩🇪 الألمانية (German)</option>
+                  <option value="الإسبانية (Spanish - DELE)">🇪🇸 الإسبانية (Spanish)</option>
+                  <option value="الصينية (Mandarin - HSK)">🇨🇳 الصينية (Mandarin)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => generateLanguageMasteryIdea('a0_to_c2')}
+                  className="bg-slate-900 hover:bg-purple-950/60 border border-slate-800 hover:border-purple-500/50 text-slate-300 hover:text-purple-200 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Headphones size={13} className="text-purple-400 shrink-0" />
+                  <span>🗣️ من الحروف A0 إلى C2 Native</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateLanguageMasteryIdea('exam_prep')}
+                  className="bg-slate-900 hover:bg-amber-950/60 border border-slate-800 hover:border-amber-500/50 text-slate-300 hover:text-amber-200 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Trophy size={13} className="text-amber-400 shrink-0" />
+                  <span>🎯 معسكر IELTS / JLPT / DELF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateLanguageMasteryIdea('mega_combined')}
+                  className="bg-slate-900 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Sparkles size={13} className="text-rose-400 shrink-0" />
+                  <span>👑 الشهادة الإمبراطورية (20+ كورس)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => generateLanguageMasteryIdea('tech_business_lang')}
+                  className="bg-slate-900 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 text-slate-300 hover:text-indigo-200 text-[11px] font-bold py-2 px-2.5 rounded-xl transition-all flex items-center gap-1.5 text-right"
+                >
+                  <Mic size={13} className="text-indigo-400 shrink-0" />
+                  <span>💼 لغة الشركات والمبرمجين</span>
+                </button>
+              </div>
+            </div>
+
             <button 
               onClick={handleBundleExistingPlatformCourses}
               disabled={bundlingExisting}
@@ -2098,14 +2288,17 @@ const AcademyLab2 = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-400 mb-2">الموضوع أو المشروع المراد تدريسه وبناؤه</label>
-                <input type="text" placeholder="مثال: شهادة مهنية في بناء مشروع Full-Stack Multi-Seller E-Commerce" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white transition-colors" value={topic} onChange={(e) => setTopic(e.target.value)} />
+                <label className="block text-sm font-bold text-slate-400 mb-2">الموضوع أو المشروع أو اللغة المراد تدريسها</label>
+                <input type="text" placeholder="مثال: الشهادة الإمبراطورية لإتقان الإنجليزية من A0 إلى C2 واجتياز IELTS Band 8+" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white transition-colors" value={topic} onChange={(e) => setTopic(e.target.value)} />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-400 mb-2">مستوى الصعوبة وأسلوب الشرح</label>
                 <select className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:border-indigo-500 outline-none text-white appearance-none cursor-pointer" value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
                   <option value="pro_certificate_eli5">🎓 شهادة مهنية خارقة (9-15+ كراش كورس مترابط - تبسيط كأنك طفل 👶)</option>
                   <option value="pro_project_scratch_cert">🏗️ شهادة مهنية لبناء مشروع كامل من الصفر للنهاية (تطبيقات / مواقع / Desktop / AI - بدون اختبارات 🛠️)</option>
+                  <option value="lang_a0_to_c2_cert">🌍 شهادة مهنية لإتقان اللغات من الصفر للطلاقة (A0 ➔ C2 الشاملة: صوتيات، استماع، تحدث، قواعد، كتابة 🗣️)</option>
+                  <option value="lang_exam_prep_cert">🎯 شهادة مهنية لاجتياز الاختبارات العالمية للغات (IELTS / TOEFL / JLPT / DELF - استراتيجيات الدرجات العالية 🏆)</option>
+                  <option value="lang_mega_a0_c2_exam">👑 الشهادة اللغوية الإمبراطورية المدمجة (من الصفر A0 إلى C2 + اجتياز الاختبار العالمي - 18 إلى 24+ كراش كورس 🔥)</option>
                   <option value="single_project_scratch">🛠️ كراش كورس عملي لبناء مشروع من الصفر للنهاية (مع AI Agent - بدون اختبارات)</option>
                   <option value="crash_eli5">كراش كورس منفرد (تبسيط مطلق - اشرح لي كأني طفل 👶)</option>
                   <option value="مبتدئ تماماً (E-Rank)">مبتدئ تماماً (E-Rank)</option>
@@ -2119,14 +2312,14 @@ const AcademyLab2 = () => {
                 {loadingBlueprint ? (
                   <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-white"></div>
                 ) : (
-                  <><Wand2 size={20} /> {difficulty === 'pro_project_scratch_cert' ? 'هندسة خريطة بناء المشروع الكامل (بدون اختبارات)' : 'هندسة خريطة المنهج (V2)'}</>
+                  <><Wand2 size={20} /> {isLanguageMasteryMode ? 'هندسة خريطة الشهادة اللغوية والاختبارات العالمية' : difficulty === 'pro_project_scratch_cert' ? 'هندسة خريطة بناء المشروع الكامل (بدون اختبارات)' : 'هندسة خريطة المنهج (V2)'}</>
                 )}
               </button>
             </div>
           </div>
 
           {/* ============================================================== */}
-          {/* 🎓 العرض الأول: إذا كان المنهج "شهادة مهنية شاملة" (أكاديمية أو بناء مشروع) */}
+          {/* 🎓 العرض الأول: إذا كان المنهج "شهادة مهنية شاملة" */}
           {/* ============================================================== */}
           {blueprint && blueprint.isCertificateSeries && (
             <div className="bg-[#0b1120] border border-slate-800 rounded-3xl shadow-2xl animate-fade-in-up overflow-hidden">
@@ -2139,6 +2332,11 @@ const AcademyLab2 = () => {
                   {isNoExamProjectMode && (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
                       <Terminal size={14} /> نمط بناء مشروع من الصفر (بدون اختبارات 🛠️)
+                    </div>
+                  )}
+                  {isLanguageMasteryMode && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-200 text-xs font-black">
+                      <Volume2 size={14} /> نظام اللغات الشامل (صوتيات + استماع + نطق + محاكي AI 🎙️)
                     </div>
                   )}
                 </div>
@@ -2158,7 +2356,7 @@ const AcademyLab2 = () => {
                 {blueprint.mainAnalogy && (
                   <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 mb-4">
                     <p className="text-xs font-black text-indigo-400 mb-1 flex items-center gap-1.5">
-                      <Sparkles size={14}/> {isNoExamProjectMode ? 'المعمارية الهندسية للمشروع (Architecture Flow):' : 'القصة والتشبيه الموحد للشهادة (ELI5 Storyline):'}
+                      <Sparkles size={14}/> {isLanguageMasteryMode ? 'منهجية الانغماس اللغوي والصوتي (Immersion Methodology):' : isNoExamProjectMode ? 'المعمارية الهندسية للمشروع (Architecture Flow):' : 'القصة والتشبيه الموحد للشهادة (ELI5 Storyline):'}
                     </p>
                     <p className="text-xs text-slate-300 leading-relaxed">{blueprint.mainAnalogy}</p>
                   </div>
@@ -2193,13 +2391,13 @@ const AcademyLab2 = () => {
 
                   <form onSubmit={handleInjectCustomCrashCourse} className="space-y-2.5 pt-3 border-t border-slate-800/80">
                     <label className="block text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Compass size={14} className="text-emerald-400" /> أضف عنوان كراش كورس أو ميزة للمشروع وسيضعها الذكاء الاصطناعي في مكانها المنطقي:
+                      <Compass size={14} className="text-emerald-400" /> أضف عنوان كراش كورس من عندك وسيضعه الذكاء الاصطناعي في مكانه المنطقي:
                     </label>
 
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
-                        placeholder="مثال: لوحة تحكم البائعين، أو الدردشة الحية WebSockets، أو بوابة دفع..."
+                        placeholder={isLanguageMasteryMode ? "مثال: كورس الصوتيات المتقدم والربط الصوتي، أو Writing Task 2..." : "مثال: لوحة تحكم البائعين، أو الدردشة الحية WebSockets..."}
                         value={customCourseTitle}
                         onChange={(e) => setCustomCourseTitle(e.target.value)}
                         className="flex-1 bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
@@ -2396,7 +2594,7 @@ const AcademyLab2 = () => {
                         {activeCourseIndex === cIdx && forgingStatus === 'generating_sub_blueprint' ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
                         ) : (
-                          <><Layers size={15} /> {isNoExamProjectMode ? '1. هندسة وحدات وخطوات البناء لهذه المرحلة (بدون اختبارات)' : '1. هندسة وحدات هذا الكراش كورس (5-10+ وحدات + وحدة مشروع GitHub)'}</>
+                          <><Layers size={15} /> {isLanguageMasteryMode ? '1. هندسة وحدات هذا الكورس اللغوي (نطق + استماع + قواعد + كتابة + محاكي اختبار)' : isNoExamProjectMode ? '1. هندسة وحدات وخطوات البناء لهذه المرحلة (بدون اختبارات)' : '1. هندسة وحدات هذا الكراش كورس (5-10+ وحدات + وحدة مشروع GitHub)'}</>
                         )}
                       </button>
                     ) : (
@@ -2445,7 +2643,7 @@ const AcademyLab2 = () => {
 
                               {sec.unitDeepSummary && (
                                 <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-2 mb-2 text-[10px] text-slate-300 space-y-1">
-                                  <p><strong className="text-amber-400">ماذا ستبني:</strong> {sec.unitDeepSummary.whatYouLearn}</p>
+                                  <p><strong className="text-amber-400">ماذا ستتقن:</strong> {sec.unitDeepSummary.whatYouLearn}</p>
                                   <p><strong className="text-emerald-400">الفائدة:</strong> {sec.unitDeepSummary.whyItMatters}</p>
                                 </div>
                               )}
@@ -2456,6 +2654,7 @@ const AcademyLab2 = () => {
                                     key={lIdx} 
                                     onClick={() => {
                                       if (lesson.isForged) {
+                                        handleStopInteractiveAudio();
                                         setSelectedLesson(lesson);
                                         setPreviewMode('lesson');
                                       }
@@ -2494,9 +2693,11 @@ const AcademyLab2 = () => {
                             className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black text-xs py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(147,51,234,0.3)] flex items-center justify-center gap-2 disabled:opacity-50"
                           >
                             <BrainCircuit size={16} /> 
-                            {isNoExamProjectMode 
-                              ? '2. تأليف خطوات البناء + أكواد الملفات + أوامر الـ AI Agent (بدون اختبارات 🛠️)' 
-                              : '2. تأليف الدروس + الاختبارات + ملخصات الوحدات تلقائياً (ELI5 👶)'}
+                            {isLanguageMasteryMode
+                              ? '2. تأليف دروس اللغة + نصوص الاستماع والصوتيات IPA + محاكي الـ AI + الاختبارات 🌍'
+                              : isNoExamProjectMode 
+                                ? '2. تأليف خطوات البناء + أكواد الملفات + أوامر الـ AI Agent (بدون اختبارات 🛠️)' 
+                                : '2. تأليف الدروس + الاختبارات + ملخصات الوحدات تلقائياً (ELI5 👶)'}
                           </button>
                         ) : (
                           <div className="flex gap-2 pt-2">
@@ -2548,7 +2749,7 @@ const AcademyLab2 = () => {
 
                     <div className="bg-[#0b1120] rounded-xl border border-slate-800 overflow-hidden">
                       {section.lessons.map((lesson, lIdx) => (
-                        <div key={lIdx} onClick={() => { if (lesson.isForged) { setSelectedLesson(lesson); setPreviewMode('lesson'); } }} className={`p-3.5 border-b border-slate-800/50 last:border-0 flex items-center justify-between transition-colors ${lesson.isForged ? 'hover:bg-indigo-950/30 cursor-pointer' : 'opacity-70'}`}>
+                        <div key={lIdx} onClick={() => { if (lesson.isForged) { handleStopInteractiveAudio(); setSelectedLesson(lesson); setPreviewMode('lesson'); } }} className={`p-3.5 border-b border-slate-800/50 last:border-0 flex items-center justify-between transition-colors ${lesson.isForged ? 'hover:bg-indigo-950/30 cursor-pointer' : 'opacity-70'}`}>
                           <div className="flex items-start gap-3">
                             <div className={`mt-0.5 shrink-0 w-6 h-6 rounded-full flex items-center justify-center border ${lesson.isForged ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
                               {lesson.isForged ? <CheckCircle size={12} /> : <Play size={10} />}
@@ -2577,7 +2778,7 @@ const AcademyLab2 = () => {
         </div>
 
         {/* ================================================== */}
-        {/* العمود الأيسر: شاشة المعاينة المزدوجة */}
+        {/* العمود الأيسر: شاشة المعاينة المزدوجة + مشغل الصوتيات التفاعلي للغات */}
         {/* ================================================== */}
         <div className="lg:col-span-7 flex flex-col space-y-6">
 
@@ -2586,7 +2787,7 @@ const AcademyLab2 = () => {
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 {forgingStatus === 'forging' ? <div className="animate-pulse w-3 h-3 bg-purple-500 rounded-full"></div> : <CheckCircle className="text-emerald-500" />}
                 {forgingStatus === 'forging' 
-                  ? (isNoExamProjectMode ? 'الذكاء الاصطناعي يبني الآن خطوات المشروع وأكواد الملفات وبرومبتات الـ AI Agent (بدون اختبارات)...' : 'الذكاء الاصطناعي يقوم بالتأليف الآن (دروس + اختبارات + ملخصات الوحدات)...') 
+                  ? (isLanguageMasteryMode ? 'الذكاء الاصطناعي يؤلف الآن دروس اللغة ونصوص الاستماع والصوتيات (IPA) والاختبارات...' : isNoExamProjectMode ? 'الذكاء الاصطناعي يبني الآن خطوات المشروع وأكواد الملفات وبرومبتات الـ AI Agent (بدون اختبارات)...' : 'الذكاء الاصطناعي يقوم بالتأليف الآن (دروس + اختبارات + ملخصات الوحدات)...') 
                   : 'تم اكتمال التأليف بنجاح'}
               </h3>
 
@@ -2613,7 +2814,7 @@ const AcademyLab2 = () => {
                       : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
                   }`}
                 >
-                  <BookOpen size={15} /> معاينة محتوى الدرس / خطوة البناء
+                  <BookOpen size={15} /> معاينة محتوى الدرس / الصوتيات
                 </button>
                 <button
                   onClick={() => setPreviewMode('certificate_dossier')}
@@ -2682,7 +2883,7 @@ const AcademyLab2 = () => {
                     </h3>
 
                     <div>
-                      <p className="text-xs font-bold text-slate-400 mb-2">🏢 المسميات الوظيفية المؤهل لها:</p>
+                      <p className="text-xs font-bold text-slate-400 mb-2">🏢 المسميات الوظيفية والفرص المؤهل لها:</p>
                       <div className="flex flex-wrap gap-2">
                         {blueprint.masterDossier.careerAndFinancialROI?.jobRoles?.map((role, rIdx) => (
                           <span key={rIdx} className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-bold px-3 py-1 rounded-lg">
@@ -2693,7 +2894,7 @@ const AcademyLab2 = () => {
                     </div>
 
                     <div>
-                      <p className="text-xs font-bold text-slate-400 mb-2">💰 خدمات العمل الحر ومشاريع الـ SaaS القابلة للبيع:</p>
+                      <p className="text-xs font-bold text-slate-400 mb-2">💰 الفرص العملية والمهنية:</p>
                       <ul className="space-y-1.5 text-xs text-slate-300">
                         {blueprint.masterDossier.careerAndFinancialROI?.freelanceServices?.map((srv, sIdx) => (
                           <li key={sIdx} className="flex items-start gap-2">
@@ -2733,7 +2934,7 @@ const AcademyLab2 = () => {
 
                         {cg.keyTakeaways && cg.keyTakeaways.length > 0 && (
                           <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                            <p className="text-[11px] font-bold text-indigo-300 mb-1.5">📚 الوحدات والمحاور التي يبنيها الطالب في هذا الكورس:</p>
+                            <p className="text-[11px] font-bold text-indigo-300 mb-1.5">📚 الوحدات والمحاور التي يتقنها الطالب في هذا الكورس:</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {cg.keyTakeaways.map((kt, kIdx) => (
                                 <div key={kIdx} className="text-[11px] text-slate-300 flex items-center gap-1.5">
@@ -2747,7 +2948,7 @@ const AcademyLab2 = () => {
 
                         <div className="bg-emerald-950/20 border border-emerald-500/30 p-3 rounded-xl text-[11px] text-emerald-200 flex items-start gap-2">
                           <GitBranch size={15} className="text-emerald-400 shrink-0 mt-0.5" />
-                          <span><strong>مشروع GitHub & AI Agent:</strong> {cg.projectAndAiRole}</span>
+                          <span><strong>التطبيق العملي والـ AI:</strong> {cg.projectAndAiRole}</span>
                         </div>
                       </div>
                     ))}
@@ -2759,7 +2960,7 @@ const AcademyLab2 = () => {
               !selectedLesson ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-4 py-20">
                   <BookOpen size={64} className="opacity-20" />
-                  <p className="font-bold">اضغط على أي درس أو خطوة بناء (مكتملة باللون الأخضر) لرؤية محتواها وأكوادها هنا.</p>
+                  <p className="font-bold">اضغط على أي درس (مكتمل باللون الأخضر) لرؤية محتواه وتجربة النطق الصوتي هنا.</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-2 space-y-6 custom-scrollbar">
@@ -2774,24 +2975,87 @@ const AcademyLab2 = () => {
 
                   {selectedLesson.content && (
                     <div className="bg-slate-950 border border-slate-800 p-5 rounded-xl">
-                      <h4 className="text-emerald-400 font-bold mb-3 flex items-center gap-2"><FileText size={16}/> دليل البناء التفصيلي وبرومبتات الـ AI Agent</h4>
+                      <h4 className="text-emerald-400 font-bold mb-3 flex items-center gap-2">
+                        <FileText size={16}/> 
+                        {isLanguageMasteryMode ? 'الشرح اللغوي، مختبر الصوتيات (IPA)، ومحاكاة الـ AI Voice' : 'الشرح التفصيلي وبرومبتات الـ AI Agent'}
+                      </h4>
                       <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                         {selectedLesson.content}
                       </div>
                     </div>
                   )}
 
+                  {/* 🔊 صندوق الكود البرمجي أو مشغل الاستماع والنطق التفاعلي للغات */}
                   {selectedLesson.codeSnippet && selectedLesson.codeSnippet.trim() !== '' && (
-                    <div className="bg-[#0d1117] border border-slate-800 p-5 rounded-xl">
-                      <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2"><Code size={16}/> الكود البرمجي الكامل للملف</h4>
-                      <pre className="text-emerald-400 text-sm overflow-x-auto" dir="ltr">
+                    <div className="bg-[#0d1117] border border-slate-800 p-5 rounded-xl space-y-4">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <h4 className="text-blue-400 font-bold flex items-center gap-2">
+                          {isLanguageMasteryMode || selectedLesson.codeSnippet.includes('IPA:') ? (
+                            <><Headphones size={18} className="text-purple-400" /> نص الاستماع التفاعلي وتدريب النطق (Shadowing Script)</>
+                          ) : (
+                            <><Code size={16}/> الكود البرمجي</>
+                          )}
+                        </h4>
+
+                        {/* أزرار تشغيل الصوت الحقيقي بـ 3 سرعات (طبيعي 1.0x + ترديد 0.75x + تأسيسي للحروف 0.5x) */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePlayInteractiveAudio(selectedLesson.codeSnippet, 1.0)}
+                            className={`text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${
+                              isSpeakingAudio && speakingRate === 1.0
+                                ? 'bg-purple-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.5)]'
+                                : 'bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30'
+                            }`}
+                          >
+                            <Volume2 size={14} /> 🔊 سرعة المتحدث الأصلي (1.0x)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handlePlayInteractiveAudio(selectedLesson.codeSnippet, 0.75)}
+                            className={`text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${
+                              isSpeakingAudio && speakingRate === 0.75
+                                ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]'
+                                : 'bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30'
+                            }`}
+                          >
+                            <Mic size={14} /> 🐢 نطق متوسط للترديد (0.75x)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handlePlayInteractiveAudio(selectedLesson.codeSnippet, 0.5)}
+                            className={`text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all ${
+                              isSpeakingAudio && speakingRate === 0.5
+                                ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                                : 'bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30'
+                            }`}
+                          >
+                            <Headphones size={14} /> 🧒 نطق بطيء للحروف والمبتدئين (0.5x)
+                          </button>
+
+                          {isSpeakingAudio && (
+                            <button
+                              type="button"
+                              onClick={handleStopInteractiveAudio}
+                              className="text-xs font-bold bg-red-500/20 hover:bg-red-600 text-red-300 hover:text-white px-2.5 py-1.5 rounded-xl border border-red-500/30 flex items-center gap-1"
+                            >
+                              <Square size={12} /> إيقاف
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <pre className="text-emerald-400 text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed" dir="ltr">
                         <code>{selectedLesson.codeSnippet}</code>
                       </pre>
 
                       {selectedLesson.codeExplanation && selectedLesson.codeExplanation.trim() !== '' && (
                         <div className="mt-4 pt-4 border-t border-slate-800">
                           <h4 className="text-indigo-400 font-bold mb-2 flex items-center gap-2">
-                            <Microscope size={16} /> تشريح الكود (Code Anatomy)
+                            <Microscope size={16} /> 
+                            {isLanguageMasteryMode ? 'التشريح الصوتي والسمعي واللغوي (Phonetic & Audio Anatomy)' : 'تشريح الكود (Code Anatomy)'}
                           </h4>
                           <div className="text-slate-400 text-sm whitespace-pre-wrap font-mono">
                             {selectedLesson.codeExplanation}
@@ -2804,7 +3068,7 @@ const AcademyLab2 = () => {
                   {selectedLesson.codingPractice && selectedLesson.codingPractice.taskQuestion && (
                     <div className="bg-indigo-950/20 border border-indigo-500/30 p-5 rounded-xl space-y-3">
                       <h4 className="text-indigo-400 font-black flex items-center gap-2">
-                        <Code size={18}/> تمرين كتابة الكود التفاعلي للطالب (مع 3 تلميحات)
+                        <Code size={18}/> {isLanguageMasteryMode ? 'التمرين التطبيقي للكتابة والصياغة اللغوية (مع 3 تلميحات)' : 'تمرين كتابة الكود التفاعلي للطالب (مع 3 تلميحات)'}
                       </h4>
                       <p className="text-sm text-white font-bold">{selectedLesson.codingPractice.taskQuestion}</p>
                       {selectedLesson.codingPractice.hints && (
@@ -2821,13 +3085,13 @@ const AcademyLab2 = () => {
                   {selectedLesson.bossQuiz && selectedLesson.bossQuiz.length > 0 ? (
                     <div className="bg-red-900/10 border border-red-500/20 p-5 rounded-xl space-y-3">
                       <h4 className="text-red-400 font-bold flex items-center gap-2">
-                        <Flame size={16}/> {selectedLesson.type === 'unit_exam' ? 'أسئلة الاختبار النهائي للوحدة (نظري + كودي)' : 'تحدي الزعيم / البوابة الحمراء'}
+                        <Flame size={16}/> {selectedLesson.type === 'unit_exam' ? 'أسئلة الاختبار النهائي للوحدة' : 'تحدي الزعيم / البوابة'}
                       </h4>
                       <p className="text-slate-400 text-xs">يحتوي على {selectedLesson.bossQuiz.length} أسئلة:</p>
                       <div className="space-y-2">
                         {selectedLesson.bossQuiz.map((q, idx) => (
                           <div key={idx} className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs text-slate-200">
-                            <span className="text-amber-400 font-bold ml-2">[{q.questionType === 'code' ? 'كودي' : 'نظري'}]</span>
+                            <span className="text-amber-400 font-bold ml-2">[{q.questionType === 'code' ? 'تطبيقي' : 'مفاهيمي'}]</span>
                             {q.question}
                           </div>
                         ))}
