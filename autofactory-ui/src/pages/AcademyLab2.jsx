@@ -741,7 +741,8 @@ const AcademyLab2 = () => {
         endpoint = 'http://localhost:5000/api/academy2/blueprint-certificate';
       }
 
-      const res = await axios.post(endpoint, { topic, difficulty });
+      // بدلاً من: const res = await axios.post(endpoint, { topic, difficulty });
+const res = await axios.post(endpoint, { topic, difficulty, targetLanguage });
       if (res.data.success) {
         const receivedData = res.data.data;
         if (difficulty === 'pro_project_scratch_cert' || difficulty === 'single_project_scratch') {
@@ -1435,17 +1436,18 @@ const AcademyLab2 = () => {
         : 'http://localhost:5000/api/academy2/blueprint-crash-course';
 
     try {
-      const res = await axios.post(targetEndpoint, {
-        certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
-        mainAnalogy: targetCert.mainAnalogy,
-        courseOrder: cIdx + 1,
-        totalCourses: targetCert.courses.length,
-        currentCourseTitle: targetCourse.courseTitle,
-        currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
-        githubProject: targetCourse.githubProject,
-        previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
-        nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
-      });
+const res = await axios.post(targetEndpoint, {
+  certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
+  targetLanguage: targetCert.targetLanguage || targetLanguage, // 👈 أضف هذا السطر
+  mainAnalogy: targetCert.mainAnalogy,
+  courseOrder: cIdx + 1,
+  totalCourses: targetCert.courses.length,
+  currentCourseTitle: targetCourse.courseTitle,
+  currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
+  githubProject: targetCourse.githubProject,
+  previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
+  nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
+});
 
       if (res.data.success) {
         const updated = JSON.parse(JSON.stringify(targetCert));
@@ -1485,6 +1487,43 @@ const AcademyLab2 = () => {
 
     await handleForgeCrashCourseLessons(cIdx, freshBlueprintState);
   };
+
+
+  // 🧠 دالة استخراج المفردات المكتسبة من الكورسات والدروس السابقة لتفعيل التكرار المتباعد (Spaced Repetition)
+  const extractPreviouslyLearnedVocab = (certState, currentCourseIdx, currentSecIdx = 0) => {
+    if (!certState || !Array.isArray(certState.courses)) return [];
+    const collected = new Set();
+
+    const harvestFromSnippet = (snippet = '') => {
+      snippet.split('\n').forEach(line => {
+        const match = line.match(/^\d+[.) -]+\s*([^🔊|]+)/);
+        if (match && match[1]) {
+          const cleanPhrase = match[1].trim();
+          if (cleanPhrase.length >= 2 && cleanPhrase.length <= 35) {
+            collected.add(cleanPhrase);
+          }
+        }
+      });
+    };
+
+    // 1. جمع المفردات من الكورس السابق
+    if (currentCourseIdx > 0 && certState.courses[currentCourseIdx - 1]?.sections) {
+      certState.courses[currentCourseIdx - 1].sections.forEach(sec => {
+        (sec.lessons || []).forEach(les => harvestFromSnippet(les.codeSnippet));
+      });
+    }
+
+    // 2. جمع المفردات من الوحدات السابقة في نفس الكورس الحالي
+    const currCourse = certState.courses[currentCourseIdx];
+    if (currCourse?.sections) {
+      currCourse.sections.slice(0, currentSecIdx).forEach(sec => {
+        (sec.lessons || []).forEach(les => harvestFromSnippet(les.codeSnippet));
+      });
+    }
+
+    return Array.from(collected).slice(-25);
+  };
+
 
   // ==========================================
   // ✍️ 4. تأليف الدروس (يدعم: مسار اللغات بالصوتيات + مسار المشاريع بدون اختبارات + المسار الأكاديمي)
@@ -1551,8 +1590,16 @@ const AcademyLab2 = () => {
               ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
               : 'http://localhost:5000/api/academy2/forge-lesson';
 
+              
+const previouslyLearnedVocab = isLangCert
+            ? extractPreviouslyLearnedVocab(updatedCert, cIdx, sIdx)
+            : [];
+
           const res = await axios.post(lessonEndpoint, {
             courseTopic: contextualCourseTopic,
+            targetLanguage: updatedCert.targetLanguage || targetLanguage,
+            courseOrder: cIdx + 1,
+            previouslyLearnedVocab, // 👈 يفعّل التكرار المتباعد التراكمي بين الكورسات!
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
             lessonCategory: lesson.lessonCategory || (isLangCert ? 'language_mastery' : 'code'),

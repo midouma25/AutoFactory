@@ -4645,44 +4645,195 @@ app.post('/api/academy2/forge-unit-exam', async (req, res) => {
 
 
 
+// ============================================================================
+// 🧹 (ب) مصفاة التطهير الآلي لمخرجات اللغات (AI Output Sanitizer & Token-Bleed Fixer)
+// تنظف أي تداخل بين الحروف العربية واللاتينية أو الرموز الغريبة قبل إرسال الدرس!
+// ============================================================================
+const sanitizeLanguageText = (rawStr = '') => {
+    if (!rawStr || typeof rawStr !== 'string') return rawStr;
+    return rawStr
+        // 1. إزالة أي رموز ديفاناغاري/هندية أو رموز تالفة قد يهلوس بها الموديل
+        .replace(/[\u0900-\u097F]+/g, '')
+        .replace(/פּ/g, 'پ')
+        // 2. إصلاح التداخل الشائع بين الحروف العربية والفرنسية داخل الكلمة الواحدة
+        .replace(/c'هست/gi, "c'est")
+        .replace(/C'هست/g, "C'est")
+        .replace(/c'ست/gi, "c'est")
+        .replace(/C'ست/g, "C'est")
+        .replace(/مaman/gi, "maman")
+        .replace(/Il\s+هو\s+bon/gi, "Il est bon")
+        .replace(/ت\s*άλλο\s*كـ/gi, "تُنطق كـ")
+        // 3. تصحيح أخطاء التذكير والتأنيث الشائعة في المستوى التأسيسي الفرنسي
+        .replace(/\bun clé\b/gi, "une clé")
+        .replace(/\bUn clé\b/g, "Une clé")
+        .replace(/---+\+/g, '---')
+        .replace(/---;/g, '---');
+};
+
+const sanitizeLanguageLessonJSON = (lessonObj) => {
+    if (!lessonObj || typeof lessonObj !== 'object') return lessonObj;
+    try {
+        const serialized = JSON.stringify(lessonObj);
+        const cleaned = sanitizeLanguageText(serialized);
+        return JSON.parse(cleaned);
+    } catch (e) {
+        return lessonObj;
+    }
+};
 
 // ============================================================================
-// 🤖 8. مسار جديد كلياً: المصحح الذكي لخانة كتابة الكود الخاصة بالطالب (AI Code Reviewer)
+// 🎙️ (أ) محرك الصوت العصبي الفائق لجميع اللغات (Multi-Language Neural Edge-TTS)
+// يختار الصوت الأصلي (فرنسي، ياباني، ألماني، إسباني، صيني، إنجليزي) ويدعم 3 سرعات!
+// ============================================================================
+const NEURAL_VOICE_MAP = {
+    'fr-FR': { female: 'fr-FR-DeniseNeural', male: 'fr-FR-HenriNeural' },
+    'ja-JP': { female: 'ja-JP-NanamiNeural', male: 'ja-JP-KeitaNeural' },
+    'de-DE': { female: 'de-DE-KatjaNeural', male: 'de-DE-ConradNeural' },
+    'es-ES': { female: 'es-ES-ElviraNeural', male: 'es-ES-AlvaroNeural' },
+    'zh-CN': { female: 'zh-CN-XiaoxiaoNeural', male: 'zh-CN-YunxiNeural' },
+    'en-US': { female: 'en-US-AriaNeural', male: 'en-US-ChristopherNeural' }
+};
+
+
+const { execFile } = require('child_process');
+const execFilePromise = util.promisify(execFile);
+
+app.post('/api/academy2/lang-cert/neural-tts', async (req, res) => {
+    const { text, langCode = 'fr-FR', rate = 1.0 } = req.body;
+    if (!text || !text.trim()) {
+        return res.status(400).json({ success: false, error: 'النص الصوتي مفقود.' });
+    }
+
+    // تنظيف النص
+    const cleanForeignText = sanitizeLanguageText(text)
+        .replace(/🔊.*$/g, '').replace(/\|.*$/g, '').replace(/^✅.*$/g, '')
+        .replace(/^\d+[.) -]+/, '').replace(/\([^)]*[\u0600-\u06FF]+[^)]*\)/g, '')
+        .replace(/[\u0600-\u06FF]+/g, '').replace(/["`$\\]/g, '').replace(/\s+/g, ' ').trim();
+
+    const finalTextToSpeak = (cleanForeignText || text.replace(/[\u0600-\u06FF"`$\\]/g, '').trim()).slice(0, 300);
+    if (!finalTextToSpeak) return res.status(400).json({ success: false, error: 'نص غير صالح.' });
+
+    const numericRate = Number(rate) || 1.0;
+
+    // 🚀 المحرك الأول والأسرع (RAM & Node.js): يستغرق 100 ملي ثانية فقط للكلمات والجمل القصيرة!
+    try {
+        const ttsRes = await axios.get('https://translate.google.com/translate_tts', {
+            params: {
+                ie: 'UTF-8',
+                q: finalTextToSpeak,
+                tl: langCode,
+                client: 'tw-ob',
+                ttsspeed: numericRate < 0.8 ? 0.24 : 1
+            },
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            responseType: 'arraybuffer',
+            timeout: 2500 // لن ننتظر أكثر من ثانيتين ونصف
+        });
+
+        if (ttsRes.data) {
+            return res.json({
+                success: true,
+                audioUrl: `data:audio/mpeg;base64,${Buffer.from(ttsRes.data).toString('base64')}`,
+                engine: 'node-ram-fast'
+            });
+        }
+    } catch (cloudErr) {
+        // إذا فشل المحرك السريع، ننتقل فوراً لمحرك بايثون
+    }
+
+    // 🐢 المحرك الثاني (Python Edge-TTS): أبطأ قليلاً لكنه احتياطي ممتاز
+    const uniqueFileName = `temp_neural_${Date.now()}_${Math.floor(Math.random() * 1000)}.mp3`;
+    const outputPath = path.join(__dirname, uniqueFileName);
+
+    try {
+        const rateFlag = numericRate < 1 ? `-25%` : `+0%`;
+        const voicePack = NEURAL_VOICE_MAP[langCode] || NEURAL_VOICE_MAP['en-US'];
+        
+        const { execFile } = require('child_process');
+        const execFilePromise = util.promisify(execFile);
+        
+        await execFilePromise('python', ['-m', 'edge_tts', '--voice', voicePack.female, '--text', finalTextToSpeak, `--rate=${rateFlag}`, '--write-media', outputPath], { timeout: 4000 });
+
+        if (fs.existsSync(outputPath)) {
+            const audioBuffer = fs.readFileSync(outputPath);
+            fs.unlinkSync(outputPath);
+            return res.json({
+                success: true,
+                audioUrl: `data:audio/mpeg;base64,${audioBuffer.toString('base64')}`,
+                engine: 'python-edge'
+            });
+        }
+    } catch (pyErr) {
+        if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch (e) {} }
+    }
+
+    res.status(503).json({ success: false, fallbackToBrowser: true });
+});
+
+
+
+
+// ============================================================================
+// 🤖 (د) المصحح المزدوج الذكي: يفحص الإملاء والنبرات والتذكير والتأنيث في اللغات + يفحص الأكواد في البرمجة!
+// استبدل مسار /api/academy2/verify-student-code القديم بهذا المسار المتطور:
 // ============================================================================
 app.post('/api/academy2/verify-student-code', async (req, res) => {
     try {
-        const { taskQuestion, studentCode, solutionCode } = req.body;
+        const { taskQuestion = '', studentCode = '', solutionCode = '', targetLanguage = '', isLanguageTask = false } = req.body;
 
         if (!studentCode || studentCode.trim() === '') {
-            return res.status(400).json({ success: false, error: 'يرجى كتابة الكود أولاً قبل التحقق.' });
+            return res.status(400).json({ success: false, error: 'يرجى كتابة إجابتك أولاً قبل التحقق.' });
         }
 
-        const systemPrompt = `أنت معلم برمجة لطيف ومشجع جداً (تشرح بأسلوب مبسط لطفل ذكي).
-        - المطلوب من الطالب: "${taskQuestion}"
-        - الحل النموذجي المرجعي: "${solutionCode}"
-        - الكود الذي كتبه الطالب: "${studentCode}"
+        const isLang = Boolean(
+            isLanguageTask ||
+            /فرنس|إنجليز|يابان|ألمان|إسبان|صين|جملة|كلمة|أداة|نطق|تهجئة|C'est|Bonjour|chat|table/i.test(`${taskQuestion} ${solutionCode} ${targetLanguage}`)
+        );
 
-        مهمتك:
-        افحص كود الطالب بمرونة؛ إذا كان يؤدي المطلوب (حتى لو كتب متغيرات بأسماء مختلفة أو بطريقة صحيحة أخرى) اعتبره ناجحاً ("isCorrect": true) وكافئه بكلمات حماسية!
-        وإذا كان فيه خطأ، اجعل "isCorrect": false واشرح له خطأه بلطف شديد دون إحباط، وأخبره أي سطر يحتاج لتعديل.
+        const systemPrompt = isLang
+            ? `أنت كبير مصححي اختبارات اللغات الدولية (DELF/DALF للفرنسية، IELTS للإنجليزية، JLPT لليابانية، Goethe للألمانية).
+            - السؤال المطلوب من الطالب: "${taskQuestion}"
+            - الحل النموذجي المرجعي: "${solutionCode}"
+            - إجابة الطالب الفعلية: "${studentCode}"
 
-        رد بصيغة JSON فقط بهذا الهيكل:
-        {
-          "isCorrect": true,
-          "feedback": "رسالتك التشجيعية أو ملاحظتك المبسطة للطالب هنا...",
-          "correctedSnippet": "السطر المصحح إن وجد خطأ، أو اتركه فارغاً إذا كان كوده صحيحاً"
-        }`;
+            🚨 مهمتك الدقيقة كمصحح لغوي وإملائي:
+            1. افحص إجابة الطالب بدقة من حيث:
+               - صحة التهجئة والحروف الصامتة.
+               - علامات النبر والحركات المزخرفة (مثل Les accents: é, è, ê, ç في الفرنسية) وعلامة الحذف (L'apostrophe مثل C'est, L'eau).
+               - تطابق الجنس النحوي (المذكر والمؤنث: un/le مقابل une/la، وتطابق الصفة مع الموصوف مثل un chat gris / une pomme rouge).
+            2. إذا كانت إجابة الطالب صحيحة في المعنى والتركيب (حتى لو نسي حركة بسيطة كالـ accent)، اجعل "isCorrect": true، ولكن نبهه بلطف في "feedback" على الحركة أو الـ Accent لتكون كتابته بمستوى المتحدث الأصلي 100%!
+            3. إذا كان هناك خطأ في الجنس النحوي (مثل un table بدلاً من une table) أو خطأ هيكلي، اجعل "isCorrect": false واشرح له القاعدة الصوتية/النحوية بلطف شديد مع إعطائه الصياغة المصححة في "correctedSnippet".
 
-        const rawContent = await generateContentSmart(systemPrompt, "افحص كود الطالب الآن بصيغة JSON.", 0.5, 4000);
-        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+            رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+            {
+              "isCorrect": true,
+              "feedback": "رسالة تشجيعية دقيقة توضح نقاط القوة، وتنبهه على أي Accent أو حرف صامت أو قاعدة تذكير/تأنيث...",
+              "correctedSnippet": "الإجابة النموذجية المصححة بالحركات الكاملة (أو اتركها فارغة إذا كانت إجابته مثالية 100%)"
+            }`
+            : `أنت معلم برمجة لطيف ومشجع جداً (تشرح بأسلوب مبسط لطفل ذكي).
+            - المطلوب من الطالب: "${taskQuestion}"
+            - الحل النموذجي المرجعي: "${solutionCode}"
+            - الكود الذي كتبه الطالب: "${studentCode}"
 
-        res.json({ success: true, data: parsedContent });
+            افحص كود الطالب بمرونة؛ إذا كان يؤدي المطلوب اعتبره ناجحاً ("isCorrect": true) وكافئه بكلمات حماسية! وإذا كان فيه خطأ، اجعل "isCorrect": false واشرح له خطأه بلطف شديد.
+            رد بصيغة JSON فقط بهذا الهيكل:
+            {
+              "isCorrect": true,
+              "feedback": "رسالتك التشجيعية أو ملاحظتك المبسطة للطالب هنا...",
+              "correctedSnippet": "السطر المصحح إن وجد خطأ، أو اتركه فارغاً إذا كان كوده صحيحاً"
+            }`;
 
+        const rawContent = await generateContentSmart(systemPrompt, "افحص إجابة الطالب الآن بصيغة JSON.", 0.4, 4000);
+        const parsedContent = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: sanitizeLanguageLessonJSON(parsedContent) });
     } catch (error) {
-        console.error('❌ خطأ في فحص كود الطالب:', error.message);
-        res.status(500).json({ success: false, error: 'حدث خطأ أثناء فحص الكود.' });
+        console.error('❌ خطأ في فحص إجابة الطالب:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء فحص الإجابة.' });
     }
 });
+
+
 
 
 // ============================================================================
@@ -4858,13 +5009,204 @@ const safeParseAIJson = (rawContent) => {
 };
 
 // ============================================================================
-// 🧠 محرك التدرج اللغوي التصاعدي الحتمي (Deterministic 7-Tier CEFR Engine V3)
-// يعزل اسم الشهادة العام تماماً ويقفل كل كراش كورس على مستواه الحقيقي بدقة 100%!
+// 🌍 0. كاشف وبروفايل اللغات العالمي (Universal Multi-Language Profiler V4)
+// يكتشف اللغة المستهدفة بدقة قبل أي عزل، ويحقن صوتياتها وقواعدها الحقيقية!
 // ============================================================================
-const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle = '', difficulty = '', explicitCourseOrder = null) => {
+const detectTargetLanguageProfile = (rawContext = '', explicitTargetLang = '') => {
+    const combined = `${explicitTargetLang} ${rawContext}`.toLowerCase();
+
+    if (/فرنس|french|français|delf|dalf/i.test(combined)) {
+        return {
+            id: 'fr',
+            nameAr: 'الفرنسية',
+            nameEn: 'French (Français)',
+            speechLang: 'fr-FR',
+            instituteRole: 'أنت كبير مؤلفي مناهج Alliance Française وخبير اختبارات DELF/DALF.',
+            examName: 'DELF B2 / DALF C1-C2',
+            a0PhonicsUnits: `
+            - الوحدة 1: الحروف الفرنسية، الحركات الصوتية الأساسية (a, e, i, o, u, y)، والحروف الصامتة في نهاية الكلمات (e, s, t, d, x).
+            - الوحدة 2: الحركات المزخرفة والنبرات الفرنسية (Les Accents: é, è, ê, ë) والفرق الصوتي الدقيق بين (/e/ و /ɛ/) مع مفردات ملموسة (café, mère, fête, père).
+            - الوحدة 3: المقاطع الصوتية المركبة الأساسية (Les Sons Composés: ou, oi, au, eau, eu, œu) في كلمات يومية (bonjour, soir, eau, bateau, feu).
+            - الوحدة 4: الأصوات الأنفية الفرنسية الشهيرة (Les Voyelles Nasales: an/en, in/ain/ein, on, un) ومخارج الهواء من الفم والأنف (maman, pain, matin, bon, jardin).
+            - الوحدة 5: الحروف الساكنة المركبة (ch, ph, gn, ill, qu, ç) والفرق بين (c/ç و g/j و s/z) مثل (chat, photo, montagne, fille, garçon).
+            - الوحدة 6: أدوات التنكير والتعريف الفرنسية للمذكر والمؤنث (un, une, des / le, la, l', les) والربط الصوتي الإجباري (La Liaison & L'Élision) مثل (un ami, l'école, les enfants).
+            - الوحدة 7: الضمائر الشخصية (je, tu, il, elle) مع فعلي الكينونة والملكية (être & avoir) وتقديم الأشياء (C'est un... / Voici la...) والألوان والأرقام (1-20).
+            - الوحدة 8: المراجعة الصوتية الشاملة وقراءة أولى المحادثات والقصص القصيرة بالفرنسية السليمة.`,
+            a0PedagogyRules: `
+            🚨🚨 تحذير صارم جداً (أنت تدرّس اللغة الفرنسية 🇫🇷 لمستوى الصفر المطلق Pre-A1 / A0.1):
+            1. 🚫 ممنوع منعاً باتاً كتابة أي كلمة أو جملة باللغة الإنجليزية (إياك أن تكتب cat, mat, short A, this is)! كل الأمثلة والمفردات والجمل يجب أن تكون باللغة الفرنسية حصراً مع ترجمتها العربية!
+            2. الطالب هنا يتعلم الحروف الفرنسية، مخارج الأصوات الأنفية والمركبة (ou, oi, eau, an, in, on, ch, gn, é, è)، وأول 100 كلمة فرنسية ملموسة (مثل: un chat, un lit, une table, un livre, une pomme, l'eau, le pain, la maison, bonjour, merci).
+            3. يجب أن تكون جميع الجمل الفرنسية قصيرة جداً وبسيطة (من كلمتين إلى 5 كلمات كحد أقصى! مثل: "C'est un chat." أو "Le livre est rouge." أو "Un petit garçon.") مع الرمز الصوتي IPA والنطق التقريبي بالعربية.
+            4. في سُلّم البناء التراكمي: 1. كلمة مفردة (chat) ➔ 2. أداة + كلمة (Un chat) ➔ 3. صفة + اسم (Un petit chat) ➔ 4. جملة إشارة (C'est un petit chat.) ➔ 5. سؤال وجواب بسيط (Est-ce que c'est un chat ? Oui, c'est un chat.).`,
+            a0SentenceRules: `تأسيس الجملة الفرنسية البسيطة باستخدام الضمائر (Je, Tu, Il, Elle, Nous, Vous, Ils/Elles)، تصريف أفعال المجموعة الأولى (-er مثل parler, aimer, habiter) وفعلي (être / avoir)، النفي بـ (ne... pas)، وتكوين السؤال بـ (Est-ce que... ? / Qu'est-ce que c'est ?).`,
+            a1Grammar: `المضارع الدلالي (Présent de l'indicatif)، أفعال المجموعة الأولى والثانية والثالثة، أدوات التجزئة (du, de la, des)، صفات الملكية (mon, ma, mes)، المستقبل القريب (Futur proche: aller + infinitif)، وحروف الجر المكانية.`,
+            a2Grammar: `الماضي المركب (Passé composé مع avoir و être) والماضي الناقص (Imparfait) لسرد الذكريات، المستقبل البسيط (Futur simple)، الضمائر المفعولة (COD / COI / y / en)، وصيغ المقارنة (plus... que / moins... que).`,
+            b1Grammar: `الربط بين الأزمنة السردية (Passé composé vs Imparfait vs Plus-que-parfait)، المضارع الشرطي (Conditionnel présent)، مدخل إلى المنصوب (Subjonctif présent بعد il faut que / bien que)، الضمائر الموصولة (qui, que, dont, où)، والكلام المتصل السريع (Enchaînement & Liaison).`,
+            b2Grammar: `إتقان صيغ الـ (Subjonctif présent et passé)، الشرطيات المعقدة (Si + plus-que-parfait -> conditionnel passé)، المبني للمجهول، الروابط المنطقية الحجاجية (en revanche, quoique, néanmoins)، ومنهجية (Compte rendu & Essai argumenté) لاختبار DELF B2.`,
+            c1c2Grammar: `البلاغة الفرنسية الرفيعة، التراكيب الأدبية والأكاديمية، إتقان (Synthèse de documents) لاختبار DALF C1/C2، الفروق الدلالية الدقيقة (Nuances lexicales)، والتعابير الاصطلاحية (Expressions idiomatiques).`
+        };
+    }
+
+    if (/يابان|japanese|日本語|jlpt|hiragana|kanji|هيراغانا|كانجي/i.test(combined)) {
+        return {
+            id: 'ja',
+            nameAr: 'اليابانية',
+            nameEn: 'Japanese (日本語)',
+            speechLang: 'ja-JP',
+            instituteRole: 'أنت كبير مؤلفي مناهج مؤسسة اليابان (Japan Foundation) وخبير اختبارات JLPT (N5 إلى N1).',
+            examName: 'JLPT N5-N1',
+            a0PhonicsUnits: `
+            - الوحدة 1: حروف العلة الخمسة الأساسية في الهيراغانا (あ a, い i, う u, え e, お o) وصفوف (Ka & Sa) مع الكلمات الأولى.
+            - الوحدة 2: حروف الهيراغانا لصفوف (Ta, Na, Ha) ومخارج الأصوات اليابانية الصافية.
+            - الوحدة 3: حروف الهيراغانا لصفوف (Ma, Ya, Ra, Wa, N) والأصوات المجهورة (Dakuten: ga, za, da, ba, pa).
+            - الوحدة 4: الأصوات المدمجة (Yoon: kya, sha, cha) والشدة الصوتية (Sokuon っ) والمد الطويل.
+            - الوحدة 5: أساسيات الكاتاكانا (Katakana) للكلمات الأجنبية وأسماء الدول والتقنية.
+            - الوحدة 6: هيكل الجملة اليابانية بالمكعبات (الفاعل + は wa + الاسم + です desu) والتحيات اليومية (Aisatsu).
+            - الوحدة 7: أسماء الإشارة (これ kore, それ sore, あれ are) وأدوات الملكية والاستفهام (の no, か ka).
+            - الوحدة 8: قراءة أولى الجمل والحوارات المكتوبة بالهيراغانا وأول 15 رمز كانجي تصويري (Kanji).`,
+            a0PedagogyRules: `
+            🚨🚨 تحذير صارم جداً (أنت تدرّس اللغة اليابانية 🇯🇵 لمستوى الصفر المطلق Pre-A1 / A0.1):
+            1. 🚫 ممنوع منعاً باتاً تدريس كلمات إنجليزية! جميع المفردات والأمثلة يجب أن تكون باللغة اليابانية (مكتوبة بالهيراغانا/الكاتاكانا مع نطق Romaji والرمز الصوتي والترجمة العربية).
+            2. استخدم كلمات يابانية تأسيسية بسيطة (مثل: ねこ neko، いぬ inu، みず mizu، ほん hon، わたし watashi، これ kore، せんせい sensei، おはよう ohayou).`,
+            a0SentenceRules: `تكوين الجمل اليابانية الأساسية باستخدام الأدوات (は wa, を wo, に ni, で de, へ e)، أفعال المجموعة 1 و 2 و 3 بصيغة (Masu-form: 食べます، 行きます)، والنفي والسؤال بـ (か ka).`,
+            a1Grammar: `قواعد مستوى JLPT N5: الصفات من نوع (i-adjectives & na-adjectives)، صيغة (Te-form) للربط والطلب (てください)، والتعبير عن الرغبة والقدرة والروتين اليومي + أول 100 كانجي.`,
+            a2Grammar: `قواعد مستوى JLPT N4: الصيغ العادية (Plain Form: Nai, Ta, Dictionary forms)، الجمل الشرطية (たら tara, ば ba, と to)، وإعطاء وتلقي الخدمات (あげる، もらう، くれる) + 300 كانجي.`,
+            b1Grammar: `قواعد مستوى JLPT N3: المبني للمجهول والسببية (Passive & Causative)، لغة الاحترام والأدب المهني (Keigo: Sonkeigo & Kenjougo)، والروابط السردية المتوسطة.`,
+            b2Grammar: `قواعد مستوى JLPT N2: التراكيب النحوية المهنية والإعلامية، المتلازمات اللفظية اليابانية، قراءة المقالات الصحفية، وفهم المحادثات بالسرعة الطبيعية.`,
+            c1c2Grammar: `قواعد مستوى JLPT N1: الذروة البلاغية والأدبية، التعابير الرباعية (Yojijukugo)، قراءة النصوص الفلسفية والاقتصادية المعقدة، والطلاقة الكاملة.`
+        };
+    }
+
+    if (/ألمان|المان|german|deutsch|goethe|testdaf/i.test(combined)) {
+        return {
+            id: 'de',
+            nameAr: 'الألمانية',
+            nameEn: 'German (Deutsch)',
+            speechLang: 'de-DE',
+            instituteRole: 'أنت كبير مؤلفي مناهج معهد غوته (Goethe-Institut) وخبير اختبارات Goethe-Zertifikat و TestDaF.',
+            examName: 'Goethe-Zertifikat / TestDaF',
+            a0PhonicsUnits: `
+            - الوحدة 1: الأبجدية الألمانية ومخارج حروف العلة الأساسية والمركبة (ei, ie, eu, äu, au).
+            - الوحدة 2: الحروف المميزة في الألمانية (Umlaute: ä, ö, ü) وحرف (ß - Eszett) مع كلمات ملموسة.
+            - الوحدة 3: مخارج الحروف المركبة (ch في ich مقابل ach، و sch، و sp/st، و pf، و tz).
+            - الوحدة 4: أدوات التعريف والتنكير للأجناس الثلاثة (der, die, das / ein, eine) وأول 100 اسم ملموس (مع كتابة الحرف الأول كبيراً دائماً للاسماء!).
+            - الوحدة 5: الضمائر الشخصية (ich, du, er, sie, es) مع فعلي الكينونة والملكية (sein & haben).
+            - الوحدة 6: بناء الجملة الألمانية الأولى (Das ist ein... / Wie heißt du?) والأرقام والألوان.
+            - الوحدة 7: جمع الأسماء في الألمانية والنفي باستخدام (nicht vs kein/keine).
+            - الوحدة 8: المراجعة الصوتية وقراءة أولى المحادثات القصيرة بالألمانية.`,
+            a0PedagogyRules: `
+            🚨🚨 تحذير صارم جداً (أنت تدرّس اللغة الألمانية 🇩🇪 لمستوى الصفر المطلق Pre-A1 / A0.1):
+            1. 🚫 ممنوع منعاً باتاً تدريس كلمات إنجليزية! جميع الأمثلة والمفردات يجب أن تكون بالألمانية حصراً (مثل: das Buch, der Tisch, die Katze, das Wasser, das Haus, Guten Tag) مع تذكير الطالب بأن كل اسم في الألمانية يبدأ بحرف كبير!`,
+            a0SentenceRules: `قاعدة وضع الفعل في المرتبة الثانية دائماً (Verb Position 2 - V2 Rule)، تصريف الأفعال القياسية في المضارع، وتكوين الأسئلة بـ (W-Fragen & Ja/Nein-Fragen).`,
+            a1Grammar: `حالتا الرفع والنصب (Nominativ & Akkusativ)، الأفعال المنفصلة (Trennbare Verben)، والأفعال المساعدة (Modalverben: können, müssen, wollen).`,
+            a2Grammar: `حالة الجر (Dativ)، حروف الجر متغيرة الحالة (Wechselpräpositionen)، الماضي التام للحديث اليومي (Perfekt)، والروابط التي ترسل الفعل لنهاية الجملة (weil, dass, wenn).`,
+            b1Grammar: `الماضي البسيط السردي (Präteritum)، حالة المضاف إليه (Genitiv)، المبني للمجهول (Passiv)، صيغة التمني والشرط (Konjunktiv II)، والجمل الموصولة (Relativsätze).`,
+            b2Grammar: `التراكيب المتقدمة مثل الروابط المزدوجة (je... desto / sowohl... als auch)، النعوت الموسعة، Nominalstil مقابل Verbalstil، والتحضير لاختبار Goethe B2.`,
+            c1c2Grammar: `الكلام المنقول الرسمي (Konjunktiv I)، البلاغة الأكاديمية والعلمية، وإتقان مهارات TestDaF و Goethe C1/C2.`
+        };
+    }
+
+    if (/إسبان|اسبان|spanish|español|dele|siele/i.test(combined)) {
+        return {
+            id: 'es',
+            nameAr: 'الإسبانية',
+            nameEn: 'Spanish (Español)',
+            speechLang: 'es-ES',
+            instituteRole: 'أنت كبير مؤلفي مناهج معهد ثيربانتس (Instituto Cervantes) وخبير اختبارات DELE/SIELE.',
+            examName: 'DELE / SIELE',
+            a0PhonicsUnits: `
+            - الوحدة 1: الأبجدية الإسبانية وحروف العلة الخمسة الصافية الثابتة (a, e, i, o, u).
+            - الوحدة 2: الحروف الخاصة في الإسبانية (ñ, ll, ch, rr) وحرف (h) الصامت دائماً (Hola, niño, calle, perro).
+            - الوحدة 3: قواعد نطق حرفي (c / z / q) وحرفي (g / j) حسب حرف العلة الذي يليهما.
+            - الوحدة 4: التذكير والتأنيث وأدوات التعريف والتنكير (el, la, los, las / un, una) وأول 100 كلمة ملموسة.
+            - الوحدة 5: قواعد النبر الصوتي وعلامة المد (La Tilde / Acento ortográfico: á, é, í, ó, ú).
+            - الوحدة 6: الفرق التأسيسي الأول بين فعلي الكينونة (Ser vs Estar) وتقديم النفس والأشياء.
+            - الوحدة 7: الفعل (Tener & Hay) مع الأرقام والألوان والصفات المطابقة للاسم.
+            - الوحدة 8: المراجعة الصوتية الشاملة وقراءة أولى المحادثات القصيرة بالإسبانية.`,
+            a0PedagogyRules: `
+            🚨🚨 تحذير صارم جداً (أنت تدرّس اللغة الإسبانية 🇪🇸 لمستوى الصفر المطلق Pre-A1 / A0.1):
+            1. 🚫 ممنوع منعاً باتاً تدريس كلمات إنجليزية! جميع الأمثلة والمفردات يجب أن تكون بالإسبانية حصراً (مثل: el gato, la casa, el libro, la mesa, el agua, buenos días).`,
+            a0SentenceRules: `تصريف أفعال المجموعات الثلاث (-ar, -er, -ir) في المضارع، استخدامات (Ser, Estar, Tener, Ir)، وتكوين الأسئلة بعلامتي الاستفهام (¿...?).`,
+            a1Grammar: `الأفعال المنعكسة للروتين اليومي (Verbos reflexivos)، الأفعال متغيرة الجذر (Stem-changing verbs: poder, querer)، والفعل (Gustar).`,
+            a2Grammar: `أزمنة الماضي في الإسبانية (Pretérito Indefinido vs Pretérito Imperfecto vs Pretérito Perfecto)، وضمائر المفعول المباشر وغير المباشر.`,
+            b1Grammar: `مدخل واسع إلى المنصوب الإسباني (Presente de Subjuntivo)، صيغ الأمر (Imperativo)، والمستقبل والشرطي.`,
+            b2Grammar: `أزمنة الـ Subjuntivo الماضي، الجمل الشرطية المعقدة (Oraciones condicionales)، والروابط الحجاجية لاختبار DELE B2.`,
+            c1c2Grammar: `البلاغة الإسبانية، التعابير الاصطلاحية (Modismos)، والتحرير الأكاديمي والأدبي لمستوى DELE C1/C2.`
+        };
+    }
+
+    if (/صين|mandarin|chinese|中文|hsk|pinyin/i.test(combined)) {
+        return {
+            id: 'zh',
+            nameAr: 'الصينية (الماندرين)',
+            nameEn: 'Mandarin Chinese (中文)',
+            speechLang: 'zh-CN',
+            instituteRole: 'أنت كبير مؤلفي مناهج معهد كونفوشيوس وخبير اختبارات HSK (من HSK 1 إلى HSK 6).',
+            examName: 'HSK 1-6',
+            a0PhonicsUnits: `
+            - الوحدة 1: نظام البينين الصوتي (Pinyin): الحروف الاستهلالية (Initials) والنهايات الصوتية (Finals).
+            - الوحدة 2: النغمات الأربع في اللغة الصينية (The 4 Tones: ā, á, ǎ, à + النغمة المحايدة) وكيف تغير النغمة معنى الكلمة (mā, má, mǎ, mà).
+            - الوحدة 3: مخارج الأصوات الصينية الخاصة (zh, ch, sh, r مقابل j, q, x مقابل z, c, s).
+            - الوحدة 4: قواعد تغير النغمة في الكلام المتصل (Tone Sandhi: مثل نطق نغمتين ثالثتين معاً في Nǐ hǎo).
+            - الوحدة 5: جذور المقاطع الصينية التأسيسية (Radicals) وترتيب رسم الخطوط (Stroke Order) لأول 50 رمز هانزي (Hanzi).
+            - الوحدة 6: الضمائر الشخصية (我 wǒ, 你 nǐ, 他 tā) وفعل الكينونة (是 shì) وأدوات القياس الأساسية (Measure Words: 个 gè, 本 běn).
+            - الوحدة 7: الأرقام، التواريخ، وأسماء الإشارة (这 zhè, 那 nà) والنفي بـ (不 bù و 没 méi).
+            - الوحدة 8: تكوين الأسئلة بـ (吗 ma و 什么 shénme) وقراءة أولى الحوارات بالرموز الصينية والبينين.`,
+            a0PedagogyRules: `
+            🚨🚨 تحذير صارم جداً (أنت تدرّس اللغة الصينية الماندرين 🇨🇳 لمستوى الصفر المطلق Pre-A1 / A0.1):
+            1. 🚫 ممنوع منعاً باتاً تدريس كلمات إنجليزية! جميع الأمثلة يجب أن تضم الرمز الصيني (Hanzi) متبوعاً بنظام النطق (Pinyin بالنغمات) والترجمة العربية.`,
+            a0SentenceRules: `هيكل الجملة الصينية (SVO مع وضع الزمان والمكان قبل الفعل)، أداة الملكية (的 de)، وأفعال الحياة اليومية (HSK 1).`,
+            a1Grammar: `قواعد HSK 1-2: أداة اكتمال الفعل (了 le)، الظروف الزمنية، الأفعال المساعدة (想 xiǎng, 要 yào, 会 huì, 能 néng).`,
+            a2Grammar: `قواعد HSK 3: المكملات الاتجاهية والنتيجية (Resultative & Directional Complements)، وتراكيب المقارنة بـ (比 bǐ) وتراكيب (把 bǎ).`,
+            b1Grammar: `قواعد HSK 4: الجمل المركبة والروابط المنطقية (虽然...但是 / 不但...而且)، والتعبير عن الآراء والسرد المفصل.`,
+            b2Grammar: `قواعد HSK 5: المتلازمات الصينية الرسمية، التعابير الرباعية المأثورة (Chengyu 成语)، وقراءة النصوص الإعلامية والمهنية.`,
+            c1c2Grammar: `قواعد HSK 6+: البلاغة الصينية المتقدمة، الأدب والخطاب الأكاديمي والاقتصادي الرفيع.`
+        };
+    }
+
+    // الافتراضي: اللغة الإنجليزية
+    return {
+        id: 'en',
+        nameAr: 'الإنجليزية',
+        nameEn: 'English',
+        speechLang: 'en-US',
+        instituteRole: 'أنت أعظم أستاذ لغة إنجليزية ومؤلف مناهج Cambridge في العالم.',
+        examName: 'IELTS Band 8.0+ / TOEFL iBT',
+        a0PhonicsUnits: `
+        - الوحدة 1: الحروف الساكنة الأولى وصوت العلة القصير (Short A) وعائلات (-at, -an) مثل (cat, mat, man, pan).
+        - الوحدة 2: أصوات العلة القصيرة (Short I & Short E) والفرق بين (P / B) وعائلات (-in, -it, -et, -ed) مثل (pin, bin, bed, red).
+        - الوحدة 3: أصوات العلة القصيرة (Short O & Short U) وعائلات (-ot, -og, -ug, -un) مثل (dog, hot, cup, sun).
+        - الوحدة 4: الأصوات المركبة الأساسية (Digraphs: SH, CH, TH) والكلمات البصرية الأولى (Sight Words: the, is, on, in).
+        - الوحدة 5: أصوات العلة الطويلة (Long Vowels & Magic E) والفرق السمعي بين القصير والطويل (hat vs hate, kit vs kite).
+        - الوحدة 6: أدوات التنكير للمفرد (a / an) وأسماء الإشارة القريبة والبعيدة (This is a... / That is an...).
+        - الوحدة 7: جمع الكلمات البسيطة بإضافة (-s) والألوان والأرقام الأساسية لوصف الأشياء الملموسة (two red cats, three big cups).
+        - الوحدة 8: المراجعة الصوتية الشاملة وقراءة أولى القصص الصورية القصيرة جداً (Decodable Mini-Stories).`,
+        a0PedagogyRules: `
+        🚨🚨 تحذير صارم جداً (أنت في الكورس التأسيسي الأول Pre-A1 / A0.1 للغة الإنجليزية من الصفر المطلق!):
+        1. 🚫 ممنوع منعاً باتاً استخدام أي كلمات أكاديمية أو معقدة!
+        2. الطالب هنا يتعلم الحروف، مخارج الأصوات (Phonics)، والكلمات الملموسة البسيطة فقط (مثل: cat, mat, dog, cup, sun, bed, ship, fish, apple, egg, book, pen).
+        3. يجب أن تكون جميع الجمل الإنجليزية في الدرس قصيرة جداً وبسيطة للغاية (من كلمتين إلى 5 كلمات كحد أقصى! مثل: "This is a red cup." أو "The cat is on the mat.") مع ترجمتها ونطقها العربي المبسط فوراً.
+        4. في سُلّم البناء التراكمي: 1. كلمة مفردة ➔ 2. أداة + كلمة (A cat) ➔ 3. صفة + اسم (A big cat) ➔ 4. جملة إشارة (This is a big cat.) ➔ 5. سؤال وجواب بسيط (Is this a cat? Yes, it is.).`,
+        a0SentenceRules: `الضمائر الشخصية (I, you, he, she, it, we, they)، فعل الكينونة (am, is, are)، الأفعال اليومية البسيطة (have, want, like, eat, go)، وتكوين الجملة والسؤال البسيط.`,
+        a1Grammar: `الأزمنة الحاضرة (Present Simple & Present Continuous)، الأسماء المعدودة وغير المعدودة (some/any, there is/are)، أدوات الاستفهام، وحروف الجر.`,
+        a2Grammar: `الماضي البسيط والمستمر (Past Simple & Continuous)، خطط المستقبل (will vs going to)، صيغ المقارنة والتفضيل، والمضارع التام التأسيسي.`,
+        b1Grammar: `الأزمنة التامة المستمرة، ضمائر الوصل (Relative Clauses)، الجمل الشرطية (Conditionals 0-3)، المبني للمجهول، الكلام المنقول، والكلام المتصل السريع (Connected Speech).`,
+        b2Grammar: `المتلازمات اللفظية (Collocations)، الأفعال المركبة (Phrasal Verbs)، الشرطيات المختلطة (Mixed Conditionals)، وأفعال الاستنتاج (Modals of Deduction).`,
+        c1c2Grammar: `الأساليب العكسية (Inversion)، الجمل المنشطرة (Cleft Sentences)، المصدرية الأكاديمية (Nominalization)، والتعابير المجازية الدقيقة (Idioms & Nuances).`
+    };
+};
+
+// ============================================================================
+// 🧠 محرك التدرج اللغوي التصاعدي الحتمي متعدد اللغات (Deterministic 7-Tier CEFR Engine V4)
+// يكتشف اللغة المستهدفة أولاً، ثم يعزل رقم الكورس ويقفل المحتوى على اللغة والمستوى بدقة 100%!
+// ============================================================================
+const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle = '', difficulty = '', explicitCourseOrder = null, explicitTargetLang = '') => {
     const rawTopic = String(courseTopic || '');
 
-    // 1. عزل اسم الكراش كورس الحالي عن اسم الشهادة العام (لكي لا تتسرب كلمات C2 أو IELTS من اسم الشهادة!)
+    // 0. اكتشاف اللغة المستهدفة من النص الكامل (قبل قص اسم الشهادة!)
+    const langProfile = detectTargetLanguageProfile(`${rawTopic} ${sectionName} ${lessonTitle}`, explicitTargetLang);
+
+    // 1. عزل اسم الكراش كورس الحالي عن اسم الشهادة العام (لكي لا تتسرب كلمات C2 أو أسماء الاختبارات من اسم الشهادة!)
     let isolatedCourseTitle = rawTopic;
     const crashCourseIdx = rawTopic.search(/(?:الكراش كورس|كراش كورس|Course)\s*\d+/i);
     if (crashCourseIdx !== -1) {
@@ -4875,13 +5217,11 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
     const courseNumMatch = isolatedCourseTitle.match(/(?:الكراش كورس|كراش كورس|الكورس|كورس|Course|المرحلة)\s*(\d+)/i);
     const courseNum = explicitCourseOrder ? Number(explicitCourseOrder) : (courseNumMatch ? Number(courseNumMatch[1]) : null);
 
-    // النص المحلي النظيف الخالي من اسم الشهادة العام
     const cleanLocalCtx = `${isolatedCourseTitle} ${sectionName} ${lessonTitle}`;
 
     // 3. التحديد الحتمي للمستوى (Deterministic Tier Detection)
     let detectedTier = 'A1';
 
-    // أ) إذا كان لدينا رقم الكورس (وهو موجود دائماً في عناوين الكراش كورسات 1 إلى 20):
     if (courseNum && difficulty !== 'lang_exam_prep_cert') {
         if (courseNum === 1) detectedTier = 'A0_PHONICS';
         else if (courseNum === 2) detectedTier = 'A0_SENTENCE';
@@ -4894,159 +5234,177 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
     } else if (difficulty === 'lang_exam_prep_cert') {
         detectedTier = 'EXAM_MASTERY';
     } else {
-        // ب) في حال عدم وجود رقم كورس، نفحص النص المعزول من الأسهل للأصعب (مع فحص Pre-A1 أولاً قبل A1!)
-        if (/Pre-A1|A0\.1|Phonics|مخارج الأصوات|الحروف|CVC/i.test(cleanLocalCtx)) {
+        if (/Pre-A1|A0\.1|Phonics|مخارج الأصوات|الحروف|الأبجدية|CVC/i.test(cleanLocalCtx)) {
             detectedTier = 'A0_PHONICS';
         } else if (/A0\.2|A0\b|الأفعال اليومية البسيطة|الضمائر/i.test(cleanLocalCtx)) {
             detectedTier = 'A0_SENTENCE';
-        } else if (/(?<!Pre-)A1\b|A1\.1|A1\.2|Present Simple|Present Continuous|الروتين اليومي/i.test(cleanLocalCtx)) {
+        } else if (/(?<!Pre-)A1\b|A1\.1|A1\.2|الروتين اليومي/i.test(cleanLocalCtx)) {
             detectedTier = 'A1';
-        } else if (/A2\b|A2\.1|A2\.2|A2\+|Past Simple|Comparatives|الماضي|المقارنات/i.test(cleanLocalCtx)) {
+        } else if (/A2\b|A2\.1|A2\.2|A2\+|الماضي|المقارنات/i.test(cleanLocalCtx)) {
             detectedTier = 'A2';
-        } else if (/B1\b|B1\.1|B1\.2|B1\+|Relative Clauses|Connected Speech|Conditionals 0-3/i.test(cleanLocalCtx)) {
+        } else if (/B1\b|B1\.1|B1\.2|B1\+/i.test(cleanLocalCtx)) {
             detectedTier = 'B1';
-        } else if (/B2\b|B2\.1|B2\.2|B2\+|Collocations|Phrasal Verbs|Deduction/i.test(cleanLocalCtx)) {
+        } else if (/B2\b|B2\.1|B2\.2|B2\+/i.test(cleanLocalCtx)) {
             detectedTier = 'B2';
-        } else if (/C1\b|C1\.1|C1\.2|C2\b|Inversion|Cleft Sentences|Idioms/i.test(cleanLocalCtx)) {
+        } else if (/C1\b|C1\.1|C1\.2|C2\b/i.test(cleanLocalCtx)) {
             detectedTier = 'C1_C2';
-        } else if (/IELTS|TOEFL|JLPT|DELF|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) {
+        } else if (/IELTS|TOEFL|JLPT|DELF|DALF|TestDaF|DELE|HSK|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) {
             detectedTier = 'EXAM_MASTERY';
         }
     }
 
+    const strictLangLockRule = langProfile.id !== 'en'
+        ? `\n🚨🚨 قانون الهوية اللغوية القاطع (STRICT LANGUAGE LOCK):
+        - اللغة المستهدفة في هذا الكورس هي **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** حصراً!
+        - 🚫 يُمنع منعاً باتاً وقاطعاً استخدام أي مفردة أو جملة أو قاعدة صوتية باللغة الإنجليزية (إياك أن تكتب كلمات مثل cat, mat, short A, this is a... إلخ)!
+        - جميع المفردات، الجمل، الحوارات، نصوص الاستماع، والتمارين يجب أن تكون باللغة **${langProfile.nameAr} (${langProfile.nameEn})** مع شرحها وترجمتها بالعربية!`
+        : '';
+
     const specsMap = {
         A0_PHONICS: {
             tierId: 'A0',
-            cefrLabel: 'المستوى التأسيسي الأول للصوتيات والحروف (Pre-A1 / A0.1 Phonics & First Words)',
+            langProfile,
+            cefrLabel: `المستوى التأسيسي الأول للصوتيات والحروف في اللغة ${langProfile.nameAr} (Pre-A1 / A0.1 Phonics & First Words)`,
             unitStructureGuide: `
-            - الوحدة 1: الحروف الساكنة الأولى وصوت العلة القصير (Short A) وعائلات (-at, -an) مثل (cat, mat, man, pan).
-            - الوحدة 2: أصوات العلة القصيرة (Short I & Short E) والفرق بين (P / B) وعائلات (-in, -it, -et, -ed) مثل (pin, bin, bed, red).
-            - الوحدة 3: أصوات العلة القصيرة (Short O & Short U) وعائلات (-ot, -og, -ug, -un) مثل (dog, hot, cup, sun).
-            - الوحدة 4: الأصوات المركبة الأساسية (Digraphs: SH, CH, TH) والكلمات البصرية الأولى (Sight Words: the, is, on, in).
-            - الوحدة 5: أصوات العلة الطويلة (Long Vowels & Magic E) والفرق السمعي بين القصير والطويل (hat vs hate, kit vs kite).
-            - الوحدة 6: أدوات التنكير للمفرد (a / an) وأسماء الإشارة القريبة والبعيدة (This is a... / That is an...).
-            - الوحدة 7: جمع الكلمات البسيطة بإضافة (-s) والألوان والأرقام الأساسية لوصف الأشياء الملموسة (two red cats, three big cups).
-            - الوحدة 8: المراجعة الصوتية الشاملة وقراءة أولى القصص الصورية القصيرة جداً (Decodable Mini-Stories).
-            (داخل كل وحدة 6 دروس: 1. اكتشاف الصوت والمفردات الملموسة ➔ 2. مختبر مخارج الفم واللسان ➔ 3. تركيب الكلمات بالمكعبات ➔ 4. بناء عبارات وجمل من 3-4 كلمات ➔ 5. مختبر الاستماع والترديد Shadowing ➔ 6. ورشة التهجئة والإملاء الصوتي).`,
+            ${langProfile.a0PhonicsUnits}
+            (داخل كل وحدة 6 دروس: 1. اكتشاف الصوت والمفردات الملموسة في اللغة ${langProfile.nameAr} ➔ 2. مختبر مخارج الفم واللسان ➔ 3. تركيب الكلمات بالمكعبات ➔ 4. بناء عبارات وجمل قصيرة من 3-4 كلمات باللغة ${langProfile.nameAr} ➔ 5. مختبر الاستماع والترديد Shadowing ➔ 6. ورشة التهجئة والإملاء الصوتي).`,
             pedagogyRules: `
-            🚨🚨 تحذير صارم جداً (أنت في الكورس التأسيسي الأول Pre-A1 / A0.1 للمبتدئين من الصفر المطلق!):
-            1. 🚫 ممنوع منعاً باتاً استخدام أي كلمات أكاديمية أو معقدة (مثل plethora, paradigm, discourse, empirical)!
-            2. الطالب هنا يتعلم الحروف، مخارج الأصوات (Phonics)، والكلمات الملموسة البسيطة فقط (مثل: cat, mat, dog, cup, sun, bed, ship, fish, apple, egg, book, pen).
-            3. يجب أن تكون جميع الجمل الإنجليزية في الدرس قصيرة جداً وبسيطة للغاية (من كلمتين إلى 5 كلمات كحد أقصى! مثل: "This is a red cup." أو "The cat is on the mat.") مع ترجمتها ونطقها العربي المبسط فوراً.
-            4. في سُلّم البناء التراكمي: 1. كلمة مفردة ➔ 2. أداة + كلمة (A cat) ➔ 3. صفة + اسم (A big cat) ➔ 4. جملة إشارة (This is a big cat.) ➔ 5. سؤال وجواب بسيط (Is this a cat? Yes, it is.).
-            5. قطعة القراءة: من 4 إلى 5 جمل بسيطة جداً (30 إلى 45 كلمة إجمالاً) مبنية 100% من الكلمات الصوتية البسيطة.`
+            ${langProfile.a0PedagogyRules}
+            ${strictLangLockRule}
+            5. قطعة القراءة: من 4 إلى 5 جمل بسيطة جداً باللغة ${langProfile.nameAr} مبنية 100% من الكلمات الصوتية البسيطة مع ترجمتها العربية.`
         },
         A0_SENTENCE: {
             tierId: 'A0',
-            cefrLabel: 'المستوى التأسيسي الثاني: الضمائر، الأفعال اليومية، وتكوين الجملة والسؤال الأول (CEFR A0.2)',
+            langProfile,
+            cefrLabel: `المستوى التأسيسي الثاني للغة ${langProfile.nameAr}: الضمائر، الأفعال اليومية، وتكوين الجملة والسؤال الأول (CEFR A0.2)`,
             unitStructureGuide: `
-            - الدرس 1 (المفردات الأساسية المصورة: التحيات، الضمائر، الأفعال اليومية البسيطة، أو الصفات المباشرة).
-            - الدرس 2 (مختبر النطق الصوتي: نطق الضمائر والاختصارات البسيطة I'm, You're, It's بوضوح).
-            - الدرس 3 (قاعدة التركيب البسيطة بالمكعبات: الفاعل + الفعل + المفعول البسيط).
-            - الدرس 4 (تطبيق القاعدة في جمل يومية قصيرة من 4 إلى 6 كلمات في الإثبات والنفي).
-            - الدرس 5 (مختبر الاستماع النشط وتكوين السؤال والجواب الأول: What is...? / Do you like...?).
-            - الدرس 6 (ورشة القراءة المبسطة وكتابة 3 إلى 4 جمل قصيرة عن النفس).`,
+            - محور القواعد والتراكيب في اللغة ${langProfile.nameAr}: ${langProfile.a0SentenceRules}
+            - الدرس 1 (المفردات الأساسية المصورة في اللغة ${langProfile.nameAr}: التحيات، الضمائر، الأفعال اليومية البسيطة، والصفات المباشرة).
+            - الدرس 2 (مختبر النطق الصوتي والوصل في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (قاعدة التركيب البسيطة بالمكعبات في اللغة ${langProfile.nameAr}: الفاعل + الفعل + المفعول البسيط).
+            - الدرس 4 (تطبيق القاعدة في جمل يومية قصيرة من 4 إلى 6 كلمات باللغة ${langProfile.nameAr} في الإثبات والنفي).
+            - الدرس 5 (مختبر الاستماع النشط وتكوين السؤال والجواب الأول باللغة ${langProfile.nameAr}).
+            - الدرس 6 (ورشة القراءة المبسطة وكتابة 3 إلى 4 جمل قصيرة عن النفس باللغة ${langProfile.nameAr}).`,
             pedagogyRules: `
-            🚨🚨 تحذير صارم جداً (أنت في المستوى التأسيسي A0.2 للمبتدئين!):
-            1. 🚫 ممنوع منعاً باتاً استخدام مفردات متقدمة أو أكاديمية! التزم فقط بالكلمات اليومية البسيطة جداً (Hello, Good morning, I, you, he, she, we, they, am, is, are, have, want, like, eat, drink, see, go, book, water, apple, happy, big, small, numbers 1-20).
-            2. طول الجملة الإنجليزية يجب ألا يتجاوز (4 إلى 6 كلمات فقط!) مثل: "Hello, my name is Sara." أو "I have two red books." أو "Do you like hot tea?".
-            3. في سُلّم البناء التراكمي: اصعد من (كلمة/فعل بسيط) إلى (جملة من 3 كلمات) إلى (جملة من 5 كلمات) إلى (نفي بسيط) إلى (سؤال وجواب مباشر).
-            4. قطعة القراءة: فقرة بسيطة جداً وواضحة من (45 إلى 65 كلمة) بحوار تعارف أو موقف يومي سهل جداً.`
+            🚨🚨 تحذير صارم جداً (أنت في المستوى التأسيسي A0.2 للغة ${langProfile.nameAr} للمبتدئين!):
+            ${strictLangLockRule}
+            1. 🚫 ممنوع منعاً باتاً استخدام مفردات متقدمة أو أكاديمية! التزم فقط بالكلمات اليومية البسيطة جداً في اللغة ${langProfile.nameAr}.
+            2. محور التركيز النحوي: ${langProfile.a0SentenceRules}
+            3. طول الجملة باللغة ${langProfile.nameAr} يجب ألا يتجاوز (4 إلى 6 كلمات فقط!).
+            4. قطعة القراءة: فقرة بسيطة جداً باللغة ${langProfile.nameAr} من (45 إلى 65 كلمة) بحوار تعارف أو موقف يومي سهل جداً.`
         },
         A1: {
             tierId: 'A1',
-            cefrLabel: 'المستوى الابتدائي المتكامل (CEFR A1)',
+            langProfile,
+            cefrLabel: `المستوى الابتدائي المتكامل للغة ${langProfile.nameAr} (CEFR A1)`,
             unitStructureGuide: `
-            - الدرس 1 (المفردات الحياتية والروتين اليومي والعبارات الوظيفية للوحدة).
-            - الدرس 2 (مختبر النطق: نبر الكلمات Word Stress والأصوات الضعيفة Weak Forms).
-            - الدرس 3 (هندسة القواعد التأسيسية: الأزمنة الحاضرة Present Simple / Continuous، أدوات الاستفهام، وحروف الجر).
-            - الدرس 4 (تطبيق القواعد في بناء جمل حياتية من 6 إلى 10 كلمات).
-            - الدرس 5 (مختبر الاستماع الحواري وفهم المتحدث في المواقف اليومية كالمطعم والتسوق).
-            - الدرس 6 (ورشة القراءة التطبيقية وكتابة فقرة شخصية قصيرة من 40-50 كلمة).`,
+            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.a1Grammar}
+            - الدرس 1 (المفردات الحياتية والروتين اليومي والعبارات الوظيفية باللغة ${langProfile.nameAr}).
+            - الدرس 2 (مختبر النطق والإيقاع الصوتي في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (هندسة القواعد التأسيسية في اللغة ${langProfile.nameAr}: ${langProfile.a1Grammar}).
+            - الدرس 4 (تطبيق القواعد في بناء جمل حياتية باللغة ${langProfile.nameAr} من 6 إلى 10 كلمات).
+            - الدرس 5 (مختبر الاستماع الحواري وفهم المتحدث باللغة ${langProfile.nameAr} في المواقف اليومية كالمطعم والتسوق).
+            - الدرس 6 (ورشة القراءة التطبيقية وكتابة فقرة شخصية قصيرة باللغة ${langProfile.nameAr} من 40-50 كلمة).`,
             pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR A1):
-            1. 🚫 ممنوع استخدام كلمات أكاديمية معقدة (مثل C1/C2)، وممنوع النزول لمستوى الحروف المفردة! استخدم مفردات الحياة اليومية الواضحة (العائلة، المنزل، العمل، الطعام، التسوق، الأوقات).
-            2. يبني الطالب هنا جملاً حياتية طبيعية طولها من (6 إلى 10 كلمات) باستخدام (Present Simple, Present Continuous, can, there is/are, some/any, because, but, so).
-            3. قطعة القراءة: قصة يومية أو رسالة بسيطة من (80 إلى 110 كلمات) متبوعة بحوار حياتي طبيعي.`
+            🚨 قانون التدرج التصاعدي لمستوى (CEFR A1) في اللغة ${langProfile.nameAr}:
+            ${strictLangLockRule}
+            1. استخدم مفردات الحياة اليومية الواضحة باللغة ${langProfile.nameAr} (العائلة، المنزل، العمل، الطعام، التسوق، الأوقات).
+            2. يبني الطالب جملاً حياتية باللغة ${langProfile.nameAr} طولها من (6 إلى 10 كلمات) لتطبيق: ${langProfile.a1Grammar}.
+            3. قطعة القراءة: قصة يومية أو رسالة بسيطة باللغة ${langProfile.nameAr} من (80 إلى 110 كلمات) متبوعة بحوار حياتي طبيعي.`
         },
         A2: {
             tierId: 'A2',
-            cefrLabel: 'المستوى ما قبل المتوسط (CEFR A2 - Waystage)',
+            langProfile,
+            cefrLabel: `المستوى ما قبل المتوسط للغة ${langProfile.nameAr} (CEFR A2 - Waystage)`,
             unitStructureGuide: `
-            - الدرس 1 (الحصيلة اللفظية الموسعة، الأفعال الشائعة، وبدايات المتلازمات في موضوع الوحدة).
-            - الدرس 2 (مختبر الصوتيات: وصل الكلمات Linking، نطق نهايات -ed، والتنغيم الصوتي).
-            - الدرس 3 (هندسة القواعد السردية: الماضي البسيط والمستمر، المستقبل، المقارنات، والمضارع التام التأسيسي).
-            - الدرس 4 (بناء الجمل المركبة والسرد القصصي المترابط من 10 إلى 14 كلمة).
-            - الدرس 5 (مختبر الفهم السمعي لمواقف السفر، الصحة، العمل، والترديد بالسرعة الطبيعية).
-            - الدرس 6 (ورشة القراءة التحليلية المبسطة وكتابة رسالة أو قصة مترابطة من 70-90 كلمة).`,
+            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.a2Grammar}
+            - الدرس 1 (الحصيلة اللفظية الموسعة والأفعال الشائعة في اللغة ${langProfile.nameAr}).
+            - الدرس 2 (مختبر الصوتيات: وصل الكلمات والتنغيم الصوتي في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (هندسة القواعد السردية في اللغة ${langProfile.nameAr}: ${langProfile.a2Grammar}).
+            - الدرس 4 (بناء الجمل المركبة والسرد القصصي المترابط باللغة ${langProfile.nameAr} من 10 إلى 14 كلمة).
+            - الدرس 5 (مختبر الفهم السمعي لمواقف السفر، الصحة، والعمل باللغة ${langProfile.nameAr}).
+            - الدرس 6 (ورشة القراءة التحليلية المبسطة وكتابة رسالة أو قصة مترابطة باللغة ${langProfile.nameAr} من 70-90 كلمة).`,
             pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR A2):
-            1. الطالب هنا يسرد تجاربه في الماضي، يخطط للمستقبل، ويقارن بين الأشياء بجمل مركبة واضحة طولها (10 إلى 14 كلمة) باستخدام (when, while, going to, will, comparatives, Present Perfect, should, must).
-            2. قطعة القراءة: مقال مبسط أو قصة واقعية من (130 إلى 170 كلمة) غنية بالروابط الزمنية.`
+            🚨 قانون التدرج التصاعدي لمستوى (CEFR A2) في اللغة ${langProfile.nameAr}:
+            ${strictLangLockRule}
+            1. الطالب هنا يسرد تجاربه في الماضي، يخطط للمستقبل، ويقارن بين الأشياء باللغة ${langProfile.nameAr} بجمل طولها (10 إلى 14 كلمة) مطبقاً: ${langProfile.a2Grammar}.
+            2. قطعة القراءة: مقال مبسط أو قصة واقعية باللغة ${langProfile.nameAr} من (130 إلى 170 كلمة).`
         },
         B1: {
             tierId: 'B1',
-            cefrLabel: 'المستوى المتوسط المستقل (CEFR B1 / B1+ Threshold)',
+            langProfile,
+            cefrLabel: `المستوى المتوسط المستقل للغة ${langProfile.nameAr} (CEFR B1 / B1+ Threshold)`,
             unitStructureGuide: `
-            - الدرس 1 (المفردات المفاهيمية، المتلازمات اللفظية Collocations، والأفعال المركبة للوحدة).
-            - الدرس 2 (مختبر الكلام المتصل السريع Connected Speech: Elision, Assimilation & Reductions).
-            - الدرس 3 (هندسة القواعد المتوسطة: الأزمنة التامة المستمرة، ضمائر الوصل، الشرطيات If 0-3، المبني للمجهول، والكلام المنقول).
-            - الدرس 4 (صياغة الحجج، التعبير عن الآراء والمشاعر، وبناء جمل من 14 إلى 18 كلمة).
-            - الدرس 5 (مختبر الاستماع للمتحدث الأصلي السريع وتحليل النبرة والاختصارات الصوتية).
-            - الدرس 6 (ورشة القراءة المقالاتية وكتابة فقرة رأي أو بريد رسمي متماسك من 120-150 كلمة).`,
+            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.b1Grammar}
+            - الدرس 1 (المفردات المفاهيمية والمتلازمات اللفظية في اللغة ${langProfile.nameAr}).
+            - الدرس 2 (مختبر الكلام المتصل السريع في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (هندسة القواعد المتوسطة في اللغة ${langProfile.nameAr}: ${langProfile.b1Grammar}).
+            - الدرس 4 (صياغة الحجج، التعبير عن الآراء، وبناء جمل باللغة ${langProfile.nameAr} من 14 إلى 18 كلمة).
+            - الدرس 5 (مختبر الاستماع للمتحدث الأصلي السريع باللغة ${langProfile.nameAr}).
+            - الدرس 6 (ورشة القراءة المقالاتية وكتابة فقرة رأي أو بريد رسمي باللغة ${langProfile.nameAr} من 120-150 كلمة).`,
             pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR B1 / B1+):
-            1. الطالب في مرحلة الاستقلالية اللغوية؛ الأمثلة يجب أن تكون غنية بـ (Present Perfect Continuous, Relative Clauses, Conditionals, Passive Voice, Reported Speech, Discourse Markers).
-            2. قطعة القراءة: مقال تحليلي أو نقاشي من (190 إلى 240 كلمة) بمستوى B1+.`
+            🚨 قانون التدرج التصاعدي لمستوى (CEFR B1 / B1+) في اللغة ${langProfile.nameAr}:
+            ${strictLangLockRule}
+            1. الطالب في مرحلة الاستقلالية اللغوية؛ الأمثلة باللغة ${langProfile.nameAr} يجب أن تطبق: ${langProfile.b1Grammar}.
+            2. قطعة القراءة: مقال تحليلي أو نقاشي باللغة ${langProfile.nameAr} من (190 إلى 240 كلمة).`
         },
         B2: {
             tierId: 'B2',
-            cefrLabel: 'المستوى فوق المتوسط والطلاقة المهنية (CEFR B2 / B2+ Vantage)',
+            langProfile,
+            cefrLabel: `المستوى فوق المتوسط والطلاقة المهنية للغة ${langProfile.nameAr} (CEFR B2 / B2+ Vantage)`,
             unitStructureGuide: `
-            - الدرس 1 (الثروة اللفظية المتقدمة: Collocations، Phrasal Verbs، والتمييز بين الرسمي وغير الرسمي).
-            - الدرس 2 (مختبر الإيقاع البلاغي، النبر التوكيدي Emphatic Stress، وتنغيم الإقناع).
-            - الدرس 3 (الهندسة النحوية المتقدمة: Mixed Conditionals، Participle Clauses، واستنتاج الماضي Modals of Deduction).
-            - الدرس 4 (التواصل المهني، إدارة المفاوضات والاجتماعات، وصياغة الجمل المعقدة 18-24 كلمة).
-            - الدرس 5 (مختبر الاستماع التحليلي للمحاضرات والمناقشات السريعة واستخلاص المعاني الضمنية).
-            - الدرس 6 (هندسة كتابة المقالات الجدلية والتقارير الاحترافية Coherence, Cohesion & Hedging).`,
+            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.b2Grammar}
+            - الدرس 1 (الثروة اللفظية المتقدمة في اللغة ${langProfile.nameAr} والتمييز بين الرسمي وغير الرسمي).
+            - الدرس 2 (مختبر الإيقاع البلاغي وتنغيم الإقناع في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (الهندسة النحوية المتقدمة في اللغة ${langProfile.nameAr}: ${langProfile.b2Grammar}).
+            - الدرس 4 (التواصل المهني، إدارة المفاوضات، وصياغة الجمل المعقدة باللغة ${langProfile.nameAr} 18-24 كلمة).
+            - الدرس 5 (مختبر الاستماع التحليلي للمحاضرات والمناقشات السريعة باللغة ${langProfile.nameAr}).
+            - الدرس 6 (هندسة كتابة المقالات الجدلية والتقارير الاحترافية باللغة ${langProfile.nameAr}).`,
             pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR B2 / B2+):
-            1. نحن في مستوى الطلاقة المهنية والأكاديمية؛ استخدم متلازمات لفظية أصيلة وتراكيب نحوية متقدمة (Participle Clauses, Passive Reporting, Modals of Deduction).
-            2. قطعة القراءة: نص تحليلي أو دراسة حالة مهنية/أكاديمية من (250 إلى 300 كلمة).`
+            🚨 قانون التدرج التصاعدي لمستوى (CEFR B2 / B2+) في اللغة ${langProfile.nameAr}:
+            ${strictLangLockRule}
+            1. نحن في مستوى الطلاقة المهنية والأكاديمية باللغة ${langProfile.nameAr}؛ طبق بعمق: ${langProfile.b2Grammar}.
+            2. قطعة القراءة: نص تحليلي أو دراسة حالة مهنية/أكاديمية باللغة ${langProfile.nameAr} من (250 إلى 300 كلمة).`
         },
         C1_C2: {
             tierId: 'C1_C2',
-            cefrLabel: 'مستوى الكفاءة العليا وطلاقة المتحدث الأصلي (CEFR C1 / C2 Mastery)',
+            langProfile,
+            cefrLabel: `مستوى الكفاءة العليا وطلاقة المتحدث الأصلي للغة ${langProfile.nameAr} (CEFR C1 / C2 Mastery)`,
             unitStructureGuide: `
-            - الدرس 1 (المعجم البلاغي والأكاديمي الرفيع، الظلال الدلالية الدقيقة Nuances، والكنايات الثقافية Idioms).
-            - الدرس 2 (مختبر البلاغة الصوتية، التحكم في النبرة الخطابية، وإيقاع المتحدث الأصلي في المحاضرات).
-            - الدرس 3 (الذروة النحوية: الأساليب العكسية Inversion، الجمل المنشطرة Cleft Sentences، والمصدرية الأكاديمية Nominalization).
-            - الدرس 4 (الارتجال الفوري، المحاججة الفلسفية والعلمية، وبناء التراكيب البلاغية الرفيعة).
-            - الدرس 5 (مختبر الاستماع النقدي للنصوص الأدبية، الإعلامية، والأكاديمية المعقدة وقراءة ما بين السطور).
-            - الدرس 6 (ورشة التحرير البلاغي والكتابة الأكاديمية والإبداعية بمستوى C2 Native).`,
+            - محور القواعد والبلاغة للغة ${langProfile.nameAr}: ${langProfile.c1c2Grammar}
+            - الدرس 1 (المعجم البلاغي والأكاديمي الرفيع والظلال الدلالية الدقيقة والكنايات في اللغة ${langProfile.nameAr}).
+            - الدرس 2 (مختبر البلاغة الصوتية وإيقاع المتحدث الأصلي في المحاضرات باللغة ${langProfile.nameAr}).
+            - الدرس 3 (الذروة النحوية في اللغة ${langProfile.nameAr}: ${langProfile.c1c2Grammar}).
+            - الدرس 4 (الارتجال الفوري والمحاججة الفلسفية والعلمية باللغة ${langProfile.nameAr}).
+            - الدرس 5 (مختبر الاستماع النقدي للنصوص الأدبية والإعلامية والأكاديمية باللغة ${langProfile.nameAr}).
+            - الدرس 6 (ورشة التحرير البلاغي والكتابة الأكاديمية بمستوى C2 في اللغة ${langProfile.nameAr}).`,
             pedagogyRules: `
-            🚨 قانون الذروة اللغوية الصارم (CEFR C1 / C2 Native Mastery):
-            1. أنت تخاطب طالباً في قمة الهرم اللغوي (C1/C2)؛ استخدم تراكيب بلاغية ونحوية رفيعة (Negative Inversion, Cleft Sentences, Subjunctive, Academic Nominalization).
-            2. قطعة القراءة: مقال فكري/أكاديمي/أدبي رفيع المستوى (300 إلى 380 كلمة) مع تشريحه البلاغي.`
+            🚨 قانون الذروة اللغوية الصارم (CEFR C1 / C2 Native Mastery) في اللغة ${langProfile.nameAr}:
+            ${strictLangLockRule}
+            1. أنت تخاطب طالباً في قمة الهرم اللغوي (C1/C2) في اللغة ${langProfile.nameAr}؛ طبق: ${langProfile.c1c2Grammar}.
+            2. قطعة القراءة: مقال فكري/أكاديمي/أدبي رفيع المستوى باللغة ${langProfile.nameAr} (300 إلى 380 كلمة) مع تشريحه البلاغي.`
         },
         EXAM_MASTERY: {
             tierId: 'EXAM_MASTERY',
-            cefrLabel: 'معسكر الاختبارات العالمية القياسية (IELTS Band 8.0+ / TOEFL / JLPT Mastery)',
+            langProfile,
+            cefrLabel: `معسكر الاختبارات العالمية القياسية للغة ${langProfile.nameAr} (${langProfile.examName} Mastery)`,
             unitStructureGuide: `
-            - الدرس 1 (تشريح خوارزمية القسم ومعايير المصحح الرسمي Band Descriptors).
-            - الدرس 2 (الثروة اللفظية الأكاديمية المتقدمة Academic Collocations & Paraphrasing).
-            - الدرس 3 (الهندسة النحوية والتراكيب المعقدة التي ترفع التقييم فوراً).
-            - الدرس 4 (تكتيكات كشف الفخاخ السمعية والقرائية Distractors & Time Management).
-            - الدرس 5 (مختبر المحاكاة الصوتية والشفهية تحت ضغط الوقت).
-            - الدرس 6 (ورشة الكتابة الأكاديمية التحليلية وترقية الإجابات من Band 6 إلى Band 8.5+).`,
+            - الدرس 1 (تشريح خوارزمية القسم ومعايير المصحح الرسمي في اختبار ${langProfile.examName}).
+            - الدرس 2 (الثروة اللفظية الأكاديمية المتقدمة وإعادة الصياغة في اللغة ${langProfile.nameAr}).
+            - الدرس 3 (الهندسة النحوية والتراكيب المعقدة التي ترفع التقييم فوراً في ${langProfile.examName}).
+            - الدرس 4 (تكتيكات كشف الفخاخ السمعية والقرائية وإدارة الوقت في ${langProfile.examName}).
+            - الدرس 5 (مختبر المحاكاة الصوتية والشفهية تحت ضغط الوقت باللغة ${langProfile.nameAr}).
+            - الدرس 6 (ورشة الكتابة الأكاديمية التحليلية وترقية الإجابات لأعلى درجة في ${langProfile.examName}).`,
             pedagogyRules: `
-            🚨 قانون التدرج الصارم (معسكر الاختبارات العالمية IELTS / TOEFL Band 8.5+):
-            1. ركز 100% على استراتيجيات الحل، معايير التقييم الرسمية، كشف الفخاخ (Distractors)، وإعادة الصياغة الأكاديمية (Paraphrasing).`
+            🚨 قانون التدرج الصارم (معسكر الاختبارات العالمية ${langProfile.examName} للغة ${langProfile.nameAr}):
+            ${strictLangLockRule}
+            1. ركز 100% على استراتيجيات الحل، معايير التقييم الرسمية لاختبار (${langProfile.examName})، كشف الفخاخ، وإعادة الصياغة الأكاديمية باللغة ${langProfile.nameAr}.`
         }
     };
 
     return specsMap[detectedTier] || specsMap.A1;
 };
+
 
 
 
@@ -5508,109 +5866,98 @@ app.post('/api/academy2/lang-cert/suggest-idea', async (req, res) => {
     }
 });
 
-// ب) مسار هندسة هيكل الشهادة اللغوية (توزيع متوازن وعلمي عبر المستويات الـ 6 من A0 إلى C2)
+// ب) مسار هندسة هيكل الشهادة اللغوية (متكيف 100% مع أي لغة يختارها المستخدم!)
 app.post('/api/academy2/lang-cert/blueprint-series', async (req, res) => {
-    const { topic, difficulty } = req.body;
+    const { topic, difficulty, targetLanguage = '' } = req.body;
     if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع شهادة اللغة.' });
 
     try {
-        console.log(`\n🌍 [Natural Language Progression Architect] جاري هندسة التدرج التصاعدي المتوازن (${difficulty}): ${topic}...`);
+        const langProfile = detectTargetLanguageProfile(topic, targetLanguage);
+        console.log(`\n🌍 [Multi-Language Architect - ${langProfile.nameAr}] جاري هندسة التدرج التصاعدي (${difficulty}): ${topic}...`);
 
         let progressionMatrixInstruction = '';
 
         if (difficulty === 'lang_exam_prep_cert') {
             progressionMatrixInstruction = `
-            🚨 المسار المختار: شهادة مهنية لاجتياز الاختبارات العالمية للغات (IELTS / TOEFL / JLPT / DELF) — (15 كراش كورس متسلسل بدقة):
-            - كورس 1: تشريح الاختبار العالمي، معايير التقييم الرسمية للمصححين (Band/Score Descriptors)، وخريطة إدارة الوقت.
-            - كورس 2: تأسيس القواعد النحوية الأكاديمية المركزة والتراكيب المعقدة التي ترفع درجة الكتابة والمحادثة فوراً.
-            - كورس 3: الثروة اللفظية الأكاديمية، المتلازمات اللفظية (Collocations)، وفن إعادة الصياغة الذكية (Paraphrasing).
-            - كورس 4: هندسة الاستماع (الجزء 1): التقاط التفاصيل الدقيقة وكشف فخاخ تراجع المتحدث (Distractors & Self-Correction).
-            - كورس 5: هندسة الاستماع (الجزء 2): فهم المحاضرات الأكاديمية، الخرائط، والأسئلة متعددة الخيارات المعقدة.
-            - كورس 6: هندسة القراءة الأكاديمية (الجزء 1): تقنيات المسح السريع (Skimming & Scanning) وحل أسئلة (True / False / Not Given) بلا أخطاء.
-            - كورس 7: هندسة القراءة الأكاديمية (الجزء 2): مطابقة عناوين الفقرات (Matching Headings)، إكمال الملخصات، واستنتاج المعاني من السياق.
-            - كورس 8: هندسة الكتابة (المهمة 1): القوالب الهندسية لتحليل الجداول والرسوم البيانية والخرائط (أو الرسائل الرسمية).
-            - كورس 9: هندسة الكتابة (المهمة 2 - المقالات الأكاديمية): بناء المقدمة، فقرات الحجج المتماسكة، وأدوات الربط المنطقي (Coherence & Cohesion).
-            - كورس 10: ورشة ترقية وتصحيح المقالات: تحويل المقالات العادية إلى مستوى (Band 8.0+ / C1-C2).
-            - كورس 11: هندسة المحادثة (الجزء 1): الإجابة المباشرة بطلاقة، التخلص من التردد، وتنغيم الصوت الطبيعي (Intonation).
-            - كورس 12: هندسة المحادثة (الجزء 2 و 3): التحدث المستمر لدقيقتين بتقنية (A-R-E) ومناقشة القضايا الفكرية العميقة مع الممتحن.
-            - كورس 13 إلى 15: معسكرات المحاكاة الكاملة تحت ضغط الوقت (Full Mock Exams) لجميع الأقسام الأربعة.`;
+            🚨 المسار المختار: شهادة مهنية لاجتياز الاختبار العالمي للغة ${langProfile.nameAr} (${langProfile.examName}) — (15 كراش كورس متسلسل بدقة):
+            - كورس 1: تشريح اختبار (${langProfile.examName})، معايير التقييم الرسمية للمصححين، وخريطة إدارة الوقت.
+            - كورس 2: تأسيس القواعد النحوية الأكاديمية المركزة في اللغة ${langProfile.nameAr} والتراكيب التي ترفع درجة الكتابة والمحادثة فوراً.
+            - كورس 3: الثروة اللفظية الأكاديمية، المتلازمات اللفظية، وفن إعادة الصياغة الذكية باللغة ${langProfile.nameAr}.
+            - كورس 4 إلى 5: هندسة الاستماع في (${langProfile.examName}): التقاط التفاصيل الدقيقة، كشف الفخاخ السمعية، وفهم المحاضرات والحوارات السريعة.
+            - كورس 6 إلى 7: هندسة القراءة الأكاديمية في (${langProfile.examName}): تقنيات المسح السريع واستنتاج المعاني وحل أصعب أنماط الأسئلة.
+            - كورس 8 إلى 10: هندسة الكتابة الرسمية والأكاديمية في (${langProfile.examName}): الهياكل القياسية، أدوات الربط المنطقي، وترقية النصوص لأعلى درجة.
+            - كورس 11 إلى 12: هندسة المحادثة الرسمية أمام الممتحن في (${langProfile.examName}): الطلاقة، التنغيم الصوتي، ومناقشة القضايا العميقة.
+            - كورس 13 إلى 15: معسكرات المحاكاة الكاملة تحت ضغط الوقت (Full Mock Exams) لاختبار (${langProfile.examName}).`;
         } else {
             const isMega = difficulty === 'lang_mega_a0_c2_exam';
             progressionMatrixInstruction = `
-            🚨 المسار المختار: ${isMega ? 'الشهادة اللغوية الإمبراطورية المدمجة (من الصفر A0 إلى C2 + اجتياز الاختبار العالمي - 20 كراش كورس!)' : 'شهادة إتقان اللغات المتوازنة من الصفر للطلاقة (A0 ➔ C2 الشاملة - 16 كراش كورس متسلسل بدقة!)'}
-            التزم حرفياً بهذا التسلسل التصاعدي المتوازن عبر جميع المهارات (صوتيات، مفردات، قواعد، قراءة، استماع، كتابة، ومحادثة):
+            🚨 المسار المختار للغة **${langProfile.nameAr} (${langProfile.nameEn})**: ${isMega ? `الشهادة اللغوية الإمبراطورية المدمجة للغة ${langProfile.nameAr} (من الصفر A0 إلى C2 + اجتياز اختبار ${langProfile.examName} - 20 كراش كورس!)` : `شهادة إتقان اللغة ${langProfile.nameAr} المتوازنة من الصفر للطلاقة (A0 ➔ C2 الشاملة - 16 كراش كورس متسلسل بدقة!)`}
+            🚫 تحذير حاسم: صمم عناوين وأوصاف جميع الكورسات بحيث تخص قواعد وصوتيات ومفردات **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** حصراً (لا تذكر قواعد أو أصوات إنجليزية إذا كانت اللغة غير إنجليزية!):
 
-            🟢 [المرحلة 1 (التأسيس الصوتي واللبنات الأولى - Pre-A1 & A0): كورسان فقط مكثفان ومتكاملان]
-            - كورس 1 (Pre-A1 / A0.1 - الحروف، مخارج الأصوات Phonics، ودمج الكلمات والعبارات الأولى): إتقان الحروف وأصوات العلة القصيرة والطويلة والأصوات المركبة (sh, ch, th)، دمج الكلمات، وأول 100 مفردة ملموسة مع أدوات التنكير والإشارة (a/an/the, This is...).
-            - كورس 2 (A0.2 - الضمائر، الأفعال اليومية الأساسية، وتكوين الجملة والسؤال الأول): الضمائر الشخصية، أهم 40 فعلاً يومياً وصفة أساسية، الأرقام والوقت، وتكوين جمل الإثبات والنفي والسؤال البسيط (I am, You have, Do you want...?).
+            🟢 [المرحلة 1 (التأسيس الصوتي واللبنات الأولى في اللغة ${langProfile.nameAr} - Pre-A1 & A0): كورسان مكثفان]
+            - كورس 1 (Pre-A1 / A0.1 - الحروف، مخارج الأصوات Phonics، ودمج الكلمات والعبارات الأولى في اللغة ${langProfile.nameAr}): يغطي ${langProfile.a0PhonicsUnits.replace(/\s+/g, ' ').slice(0, 260)}...
+            - كورس 2 (A0.2 - الضمائر، الأفعال اليومية الأساسية، وتكوين الجملة والسؤال الأول في اللغة ${langProfile.nameAr}): يغطي ${langProfile.a0SentenceRules}
 
-            🔵 [المرحلة 2 (التواصل الحياتي اليومي وتأسيس الأزمنة - CEFR A1 & A2): 5 كورسات متدرجة]
-            - كورس 3 (A1.1 - الروتين اليومي، العائلة، المنزل، والزمن الحاضر البسيط Present Simple): التحدث عن العادات اليومية، الوظائف، المنزل، وحروف الجر المكانية والزمانية في جمل من 6-8 كلمات.
-            - كورس 4 (A1.2 - العالم الخارجي: المطاعم، التسوق، الاتجاهات، والمضارع المستمر Present Continuous): وصف المشاهد الحية، الأسماء المعدودة وغير المعدودة (some/any/much/many)، وإدارة الحوارات الخدمية اليومية.
-            - كورس 5 (A2.1 - سرد القصص والتجارب الماضية Past Simple & Past Continuous): الأفعال القياسية والشاذة، نطق نهايات (-ed)، وربط الأحداث الماضية بأدوات السرد (when, while, after, before).
-            - كورس 6 (A2.2 - خطط المستقبل، السفر، الصحة، وصيغ المقارنة والتفضيل): التمييز الدقيق بين (will / going to / Present Continuous for future)، المقارنات (er / more / the most)، ومواقف المطارات والمواعيد.
-            - كورس 7 (A2+ Bridge - جسر الانطلاق للمتوسط: المضارع التام التأسيسي وأفعال الإلزام والنصيحة): إتقان (Present Perfect) للتجارب الحياتية، أفعال المودال (must, have to, should, could)، وكتابة الفقرات المترابطة.
+            🔵 [المرحلة 2 (التواصل الحياتي اليومي وتأسيس الأزمنة في اللغة ${langProfile.nameAr} - CEFR A1 & A2): 5 كورسات متدرجة]
+            - كورس 3 و 4 (A1.1 & A1.2 - الحياة اليومية، العائلة، المطاعم، التسوق، وقواعد المستوى الابتدائي في اللغة ${langProfile.nameAr}): يغطي ${langProfile.a1Grammar}
+            - كورس 5 و 6 و 7 (A2.1 & A2.2 & A2+ Bridge - سرد التجارب الماضية، خطط المستقبل، المقارنات، وجسر الانطلاق للمتوسط في اللغة ${langProfile.nameAr}): يغطي ${langProfile.a2Grammar}
 
-            🟣 [المرحلة 3 (الاستقلالية اللغوية، الجمل المركبة، وفهم المتحدث السريع - CEFR B1 & B1+): 3 كورسات]
-            - كورس 8 (B1.1 - الأزمنة التامة المستمرة، الجمل الموصولة Relative Clauses، وربط الأفكار المعقدة): استخدام (Present Perfect Continuous & Past Perfect) وضمائر الوصل (who, which, whose, where) لبناء جمل طويلة متماسكة.
-            - كورس 9 (B1.2 - فك شفرة الأذن السمعية، الكلام المتصل Connected Speech، وإدارة النقاشات): قواعد دمج الأصوات واختزالها في نطق أهل اللغة السريع، والتعبير عن الآراء والاتفاق والاختلاف بلباقة.
-            - كورس 10 (B1+ - الجمل الشرطية Conditionals 0-3، المبني للمجهول Passive، والكلام المنقول Reported Speech): الهندسة النحوية للمواقف الافتراضية، صياغة الأخبار والتقارير، وحل المشكلات المعقدة.
+            🟣 [المرحلة 3 (الاستقلالية اللغوية، الجمل المركبة، وفهم المتحدث السريع باللغة ${langProfile.nameAr} - CEFR B1 & B1+): 3 كورسات]
+            - كورس 8 و 9 و 10 (B1.1 & B1.2 & B1+ - ربط الأفكار المعقدة، فك شفرة الكلام السريع المتصل، والقواعد المتوسطة في اللغة ${langProfile.nameAr}): يغطي ${langProfile.b1Grammar}
 
-            🟠 [المرحلة 4 (الطلاقة المهنية والأكاديمية، المتلازمات، والإقناع - CEFR B2 & B2+): 3 كورسات]
-            - كورس 11 (B2.1 - القفزة اللفظية الكبرى: المتلازمات Collocations والأفعال المركبة Phrasal Verbs): استبدال الكلمات العادية بالتعابير الأصيلة التي يستخدمها المتحدث الأصلي في الحياة والعمل.
-            - كورس 12 (B2.2 - التراكيب المتقدمة، الشرطيات المختلطة، والاستنتاج المنطقي Modals of Deduction): إتقان (must have been, couldn't have done, Mixed Conditionals, & Participle Clauses) في المناظرات والاجتماعات.
-            - كورس 13 (B2+ - القراءة التحليلية العميقة وهندسة كتابة المقالات والتقارير الاحترافية): بناء المقالات الجدلية والتقارير الرسمية بأدوات التماسك النصي (Coherence, Cohesion & Academic Hedging).
+            🟠 [المرحلة 4 (الطلاقة المهنية والأكاديمية، المتلازمات، والإقناع باللغة ${langProfile.nameAr} - CEFR B2 & B2+): 3 كورسات]
+            - كورس 11 و 12 و 13 (B2.1 & B2.2 & B2+ - المتلازمات اللفظية الأصيلة، التراكيب المتقدمة، وهندسة كتابة المقالات والتقارير باللغة ${langProfile.nameAr}): يغطي ${langProfile.b2Grammar}
 
-            🔴 [المرحلة 5 (البلاغة العليا وطلاقة المتحدث الأصلي - CEFR C1 & C2 Native): 3 كورسات]
-            - كورس 14 (C1.1 - الهندسة النحوية البلاغية: الأساليب العكسية Inversion والجمل المنشطرة Cleft Sentences): التحدث والكتابة بأسلوب المحاضرين والخبراء باستخدام التراكيب البلاغية رفيعة المستوى.
-            - كورس 15 (C1.2 - التعابير المجازية Idioms، الثقافة العميقة، وقراءة ما بين السطور): استيعاب الكنايات، الفكاهة، السخرية، النصوص الأدبية والعلمية، والتمييز بين الظلال الدقيقة للمفردات (Nuances).
-            - كورس 16 (C2 Native - الذروة اللغوية، الارتجال الفوري، والتحرير الأكاديمي والإبداعي المتكامل): الوصول إلى طلاقة المتحدث الأصلي الكاملة في الخطابة، المناظرات الفكرية، والكتابة الاحترافية دون أي حاجز لغوي.` +
+            🔴 [المرحلة 5 (البلاغة العليا وطلاقة المتحدث الأصلي باللغة ${langProfile.nameAr} - CEFR C1 & C2 Native): 3 كورسات]
+            - كورس 14 و 15 و 16 (C1.1 & C1.2 & C2 Native - البلاغة العليا، التعابير الاصطلاحية والثقافية، والارتجال والتحرير الأكاديمي باللغة ${langProfile.nameAr}): يغطي ${langProfile.c1c2Grammar}` +
             (isMega ? `
 
-            🏆 [المرحلة 6 الإمبراطورية المدمجة: معسكر اكتساح الاختبار العالمي للغة (IELTS / TOEFL / JLPT / DELF)]
-            - كورس 17: تشريح الاختبار العالمي وخوارزميات حصد الدرجة الكاملة في قسم الاستماع (Listening Mastery).
-            - كورس 18: تكتيكات القراءة الأكاديمية السريعة وحل أصعب أنماط الأسئلة (Reading Mastery).
-            - كورس 19: الهندسة الكاملة لقسم الكتابة الأكاديمية (Writing Task 1 & Task 2 Blueprints).
-            - كورس 20: معسكر المحادثة الرسمي أمام الممتحن ومحاكاة الاختبار الشامل (Speaking & Full Mock Exams).` : '');
+            🏆 [المرحلة 6 الإمبراطورية المدمجة: معسكر اكتساح الاختبار العالمي للغة ${langProfile.nameAr} (${langProfile.examName})]
+            - كورس 17: تشريح اختبار (${langProfile.examName}) وخوارزميات حصد الدرجة الكاملة في قسم الاستماع.
+            - كورس 18: تكتيكات القراءة الأكاديمية السريعة وحل أصعب أنماط الأسئلة في (${langProfile.examName}).
+            - كورس 19: الهندسة الكاملة لقسم الكتابة الرسمية والأكاديمية في (${langProfile.examName}).
+            - كورس 20: معسكر المحادثة الرسمي أمام الممتحن ومحاكاة الاختبار الشامل (${langProfile.examName} Full Mock Exams).` : '');
         }
 
-        const systemPrompt = `أنت أعظم أستاذ لغات ومؤلف مناهج تعليمية في العالم (Cambridge & CEFR Chief Architect).
-        مهمتك بناء هيكل **"الشهادة المهنية اللغوية المتدرجة"** حول: "${topic}".
+        const systemPrompt = `${langProfile.instituteRole}
+        مهمتك بناء هيكل **"الشهادة المهنية اللغوية المتدرجة"** لتعليم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** حول: "${topic}".
 
         ${progressionMatrixInstruction}
 
         🚨 شروط صارمة:
-        1. لا تكرر عبارة "كراش كورس 1:" مرتين في العنوان! اكتب في حقل "courseTitle" اسم الكورس مباشرة (مثال: "Pre-A1 / A0.1 - الحروف، مخارج الأصوات Phonics، ودمج الكلمات الأولى").
-        2. الوصف ("description") يجب أن يوضح كيف يصعد هذا الكورس بمستوى الطالب في جميع المهارات (الصوتيات، المفردات، القواعد، الاستماع، القراءة، الكتابة، والمحادثة).
+        1. اذكر اسم اللغة (${langProfile.nameAr}) أو مصطلحاتها بوضوح داخل عناوين وأوصاف الكورسات.
+        2. لا تكرر عبارة "كراش كورس 1:" مرتين في العنوان!
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
           "isCertificateSeries": true,
           "isLanguageSeries": true,
+          "targetLanguage": "${langProfile.nameAr} (${langProfile.nameEn})",
+          "speechLang": "${langProfile.speechLang}",
           "certificateTitle": "${topic}",
           "courseTitle": "${topic}",
-          "courseDescription": "منهج تأسيسي وتطبيقي متدرج يأخذك بيدك من البديهيات الصوتية والحروف من الصفر المطلق، ويصعد معك درجة بدرجة عبر مستويات الإطار الأوروبي (A0 ➔ A1 ➔ A2 ➔ B1 ➔ B2 ➔ C1 ➔ C2) حتى قمة الطلاقة الأكاديمية واجتياز الاختبارات العالمية...",
-          "mainAnalogy": "منهجية التصعيد اللغوي المتكامل (CEFR Spiral Escalation): كل كورس يرفع سقف المفردات، طول الجمل، عمق القواعد، وسرعة الاستماع والكتابة بدرجة علمية مدروسة.",
+          "courseDescription": "منهج تأسيسي وتطبيقي متدرج لتعلم اللغة ${langProfile.nameAr} يأخذك بيدك من البديهيات الصوتية والحروف من الصفر المطلق (A0) حتى قمة الطلاقة الأكاديمية (C2) واجتياز اختبارات (${langProfile.examName})...",
+          "mainAnalogy": "منهجية التصعيد اللغوي المتكامل (CEFR Spiral Escalation): كل كورس يرفع سقف المفردات، طول الجمل، عمق القواعد، وسرعة الاستماع والكتابة في اللغة ${langProfile.nameAr}.",
           "superCertificate": {
-            "title": "الشهادة الدولية المعتمدة في الطلاقة اللغوية الشاملة والاختبارات العالمية",
-            "badgeText": "S-Rank C2 Native & Exam Master",
-            "careerOutcomes": ["الفهم السمعي والقرائي الكامل", "التحدث والكتابة بطلاقة وثقة (C2)", "اجتياز الاختبارات العالمية (IELTS / TOEFL / JLPT / DELF) بأعلى الدرجات"]
+            "title": "الشهادة الدولية المعتمدة في الطلاقة الشاملة للغة ${langProfile.nameAr} واجتياز (${langProfile.examName})",
+            "badgeText": "S-Rank ${langProfile.nameEn} C2 & ${langProfile.examName} Master",
+            "careerOutcomes": ["الفهم السمعي والقرائي الكامل للغة ${langProfile.nameAr}", "التحدث والكتابة بطلاقة وثقة (C2)", "اجتياز اختبار (${langProfile.examName}) بأعلى الدرجات"]
           },
           "courses": [
             {
               "courseOrder": 1,
               "coursePrefix": "الكراش كورس 1",
               "difficultyLevel": "المستوى التأسيسي الأول (Pre-A1 / A0.1)",
-              "courseTitle": "Pre-A1 / A0.1 - الحروف، مخارج الأصوات Phonics، ودمج الكلمات الأولى",
-              "description": "وصف مفصل ومشوق لما سيتقنه الطالب...",
-              "courseDescription": "وصف مفصل ومشوق لما سيتقنه الطالب...",
+              "courseTitle": "Pre-A1 / A0.1 - الحروف، مخارج الأصوات، ودمج الكلمات الأولى في اللغة ${langProfile.nameAr}",
+              "description": "وصف مفصل ومشوق لما سيتقنه الطالب في اللغة ${langProfile.nameAr}...",
+              "courseDescription": "وصف مفصل ومشوق لما سيتقنه الطالب في اللغة ${langProfile.nameAr}...",
               "estimatedHours": "18 ساعة تدريب تطبيقي وصوتي",
               "certificateBadge": "شهادة إتقان المستوى ...",
               "connectionToPrevious": "نقطة الانطلاق...",
               "cliffhangerToNext": "بعد أن أتقنت ...، سننتقل في الكورس القادم إلى...",
               "githubProject": {
                 "projectTitle": "التحدي الصوتي والكتابي التطبيقي للمستوى",
-                "projectSummary": "تفاصيل المهمة الصوتية والكتابية التي ينجزها الطالب"
+                "projectSummary": "تفاصيل المهمة الصوتية والكتابية التي ينجزها الطالب باللغة ${langProfile.nameAr}"
               },
               "skills": ["Pronunciation & Prosody", "Lexical Expansion", "Grammatical Structure", "Active Listening & Writing"]
             }
@@ -5619,13 +5966,15 @@ app.post('/api/academy2/lang-cert/blueprint-series', async (req, res) => {
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `قم بهندسة الشهادة اللغوية الكاملة والمتدرجة لموضوع "${topic}" بصيغة JSON.`,
+            `قم بهندسة الشهادة اللغوية الكاملة والمتدرجة للغة ${langProfile.nameAr} حول "${topic}" بصيغة JSON.`,
             0.7,
             25000
         );
         const parsedContent = safeParseAIJson(rawContent);
         parsedContent.isCertificateSeries = true;
         parsedContent.isLanguageSeries = true;
+        parsedContent.targetLanguage = `${langProfile.nameAr} (${langProfile.nameEn})`;
+        parsedContent.speechLang = langProfile.speechLang;
 
         if (Array.isArray(parsedContent.courses)) {
             parsedContent.courses = parsedContent.courses.map((c, idx) => {
@@ -5635,6 +5984,8 @@ app.post('/api/academy2/lang-cert/blueprint-series', async (req, res) => {
                     .trim();
                 return {
                     ...c,
+                    targetLanguage: parsedContent.targetLanguage,
+                    speechLang: langProfile.speechLang,
                     courseOrder: idx + 1,
                     coursePrefix: `الكراش كورس ${idx + 1}`,
                     courseTitle: `كراش كورس ${idx + 1}: ${cleanT}`
@@ -5649,10 +6000,11 @@ app.post('/api/academy2/lang-cert/blueprint-series', async (req, res) => {
     }
 });
 
-// ج) مسار تفكيك كراش كورس اللغة إلى وحدات ودروس ذرية تتناسب مع المستوى الفعلي للكورس (A0 أم A2 أم B2 أم C2)
+// ج) مسار تفكيك كراش كورس اللغة إلى وحدات ودروس ذرية باللغة المستهدفة حصراً!
 app.post('/api/academy2/lang-cert/blueprint-course-units', async (req, res) => {
     const {
         certificateTitle,
+        targetLanguage = '',
         courseOrder,
         totalCourses,
         currentCourseTitle,
@@ -5666,23 +6018,29 @@ app.post('/api/academy2/lang-cert/blueprint-course-units', async (req, res) => {
     }
 
     try {
-        const tierSpec = getCEFRProgressionSpec(currentCourseTitle, '', '', '', courseOrder);
-        console.log(`\n🗣️ [Step-by-Step Language Unit Architect - ${tierSpec.tierId}] جاري تفكيك (${currentCourseTitle}) إلى دروس متدرجة...`);
+        // نمرر certificateTitle + currentCourseDescription + targetLanguage لكي لا تضيع هوية اللغة أبداً!
+        const fullLangContext = `${certificateTitle || ''} ${currentCourseTitle || ''} ${currentCourseDescription || ''}`;
+        const tierSpec = getCEFRProgressionSpec(fullLangContext, '', '', '', courseOrder, targetLanguage);
+        const { langProfile } = tierSpec;
 
-        const systemPrompt = `أنت أعظم أستاذ لغات ومصمم مناهج CEFR في العالم.
-        نحن الآن نفكك الكراش كورس التالي: "${currentCourseTitle}" (الكورس رقم ${courseOrder || 1} من أصل ${totalCourses || 16} ضمن "${certificateTitle}").
+        console.log(`\n🗣️ [Language Unit Architect - ${langProfile.nameAr} - ${tierSpec.tierId}] جاري تفكيك (${currentCourseTitle})...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        نحن الآن نفكك الكراش كورس التالي لتعليم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**:
+        - عنوان الكورس: "${currentCourseTitle}" (الكورس رقم ${courseOrder || 1} من أصل ${totalCourses || 16} ضمن "${certificateTitle}").
+        - اللغة المستهدفة حصراً: **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**
         - المستوى اللغوي المعتمد لهذا الكورس: **${tierSpec.cefrLabel}**
         - وصف هذا الكورس ومستواه: "${currentCourseDescription || ''}"
         - ما تعلمه الطالب في الكورس السابق: "${previousCourseTitle || 'لا شيء إطلاقاً (بداية الرحلة من الصفر)'}"
         - ما سيتعلمه في الكورس القادم: "${nextCourseTitle || 'المستوى المتقدم التالي'}"
 
-        🚨 القواعد الذهبية الصارمة لتصميم الوحدات والدروس في مستوى (${tierSpec.cefrLabel}):
-        1. قسّم هذا الكراش كورس إلى **(7 إلى 9 وحدات متدرجة منطقياً من الأسهل للأصعب داخل هذا المستوى / Sections)**.
-        2. داخل **كل وحدة**، ضع **(6 دروس متسلسلة)**.
-        3. 🚫 **تحذير صارم جداً:** يجب أن تعكس عناوين الدروس الـ 6 داخل كل وحدة مستوى **(${tierSpec.cefrLabel})** بدقة وفق الهيكلة التخصصية التالية لهذا المستوى:
+        🚨 القواعد الذهبية الصارمة لتصميم الوحدات والدروس في اللغة ${langProfile.nameAr} بمستوى (${tierSpec.cefrLabel}):
+        1. 🚫 **تحذير قاطع:** أنت تصمم منهجاً لتعليم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**! إذا كانت اللغة غير الإنجليزية، يُمنع منعاً باتاً ذكر أي أصوات أو كلمات إنجليزية (مثل Short A, Short I, -at, -an, cat, mat, Sight Words, Phrasal Verbs)! التزم 100% بصوتيات ومفردات وقواعد **اللغة ${langProfile.nameAr}** المذكورة في وصف الكورس وفي الدليل التخصصي أدناه.
+        2. قسّم هذا الكراش كورس إلى **(7 إلى 8 وحدات متدرجة منطقياً من الأسهل للأصعب داخل هذا المستوى / Sections)**.
+        3. داخل **كل وحدة**، ضع **(6 دروس متسلسلة)** وفق الهيكلة التخصصية التالية للغة ${langProfile.nameAr}:
         ${tierSpec.unitStructureGuide}
-        4. لا تكرر نفس المفردات أو نفس القاعدة في أكثر من وحدة! كل وحدة يجب أن تفتح موضوعاً ومهارة جديدة تصعد بالطالب درجة للأعلى.
-        5. اجعل **الوحدة الأخيرة** في الكورس مخصصة لـ **"المراجعة الشاملة وتحدي التحدث والكتابة التراكمي للمستوى (${tierSpec.tierId})"** (isProjectUnit: true).
+        4. لا تكرر نفس المفردات أو نفس القاعدة في أكثر من وحدة!
+        5. اجعل **الوحدة الأخيرة** في الكورس مخصصة لـ **"المراجعة الشاملة وتحدي التحدث والكتابة التراكمي باللغة ${langProfile.nameAr} للمستوى (${tierSpec.tierId})"** (isProjectUnit: true).
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
@@ -5691,13 +6049,13 @@ app.post('/api/academy2/lang-cert/blueprint-course-units', async (req, res) => {
           "blueprint": [
             {
               "sectionOrder": 1,
-              "sectionName": "الوحدة 1: [عنوان الوحدة المحدد والمتدرج]",
+              "sectionName": "الوحدة 1: [عنوان الوحدة المحدد في اللغة ${langProfile.nameAr}]",
               "isProjectUnit": false,
-              "sectionExamSummary": "اختبار الوحدة اللغوي الشامل (صوتيات + مفردات + قواعد + قراءة وكتابة)",
+              "sectionExamSummary": "اختبار الوحدة اللغوي الشامل في اللغة ${langProfile.nameAr} (صوتيات + مفردات + قواعد + قراءة وكتابة)",
               "lessons": [
                 {
-                  "title": "الدرس 1: [عنوان دقيق ومحدد للمهارة في هذا الدرس بما يناسب مستوى ${tierSpec.tierId}]",
-                  "description": "وصف دقيق لما سيتقنه الطالب في هذا الدرس",
+                  "title": "الدرس 1: [عنوان دقيق ومحدد للمهارة في اللغة ${langProfile.nameAr} بما يناسب مستوى ${tierSpec.tierId}]",
+                  "description": "وصف دقيق لما سيتقنه الطالب في اللغة ${langProfile.nameAr} في هذا الدرس",
                   "lessonCategory": "language_mastery"
                 }
               ]
@@ -5707,7 +6065,7 @@ app.post('/api/academy2/lang-cert/blueprint-course-units', async (req, res) => {
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `فكك كورس اللغة "${currentCourseTitle}" (مستوى ${tierSpec.cefrLabel}) إلى وحدات ودروس محددة ومتدرجة بصيغة JSON.`,
+            `فكك كورس اللغة ${langProfile.nameAr} "${currentCourseTitle}" (مستوى ${tierSpec.cefrLabel}) إلى وحدات ودروس خاصة باللغة ${langProfile.nameAr} بصيغة JSON.`,
             0.7,
             22000
         );
@@ -5720,82 +6078,105 @@ app.post('/api/academy2/lang-cert/blueprint-course-units', async (req, res) => {
     }
 });
 
-// د) مسار تأليف الدرس اللغوي التفاعلي (يتكيف 100% مع مستوى الكورس من A0 حتى C2 في المفردات والقواعد والقراءة والاستماع والكتابة!)
+
+
+// ============================================================================
+// 🌍 (ج) المسار المطور لتأليف الدرس اللغوي (يدعم الذاكرة التراكمية Spaced Repetition + الترميز اللوني للمذكر والمؤنث + مصفوفة تصريف الأفعال + التطهير الآلي)
+// استبدل مسار /api/academy2/lang-cert/forge-language-lesson بهذا الكود:
+// ============================================================================
 app.post('/api/academy2/lang-cert/forge-language-lesson', async (req, res) => {
-    const { courseTopic, sectionName, lessonTitle, difficulty, courseOrder } = req.body;
+    const {
+        courseTopic,
+        sectionName,
+        lessonTitle,
+        difficulty,
+        courseOrder,
+        targetLanguage = '',
+        previouslyLearnedVocab = []
+    } = req.body;
+
     if (!lessonTitle) return res.status(400).json({ error: 'عنوان درس اللغة مفقود.' });
 
     try {
-        const tierSpec = getCEFRProgressionSpec(courseTopic, sectionName, lessonTitle, difficulty, courseOrder);
-        console.log(`\n🎙️ [Master Language Forge - Tier: ${tierSpec.tierId}] جاري تأليف الدرس: "${lessonTitle}"...`);
+        const tierSpec = getCEFRProgressionSpec(courseTopic, sectionName, lessonTitle, difficulty, courseOrder, targetLanguage);
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🎙️ [Master Language Forge V5 - ${langProfile.nameAr} - Tier: ${tierSpec.tierId}] جاري تأليف الدرس: "${lessonTitle}"...`);
 
         const isAdvancedOrInterm = ['B1', 'B2', 'C1_C2', 'EXAM_MASTERY'].includes(tierSpec.tierId);
+        const hasGenderSystem = ['fr', 'es', 'de'].includes(langProfile.id);
 
-        const systemPrompt = `أنت أعظم أستاذ لغات ومؤلف مناهج Cambridge في العالم.
+        // 1. حقن الذاكرة التراكمية (Spaced Repetition) من الكورسات أو الدروس السابقة
+        const spacedRepetitionRule = Array.isArray(previouslyLearnedVocab) && previouslyLearnedVocab.length > 0
+            ? `\n🔄 **قانون التكرار المتباعد والذاكرة التراكمية (Spaced Repetition Memory):**
+            لقد درس الطالب في المراحل السابقة هذه المفردات: (${previouslyLearnedVocab.slice(0, 20).join('، ')}).
+            قم بدمج 2 إلى 3 من هذه الكلمات السابقة بذكاء داخل جمل القراءة والحوار في هذا الدرس مع المفردات الجديدة لترسيخها في ذاكرته طويلة الأمد!`
+            : '';
+
+        // 2. قاعدة الترميز اللوني للجنس النحوي (Gender Color-Coding) وتصريف الأفعال
+        const genderAndVerbRule = hasGenderSystem
+            ? `\n🎨 **قانون الترميز البصري للجنس النحوي وتصريف الأفعال في اللغة ${langProfile.nameAr}:**
+            - في جدول المفردات، وضح دائماً جنس الاسم في عمود المعنى أو المفردة: ضع الرمز **(🔵 مذكر)** مع الأسماء المذكرة (مثل un/le)، والرمز **(🔴 مؤنث)** مع الأسماء المؤنثة (مثل une/la)؛ وتأكد بنسبة 100% من صحة الجنس النحوي (مثال في الفرنسية: une clé مؤنث وليست مذكر، une table مؤنث، un livre مذكر).
+            - ${tierSpec.tierId !== 'A0' ? `أدرج في الشرح جدولاً مصغراً لتصريف الفعل الرئيسي في الدرس مع الضمائر وكيفية نطق نهاياته (ما يُكتب وما يصمت).` : ''}`
+            : '';
+
+        const systemPrompt = `${langProfile.instituteRole}
+        - اللغة المستهدفة التي تقوم بتدريسها الآن: **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**
         - الكورس الحالي: "${courseTopic}"
         - المستوى المعتمد لهذا الدرس: **${tierSpec.cefrLabel}**
         - الوحدة الحالية: "${sectionName}"
         - 📌 الدرس المطلوب تأليفه الآن: "${lessonTitle}"
 
         ${tierSpec.pedagogyRules}
+        ${spacedRepetitionRule}
+        ${genderAndVerbRule}
 
-        🚨 يجب أن يكون حقل "content" منظماً جداً، مريحاً للعين، غنياً بالجداول البصرية، ويلتزم حرفياً بهذه المحاور الـ 6 في Markdown (مع تكييف عمق المحتوى وطول الجمل والمفردات لمستوى **${tierSpec.cefrLabel}**):
+        🚨 **تحذير تقني صارم ضد تداخل الحروف (NO TOKEN BLEEDING):**
+        - إياك أن تخلط حرفاً عربياً داخل كلمة فرنسية/أجنبية (مثلاً: اكتب \`C'est\` ولا تكتب أبداً \`C'ست\` أو \`C'هست\`! اكتب \`maman\` ولا تكتب \`مaman\`!).
+        - في عمود "النطق التقريبي بالعربية"، استخدم الحروف العربية الفصيحة فقط (إياك أن تكتب أي حروف هندية أو آسيوية!).
+
+        🚨 يجب أن يكون حقل "content" منظماً جداً، مريحاً للعين، غنياً بالجداول البصرية، ويلتزم حرفياً بهذه المحاور الـ 6 في Markdown:
 
         ### 🎯 1. الفكرة الجوهرية والقاعدة خطوة بخطوة (The Core Rule & Blueprint)
-        - ابدأ بشرح مباشر وعميق يناسب مستوى (${tierSpec.cefrLabel}).
+        - ابدأ بشرح مباشر وعميق لقاعدة أو صوت هذا الدرس في **اللغة ${langProfile.nameAr}** بما يناسب مستوى (${tierSpec.cefrLabel}).
         - قسّم شرح مهارة الدرس ("${lessonTitle}") إلى **3 خطوات مرقمة وواضحة**.
-        - ضع **معادلة التركيب البصرية (Lego Syntax/Phonetics Formula)** بعلامات الأقواس المربعة هكذا:
-          \`[المكعب 1: ...] + [المكعب 2: ...] = [النتيجة: ...]\`
+        - ضع **معادلة التركيب البصرية (Lego Syntax/Phonetics Formula)** بأمثلة من **اللغة ${langProfile.nameAr}** بعلامات الأقواس المربعة هكذا:
+          \`[المكعب 1: ...] + [المكعب 2: ...] = [النتيجة باللغة ${langProfile.nameAr}: ...]\`
 
         ### 🗣️ 2. جدول المفردات، الصوتيات، والدقة اللغوية (Vocabulary, IPA & Nuance Table)
-        - ضع **جدول Markdown إلزامياً ومنظماً** يضم أهم (8 إلى 10 مفردات / متلازمات / عبارات من صلب هذا الدرس ومستواه ${tierSpec.tierId}) بالأعمدة الخمسة التالية:
-          \`| المفردة / العبارة | الرمز الصوتي (IPA) | النطق التقريبي بالعربية | ${isAdvancedOrInterm ? 'السياق اللغوي / المتلازمات والـ Register' : 'حركة الفم واللسان ومخرج الصوت'} | المعنى الدقيق بالعربية |\`
-        - اشرح تحت الجدول في 3 نقاط مركزة أسرار إتقان النطق أو الوصل الصوتي (Connected Speech / Intonation) الخاص بهذا الدرس.
+        - ضع **جدول Markdown إلزامياً ومنظماً** يضم أهم (8 إلى 10 مفردات / عبارات باللغة **${langProfile.nameAr}** من صلب هذا الدرس ومستواه ${tierSpec.tierId}) بالأعمدة الخمسة التالية:
+          \`| المفردة / العبارة (${langProfile.nameAr}) | الرمز الصوتي (IPA) | النطق التقريبي بالعربية | ${isAdvancedOrInterm ? 'السياق اللغوي / المتلازمات والـ Register' : 'حركة الفم واللسان ومخرج الصوت'} | المعنى الدقيق بالعربية (مع 🔵 للمذكر و 🔴 للمؤنث) |\`
+        - اشرح تحت الجدول في 3 نقاط مركزة أسرار إتقان النطق أو الوصل الصوتي (Liaison / Enchaînement / Intonation) في **اللغة ${langProfile.nameAr}**.
 
         ### 🪜 3. سُلّم البناء والارتقاء التراكمي (5-Step Sentence & Register Escalation Ladder)
-        - أرِ الطالب كيف نصعد بالجملة عبر **5 درجات متسلسلة تناسب مستوى (${tierSpec.tierId})**:
+        - أرِ الطالب كيف نصعد بالجملة في **اللغة ${langProfile.nameAr}** عبر **5 درجات متسلسلة تناسب مستوى (${tierSpec.tierId})**:
           ${tierSpec.tierId === 'A0'
-            ? `1. **الدرجة 1 (الكلمة المفردة):** ...\n          2. **الدرجة 2 (عبارة من كلمتين):** ...\n          3. **الدرجة 3 (جملة إثبات قصيرة):** ...\n          4. **الدرجة 4 (تحويلها إلى سؤال بسيط):** ...\n          5. **الدرجة 5 (الجواب الطبيعي الكامل):** ...`
-            : `1. **الدرجة 1 (التركيب الأساسي المباشر):** ...\n          2. **الدرجة 2 (توسيع الجملة بالتفاصيل/الظروف):** ...\n          3. **الدرجة 3 (ربط الجملة بأداة ربط منطقية/زمنية):** ...\n          4. **الدرجة 4 (الترقية إلى صياغة المتحدث الأصلي Native Collocation/Structure):** ...\n          5. **الدرجة 5 (الصياغة الكاملة الفائقة في سياق حواري أو أكاديمي):** ...`}
+            ? `1. **الدرجة 1 (الكلمة المفردة باللغة ${langProfile.nameAr}):** ...\n          2. **الدرجة 2 (أداة + كلمة باللغة ${langProfile.nameAr}):** ...\n          3. **الدرجة 3 (جملة إثبات قصيرة باللغة ${langProfile.nameAr}):** ...\n          4. **الدرجة 4 (تحويلها إلى سؤال بسيط باللغة ${langProfile.nameAr}):** ...\n          5. **الدرجة 5 (الجواب الطبيعي الكامل باللغة ${langProfile.nameAr}):** ...`
+            : `1. **الدرجة 1 (التركيب الأساسي المباشر باللغة ${langProfile.nameAr}):** ...\n          2. **الدرجة 2 (توسيع الجملة بالتفاصيل/الظروف):** ...\n          3. **الدرجة 3 (ربط الجملة بأداة ربط منطقية/زمنية):** ...\n          4. **الدرجة 4 (الترقية إلى صياغة المتحدث الأصلي للغة ${langProfile.nameAr}):** ...\n          5. **الدرجة 5 (الصياغة الكاملة الفائقة في سياق حواري أو أكاديمي باللغة ${langProfile.nameAr}):** ...`}
 
         ### 📖 4. قطعة القراءة التطبيقية والمحادثة الواقعية (Graded Reading & Real-World Dialogue)
-        - أولاً: **نص قراءة تطبيقي متكامل (Graded Reading Passage)** مكتوب بمفردات وقواعد مستوى (${tierSpec.cefrLabel}) مع ترجمته وتحليل أهم تراكبيه.
-        - ثانياً: **حوار واقعي طبيعي (6 إلى 8 أسطر)** يجسد موقفاً حقيقياً من صلب الوحدة، مع استخراج **3 قوالب كلامية جاهزة للحفظ الفوري (Power Chunks)**.
+        - أولاً: **نص قراءة تطبيقي متكامل (Graded Reading Passage)** مكتوب بالكامل باللغة **${langProfile.nameAr}** بمفردات وقواعد مستوى (${tierSpec.cefrLabel}) مع ترجمته العربية وتحليل أهم تراكبيه.
+        - ثانياً: **حوار واقعي طبيعي باللغة ${langProfile.nameAr} (6 إلى 8 أسطر)** يجسد موقفاً حقيقياً من صلب الوحدة، مع استخراج **3 قوالب كلامية جاهزة باللغة ${langProfile.nameAr} للحفظ الفوري (Power Chunks)**.
 
-        ### ✍️ 5. ورشة الكتابة وتصحيح الأخطاء الشائعة (Writing Workshop & Error X-Ray)
-        - اشرح مهارة الكتابة الخاصة بهذا الدرس (في A0/A1: التهجئة وبناء الجمل؛ في A2/B1: بناء الفقرات والرسائل والروابط؛ في B2/C1/C2: التماسك النصي، المقالات، والأسلوب الأكاديمي).
-        - اعرض أشهر 4 أخطاء يقع فيها الطلاب بهذا التنسيق الدقيق:
+        ### ✍️ 5. ورشة الكتابة وتصحيح الأخطاء الشائعة ومعايير (${langProfile.examName})
+        - اشرح مهارة الكتابة والإملاء في **اللغة ${langProfile.nameAr}** الخاصة بهذا الدرس وكيف يقيّمها المصحح الرسمي في اختبار (${langProfile.examName}).
+        - اعرض أشهر 4 أخطاء يقع فيها الطلاب عند تعلم **اللغة ${langProfile.nameAr}** في هذا الدرس بهذا التنسيق الدقيق:
           * ❌ **الخطأ الشائع:** ...
-          * ✅ **الصواب الأصيل (Native Way):** ...
+          * ✅ **الصواب الأصيل (Native ${langProfile.nameEn} Way):** ...
           * 💡 **السبب اللغوي:** ...
 
         ### 🎙️ 6. التدريب الصوتي الحي مع مدربك الذكي (Live AI Voice Tutor Prompt)
-        - ضع نص توجيه للمدرب الصوتي داخل كتلة \`\`\`text ... \`\`\` يحدد بوضوح مستوى (${tierSpec.cefrLabel}) وأهم عبارات ومواقف هذا الدرس.
-
-        🚨 قواعد الحقول الإضافية الحاسمة في الـ JSON:
-        1. **"codeSnippet" (استوديو الاستماع والترديد الصوتي المتدرج - 8 عبارات/جمل تناسب مستوى ${tierSpec.tierId}):**
-           🎧 [Listening & Shadowing Studio]
-           1. [Target Phrase or Sentence 1 matching ${tierSpec.tierId} level]
-              🔊 IPA: /.../ | المعنى: ...
-           2. [Target Phrase or Sentence 2 matching ${tierSpec.tierId} level]
-              🔊 IPA: /.../ | المعنى: ...
-           (حتى 8 جمل متدرجة الطول والعمق).
-        2. **"codeExplanation" (دليل تدريب الأذن والوصل الصوتي Shadowing & Connected Speech Anatomy):**
-           اشرح للطالب كيف تندمج الأصوات والكلمات في هذه الجمل الـ 8، وأين يقع النبر (Stress) والتنغيم (Intonation).
-        3. **"codingPractice" (التمرين الكتابي والتطبيقي المتدرج):**
-           ضع تمريناً عملياً من 3 مهام تناسب مستوى (${tierSpec.cefrLabel}) مع 3 تلميحات والحل النموذجي الكامل.
-        4. **"dailyQuest":**
-           سؤال اختيار من متعدد يختبر أعمق نقطة في الدرس.
+        - ضع نص توجيه للمدرب الصوتي لتدريب الطالب على **اللغة ${langProfile.nameAr}** داخل كتلة \`\`\`text ... \`\`\` يحدد بوضوح مستوى (${tierSpec.cefrLabel}) وأهم عبارات هذا الدرس باللغة ${langProfile.nameAr}.
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
         {
           "content": "الشرح الكامل المنظم بالجداول والخطوات المتدرجة بصيغة Markdown...",
-          "codeSnippet": "🎧 [Listening & Shadowing Studio]\\n\\n1. ...\\n   🔊 IPA: /.../ | المعنى: ...\\n\\n2. ...",
+          "codeSnippet": "🎧 [Listening & Shadowing Studio - ${langProfile.nameEn}]\\n\\n1. ...\\n   🔊 IPA: /.../ | المعنى: ...\\n\\n2. ...",
           "codeExplanation": "🔬 دليل تدريب الأذن والنطق (Shadowing Anatomy):\\n- ...",
           "codingPractice": {
             "hasPractice": true,
-            "taskQuestion": "✍️ التمرين التطبيقي (خطوة بخطوة):\\n1. ...\\n2. ...\\n3. ...",
-            "starterCode": "// اكتب إجاباتك هنا بالترتيب:\\n1. \\n2. \\n3. \\n",
+            "taskQuestion": "✍️ التمرين التطبيقي (خطوة بخطوة باللغة ${langProfile.nameAr}):\\n1. ...\\n2. ...\\n3. ...",
+            "starterCode": "// اكتب إجاباتك باللغة ${langProfile.nameAr} هنا بالترتيب:\\n1. \\n2. \\n3. \\n",
             "hints": [
               "💡 تلميح 1 (القاعدة الأساسية): ...",
               "🛠️ تلميح 2 (الكلمات المساعدة): ...",
@@ -5813,11 +6194,13 @@ app.post('/api/academy2/lang-cert/forge-language-lesson', async (req, res) => {
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `قم بتأليف الدرس اللغوي ("${lessonTitle}") بمستوى (${tierSpec.cefrLabel}) ضمن الكورس ("${courseTopic}") بصيغة JSON.`,
-            0.7,
+            `قم بتأليف الدرس اللغوي ("${lessonTitle}") لتعليم اللغة ${langProfile.nameAr} (${langProfile.nameEn}) بمستوى (${tierSpec.cefrLabel}) ضمن الكورس ("${courseTopic}") بصيغة JSON.`,
+            0.68,
             16000
         );
-        const parsedContent = safeParseAIJson(rawContent);
+
+        // تمرير الدرس عبر مصفاة التطهير الآلي قبل إرساله للواجهة الأمامية!
+        const parsedContent = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
 
         res.json({ success: true, data: parsedContent });
     } catch (error) {
@@ -5826,19 +6209,21 @@ app.post('/api/academy2/lang-cert/forge-language-lesson', async (req, res) => {
     }
 });
 
+
 // ============================================================================
-// 🎙️ 15. مسار "Speak Class" الثلاثي للمحادثة الصوتية الحية (متكيف مع مصفوفة CEFR السداسية!)
+// 🎙️ 15. مسار "Speak Class" الثلاثي للمحادثة الصوتية الحية (متعدد اللغات!)
 // ============================================================================
 app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
     const {
         courseTitle = '',
+        targetLanguage = '',
         courseOrder = 1,
         sectionOrder = 1,
         difficulty = '',
         sectionName = '',
         lessonTitle = '',
         lessonExcerpt = '',
-        classMode = 'speak_class', // 'speak_class' | 'roleplay' | 'mission'
+        classMode = 'speak_class',
         targetVocab = [],
         activeMissionWord = '',
         stepNumber = 1,
@@ -5847,45 +6232,46 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
     } = req.body;
 
     try {
-        const tierSpec = getCEFRProgressionSpec(courseTitle, sectionName, lessonTitle, difficulty, courseOrder);
+        const tierSpec = getCEFRProgressionSpec(courseTitle, sectionName, lessonTitle, difficulty, courseOrder, targetLanguage);
+        const { langProfile } = tierSpec;
 
         let levelGuardrail = '';
         if (tierSpec.tierId === 'A0') {
             levelGuardrail = `
             🚨 قيود المستوى الصارمة جداً (${tierSpec.cefrLabel} - الوحدة ${sectionOrder}):
-            - الطالب في بداية تعلم اللغة! يجب أن تكون جملك الإنجليزية قصيرة جداً وبسيطة للغاية (من 3 إلى 7 كلمات كحد أقصى في الجملة الواحدة!).
-            - استخدم فقط الكلمات البسيطة الملموسة والأساسية الموجودة في هذا الدرس والوحدة: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
+            - الطالب في بداية تعلم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**! يجب أن تكون جملك باللغة ${langProfile.nameAr} قصيرة جداً وبسيطة للغاية (من 3 إلى 7 كلمات كحد أقصى!).
+            - استخدم فقط الكلمات البسيطة الملموسة باللغة ${langProfile.nameAr} الموجودة في هذا الدرس: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
         } else if (tierSpec.tierId === 'A1' || tierSpec.tierId === 'A2') {
             levelGuardrail = `
             🚨 قيود المستوى (${tierSpec.cefrLabel} - الوحدة ${sectionOrder}):
-            - تحدث بجمل حياتية واضحة، طبيعية، ومتوسطة الطول (من 7 إلى 13 كلمة في الجملة).
-            - ادفع الطالب لتكوين جمل تامة في أزمنة ومواقف الدرس ("${lessonTitle}") باستخدام مفرداته: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
+            - تحدث باللغة **${langProfile.nameAr} (${langProfile.nameEn})** بجمل حياتية واضحة ومتوسطة الطول (من 7 إلى 13 كلمة).
+            - ادفع الطالب لتكوين جمل تامة باللغة ${langProfile.nameAr} في مواقف الدرس ("${lessonTitle}") باستخدام مفرداته: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
         } else {
             levelGuardrail = `
             🚨 قيود المستوى المتقدم (${tierSpec.cefrLabel}):
-            - حاور الطالب كمتحدث أصلي مثقف، وادفعه لاستخدام التراكيب المتقدمة، المتلازمات اللفظية (Collocations)، وأدوات الربط الخاصة بالدرس ("${lessonTitle}").`;
+            - حاور الطالب كمتحدث أصلي مثقف باللغة **${langProfile.nameAr} (${langProfile.nameEn})**، وادفعه لاستخدام التراكيب المتقدمة الخاصة بالدرس ("${lessonTitle}").`;
         }
 
         let modeSpecificBlueprint = '';
         if (classMode === 'roleplay') {
             modeSpecificBlueprint = `
-            🎭 [النمط المختار: تمثيل موقف حقيقي - Real-Life Roleplay]
-            - 🚫 إياك أن تتصرف كأستاذ يشرح درساً! أنت الآن شخصية حقيقية داخل مشهد تمثيلي حي يناسب موضوع ("${sectionName} - ${lessonTitle}") ومستوى (${tierSpec.cefrLabel}).
-            - في حقل "sceneMeta"، حدد بدقة: "setting" (مكان المشهد)، "aiRole" (شخصيتك في المشهد)، و"studentGoal" (مهمة الطالب).`;
+            🎭 [النمط المختار: تمثيل موقف حقيقي باللغة ${langProfile.nameAr} - Real-Life Roleplay]
+            - أنت الآن شخصية حقيقية داخل مشهد تمثيلي حي باللغة ${langProfile.nameAr} يناسب موضوع ("${sectionName} - ${lessonTitle}") ومستوى (${tierSpec.cefrLabel}).`;
         } else if (classMode === 'mission') {
             const targetNow = activeMissionWord || targetVocab[0] || '';
             modeSpecificBlueprint = `
-            🎯 [النمط المختار: تحدي توظيف مفردات الدرس - Active Vocabulary Strike Mission]
-            - الكلمة/العبارة المطلوبة من الطالب في هذه الجولة تحديداً هي: "${targetNow}".
-            - اطرح على الطالب موقفاً أو سؤالاً ذكياً يناسب مستوى (${tierSpec.cefrLabel}) يجبره على استخدام ("${targetNow}") في إجابته القادمة، واجعل جميع الخيارات الثلاثة في "suggestedReplies" توظف ("${targetNow}") في جمل أصيلة!`;
+            🎯 [النمط المختار: تحدي توظيف مفردات الدرس باللغة ${langProfile.nameAr}]
+            - الكلمة/العبارة المطلوبة من الطالب في هذه الجولة هي: "${targetNow}".
+            - اطرح على الطالب موقفاً أو سؤالاً باللغة ${langProfile.nameAr} يجبره على استخدام ("${targetNow}") في إجابته القادمة، واجعل جميع الخيارات الثلاثة في "suggestedReplies" باللغة ${langProfile.nameAr} توظف ("${targetNow}")!`;
         } else {
             modeSpecificBlueprint = `
-            👩‍🏫 [النمط المختار: حصة محادثة ومناقشة مع الأستاذ - Interactive 5-Step Speak Class]
-            - أنت الآن في الخطوة التدريبية رقم (${stepNumber} من 5) لتطبيق درس ("${lessonTitle}") بمستوى (${tierSpec.cefrLabel}).`;
+            👩‍🏫 [النمط المختار: حصة محادثة ومناقشة باللغة ${langProfile.nameAr} - الخطوة ${stepNumber} من 5]`;
         }
 
-        const systemPrompt = `أنت المحرك الذكي لغرفة المحادثة الحية (Live Speak Class).
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت المحرك الذكي لغرفة المحادثة الحية (Live Speak Class) لتعليم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**.
         📌 بيانات الدرس الحالي:
+        - اللغة المستهدفة للحوار: **${langProfile.nameAr} (${langProfile.nameEn})**
         - الكورس: "${courseTitle}" (${tierSpec.cefrLabel})
         - الوحدة: "${sectionName}"
         - الدرس: "${lessonTitle}"
@@ -5895,33 +6281,29 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
         ${levelGuardrail}
         ${modeSpecificBlueprint}
 
-        🚨 القاعدة الذهبية لمنع الخلط بين (تصحيح جملة الطالب السابقة) و(السؤال الجديد):
-        1. إذا كانت رسالة الطالب هي "__START_SESSION__": اجعل "studentSpeechUpgrade" فارغاً ("")، ورحّب بالطالب في "coachReactionEnglish" واطرح السؤال الأول في "nextQuestionEnglish".
-        2. إذا تحدث الطالب ("${studentSpokenText}"):
-           - قيّم فقط الجملة التي قالها الطالب للتو ("${studentSpokenText}") في حقل "studentSpeechUpgrade" بما يناسب مستوى (${tierSpec.cefrLabel}).
-           - في "coachReactionEnglish" تفاعل مع كلامه، وفي "nextQuestionEnglish" اطرح السؤال الحواري الجديد.
-           - في "modelAnswerForNextQuestion" اكتب إجابة نموذجية للسؤال الجديد ("nextQuestionEnglish").
+        🚨 تحذير حاسم: جميع الحقول الحوارية الأجنبية (studentSpeechUpgrade, coachReactionEnglish, nextQuestionEnglish, modelAnswerForNextQuestion, suggestedReplies) يجب أن تُكتب **باللغة ${langProfile.nameAr} (${langProfile.nameEn}) حصراً**!
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "studentSpeechUpgrade": "ترقية الجملة التي قالها الطالب للتو فقط إلى إنجليزية طبيعية (أو اتركها فارغة في بداية الجلسة)",
+          "speechLang": "${langProfile.speechLang}",
+          "studentSpeechUpgrade": "ترقية الجملة التي قالها الطالب للتو إلى صياغة أصيلة باللغة ${langProfile.nameAr} (أو اتركها فارغة في بداية الجلسة)",
           "studentSpeechFeedbackArabic": "ملاحظة عربية سريعة تشرح تصحيح جملة الطالب السابقة...",
           "pronunciationScore": 95,
-          "coachReactionEnglish": "تفاعل المعلم أو الشخصية بالإنجليزية مع كلام الطالب...",
+          "coachReactionEnglish": "تفاعل المعلم أو الشخصية باللغة ${langProfile.nameAr} (${langProfile.nameEn}) مع كلام الطالب...",
           "coachReactionArabic": "ترجمة تفاعل المعلم إلى العربية...",
-          "nextQuestionEnglish": "السؤال الجديد أو الحوار التالي الذي يوجهه المعلم للطالب الآن...",
+          "nextQuestionEnglish": "السؤال الجديد أو الحوار التالي باللغة ${langProfile.nameAr} (${langProfile.nameEn}) الذي يوجهه المعلم للطالب الآن...",
           "nextQuestionArabic": "ترجمة السؤال الجديد إلى العربية...",
-          "connectedSpeechHint": "كيف ينطق المتحدث الأصلي جملة السؤال الجديد متصلة",
-          "modelAnswerForNextQuestion": "إجابة نموذجية مقترحة للسؤال الجديد تحديداً...",
+          "connectedSpeechHint": "كيف ينطق المتحدث الأصلي للغة ${langProfile.nameAr} جملة السؤال الجديد متصلة",
+          "modelAnswerForNextQuestion": "إجابة نموذجية مقترحة باللغة ${langProfile.nameAr} للسؤال الجديد تحديداً...",
           "sceneMeta": {
             "setting": "مكان المشهد التمثيلي",
             "aiRole": "اسم ودور الشخصية المحاورة",
             "studentGoal": "المهمة المطلوبة من الطالب"
           },
           "suggestedReplies": [
-            "رد مقترح 1 يجيب مباشرة على السؤال الجديد",
-            "رد مقترح 2 يجيب مباشرة على السؤال الجديد",
-            "رد مقترح 3 يجيب مباشرة على السؤال الجديد"
+            "رد مقترح 1 باللغة ${langProfile.nameAr} يجيب مباشرة على السؤال الجديد",
+            "رد مقترح 2 باللغة ${langProfile.nameAr} يجيب مباشرة على السؤال الجديد",
+            "رد مقترح 3 باللغة ${langProfile.nameAr} يجيب مباشرة على السؤال الجديد"
           ]
         }`;
 
@@ -5930,10 +6312,11 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
             .map(m => `${m.role === 'coach' ? 'Coach' : 'Student'}: ${m.text || ''}`)
             .join('\n');
 
-        const userPrompt = `سجل الحوار السابق:\n${historyText || '(بداية الحصة الآن)'}\n\nما نطقه الطالب للتو: "${studentSpokenText || '__START_SESSION__'}"\n\nولّد الرد المنظم بصيغة JSON الآن.`;
+        const userPrompt = `سجل الحوار السابق:\n${historyText || '(بداية الحصة الآن)'}\n\nما نطقه الطالب للتو: "${studentSpokenText || '__START_SESSION__'}"\n\nولّد الرد باللغة ${langProfile.nameAr} (${langProfile.nameEn}) مع الترجمة العربية بصيغة JSON الآن.`;
 
         const rawContent = await generateContentSmart(systemPrompt, userPrompt, 0.72, 2500);
         const parsed = safeParseAIJson(rawContent);
+        parsed.speechLang = langProfile.speechLang;
 
         res.json({ success: true, data: parsed });
     } catch (error) {
@@ -5941,6 +6324,8 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
         res.status(500).json({ success: false, error: 'تعذر الاتصال بالمدرب الصوتي.' });
     }
 });
+
+
 
 
 
