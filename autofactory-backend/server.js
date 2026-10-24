@@ -6326,9 +6326,467 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
 });
 
 
+// ============================================================================
+// 🧐 16. مسار "الناقد الأكاديمي ومقترح إضافات منتصف الدرس" (AI Lesson Critic & Mid-Lesson Proposer)
+// يحلل محتوى الدرس ومستوى الكراش كورس ويقترح إضافات في منتصف الدرس + عناصر للحذف!
+// ============================================================================
+app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        lesson = {},
+        targetLanguage = ''
+    } = req.body;
+
+    if (!lesson || !lesson.title) {
+        return res.status(400).json({ success: false, error: 'بيانات الدرس مطلوبة للتحليل.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            lesson.title,
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🧐 [AI Critic - ${langProfile.nameAr} - ${tierSpec.tierId}] جاري فحص الدرس واقتراح إضافات منتصف الدرس: "${lesson.title}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت الآن تعمل كـ **"أفضل ناقد ومقيّم مناهج في العالم (World-Class Curriculum Rater) ومطور دروس تفاعلية"**.
+        أمامك الدرس التالي:
+        - الكراش كورس: "${courseTitle}" (المستوى الصارم: ${tierSpec.cefrLabel})
+        - الوحدة: "${sectionName}"
+        - عنوان الدرس: "${lesson.title}"
+        - محتوى الدرس الحالي:
+        """
+        ${(lesson.content || '').slice(0, 4500)}
+        """
+
+        مهمتك الدقيقة:
+        1. تقييم جودة الدرس الحالية من 100 ومدى مطابقته لمستوى (${tierSpec.tierId}).
+        2. اقتراح **3 عناصر إبداعية محددة لإضافتها في "منتصف الدرس" (Mid-Lesson Injections)** (مثلاً بعد القسم 2 جدول المفردات أو بعد القسم 3 سُلّم البناء) لكسر الملل وتثبيت المعلومة، مثل:
+           - تمرين "املأ الفراغ التفاعلي" (Fill-in-the-Blank) في منتصف الدرس من مفردات الدرس نفسه.
+           - بطاقة "شفرة الذاكرة السريعة" (Memory Trick / Cheat Sheet) أو مقارنة بصرية سريعة.
+           - موقف حواري مصغر أو تحدي "اكتشف الخطأ في الجملة" في منتصف الشرح.
+        3. تحديد **عنصر واحد غير مهم أو مكرر أو حشو (Fluff Removal)** داخل الدرس تقترح حذفه أو تكثيفه لجعل الدرس أكثر رشاقة.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "qualityScore": 92,
+          "raterVerdict": "تقييم نقدي مركز في سطر واحد يوضح نقطة قوة الدرس وما ينقصه...",
+          "midLessonSuggestions": [
+            {
+              "id": "fill_blank_mid",
+              "badge": "🧩 حقن في منتصف الدرس",
+              "title": "إضافة تمرين (املأ الفراغ التفاعلي) بعد جدول المفردات",
+              "why": "لتثبيت المفردات والأدوات التي قرأها الطالب للتو قبل الانتقال إلى سُلّم الجمل.",
+              "operationType": "inject_mid_fill_blank",
+              "command": "أضف في منتصف الدرس (مباشرة بعد القسم 2 جدول المفردات وقبل القسم 3) قسماً تفاعلياً بعنوان (### 🧩 محطة منتصف الدرس: املأ الفراغ التفاعلي) يضم 4 جمل قصيرة من مفردات الدرس بصيغة [[الكلمة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]."
+            },
+            {
+              "id": "memory_hook_mid",
+              "badge": "🧠 خدعة ذاكرة بالمنتصف",
+              "title": "عنوان اقتراح مخصص لقاعدة هذا الدرس تحديداً...",
+              "why": "لماذا يفيد الطالب في منتصف هذا الدرس؟",
+              "operationType": "inject_mid_custom",
+              "command": "الأمر التفصيلي الدقيق لحقن هذا العنصر في منتصف الدرس (بعد القسم 3 سُلّم البناء)..."
+            },
+            {
+              "id": "dialogue_drill_mid",
+              "badge": "⚡ تحدي سريع بالمنتصف",
+              "title": "عنوان اقتراح ثالث مخصص لمحتوى هذا الدرس...",
+              "why": "السبب البيداغوجي...",
+              "operationType": "inject_mid_custom",
+              "command": "الأمر التفصيلي الدقيق..."
+            }
+          ],
+          "fluffToPrune": {
+            "title": "✂️ تنظيف وحذف الحشو الزائد في الدرس",
+            "whatToRemove": "حدد بدقة الفقرة أو التكرار الذي يمكن حذفه أو تقليصه في هذا الدرس...",
+            "command": "احذف التكرار والحشو غير الضروري في الشرح، واجعل العبارات مركزة ومباشرة دون المساس بالجداول أو الأمثلة الأساسية."
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `حلل الدرس "${lesson.title}" واقترح إضافات منتصف الدرس بصيغة JSON.`,
+            0.7,
+            3500
+        );
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في ناقد الدرس الذكي:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تحليل الدرس حالياً.' });
+    }
+});
+
+// ============================================================================
+// 🩺 17. مسار "المُشرط الجراحي للدرس" (AI Surgical Lesson Editor & Mid-Lesson Injector)
+// ينفذ الإضافة في منتصف الدرس، تمرين املأ الفراغ، الحذف، أو التعديل مع احترام الكورس والمستوى!
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        lesson = {},
+        userCommand = '',
+        operationType = 'custom', // 'inject_mid_fill_blank' | 'inject_mid_custom' | 'prune_fluff' | 'custom'
+        targetLanguage = ''
+    } = req.body;
+
+    if (!lesson || !userCommand) {
+        return res.status(400).json({ success: false, error: 'الدرس وأمر التعديل مطلوبان.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            lesson.title,
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🩺 [AI Lesson Surgeon - ${langProfile.nameAr} - ${tierSpec.tierId}] تنفيذ عملية (${operationType}): "${userCommand}"...`);
+
+        const fillBlankFormattingRule = `
+        🚨 قاعدة تنسيق تمرين "املأ الفراغ التفاعلي" في منتصف الدرس (CRITICAL INTERACTIVE SYNTAX):
+        إذا طُلب منك إضافة تمرين "املأ الفراغ" (Fill in the blank) في منتصف الدرس أو في أي مكان داخل "content":
+        1. ضعه تحت عنوان فرعي واضح في منتصف الدرس (مثلاً بين القسم 2 والقسم 3، أو بين القسم 3 والقسم 4):
+           \`### 🧩 محطة منتصف الدرس: املأ الفراغ التفاعلي (Mid-Lesson Check)\`
+        2. اكتب من 4 إلى 5 جمل مرقمة باللغة **${langProfile.nameAr}** تناسب مستوى (${tierSpec.cefrLabel})، وضع الفراغ داخل أقواس مزدوجة هكذا بالضبط:
+           \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`
+           مثال للفرنسية مستوى A0:
+           \`1. C'est [[un | une | des]] petit chat. (هذا قط صغير)\`
+           \`2. La pomme [[est | sont | as]] rouge. (التفاحة حمراء)\`
+           (بحيث يكون الخيار الأول داخل الأقواس المزدوجة \`[[...]]\` هو الإجابة الصحيحة دائماً، وسيتولى النظام خلطها برمجياً للطالب!).`;
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت الآن **"كبير جراحي المناهج التعليمية (Master Curriculum Surgeon)"**.
+        مهمتك تعديل الدرس المرفق بدقة جراحية بناءً على أمر المستخدم، مع الالتزام الصارم بـ:
+        - اللغة المستهدفة: **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**
+        - الكراش كورس: "${courseTitle}"
+        - المستوى اللغوي الإلزامي: **${tierSpec.cefrLabel}**
+        - الوحدة الحالية: "${sectionName}"
+
+        ${tierSpec.pedagogyRules}
+        ${fillBlankFormattingRule}
+
+        📌 أمر التعديل المطلوب تنفيذه الآن على الدرس:
+        "${userCommand}"
+
+        📄 بيانات الدرس الحالي قبل التعديل:
+        - العنوان: "${lesson.title}"
+        - المحتوى (content):
+        """
+        ${lesson.content || ''}
+        """
+        - استوديو الصوتيات (codeSnippet):
+        """
+        ${lesson.codeSnippet || ''}
+        """
+        - التمرين التطبيقي (codingPractice):
+        ${JSON.stringify(lesson.codingPractice || {})}
+        - سؤال التحدي (dailyQuest):
+        ${JSON.stringify(lesson.dailyQuest || {})}
+
+        🚨 القواعد الجراحية الصارمة:
+        1. نفّذ أمر المستخدم ("${userCommand}") بدقة 100% في المكان المطلوب (إذا طلب في منتصف الدرس، احقن القسم الجديد في منتصف "content" بعد القسم 2 أو القسم 3 مع الحفاظ على جميع الأقسام الـ 6 الأخرى سليمة وكاملة!).
+        2. إذا طلب حذف عنصر، احذفه بنظافة تامة دون ترك فراغات مشوهة.
+        3. إذا طلب إضافة مفردات جديدة، قم بتحديث جدول المفردات في "content" وأضفها أيضاً إلى "codeSnippet" لكي تنطق صوتياً!
+        4. إياك أن تختصر باقي أقسام الدرس التي لم يُطلب حذفها! أعد حقل "content" كاملاً شاملاً التعديل الجديد.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "surgeonReport": "ملخص سريع في سطر واحد لما قمت بإضافته أو تعديله أو حذفه في الدرس...",
+          "updatedLesson": {
+            "title": "${lesson.title}",
+            "description": "${lesson.description || ''}",
+            "content": "نص الـ Markdown الكامل للدرس بعد حقن التعديل أو تمرين منتصف الدرس...",
+            "codeSnippet": "نص استوديو الاستماع والترديد المحدث...",
+            "codeExplanation": "شرح تدريب الأذن المحدث...",
+            "codingPractice": {
+              "hasPractice": true,
+              "taskQuestion": "...",
+              "starterCode": "...",
+              "hints": ["...", "...", "..."],
+              "solutionCode": "..."
+            },
+            "dailyQuest": {
+              "question": "...",
+              "options": ["...", "...", "...", "..."],
+              "correctAnswerIndex": 1,
+              "explanation": "..."
+            }
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `نفّذ العملية الجراحية ("${userCommand}") على الدرس "${lesson.title}" وأعد النتيجة بصيغة JSON كاملة.`,
+            0.65,
+            16000
+        );
+        const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
+
+        res.json({
+            success: true,
+            surgeonReport: parsed.surgeonReport || 'تم تحديث الدرس بنجاح وفق طلبك!',
+            updatedLesson: parsed.updatedLesson || lesson
+        });
+    } catch (error) {
+        console.error('❌ خطأ في جراحة الدرس:', error.message);
+        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تعديل الدرس.' });
+    }
+});
 
 
 
+// ============================================================================
+// 🧐 16. مسار "مجلس الحكماء الثلاثي" (الناقد Rater + الأستاذ + التلميذ) + أمر تطبيق الكل!
+// استبدل مسار /api/academy2/surgeon/critique-and-suggest القديم بهذا الكود:
+// ============================================================================
+app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        lesson = {},
+        targetLanguage = '',
+        personaFocus = 'all' // 'all' | 'rater' | 'teacher' | 'student'
+    } = req.body;
+
+    if (!lesson || !lesson.title) {
+        return res.status(400).json({ success: false, error: 'بيانات الدرس مطلوبة للتحليل.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            lesson.title,
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🧐 [3-Persona Council - ${langProfile.nameAr} - ${tierSpec.tierId}] تحليل الدرس (${personaFocus}): "${lesson.title}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت الآن تقود **"مجلس الحكماء الثلاثي لتطوير المناهج العالمية"** لفحص وتحسين هذا الدرس:
+        - الكراش كورس: "${courseTitle}" (المستوى الصارم: ${tierSpec.cefrLabel})
+        - الوحدة: "${sectionName}"
+        - عنوان الدرس: "${lesson.title}"
+        - محتوى الدرس الحالي:
+        """
+        ${(lesson.content || '').slice(0, 4800)}
+        """
+
+        المطلوب منك توليد تحليل دقيق واقتراحات قابلة للتنفيذ الفوري من 3 زوايا (Personas) تتناسب 100% مع مستوى (${tierSpec.tierId}) واللغة (${langProfile.nameAr}):
+        1. **🧐 الناقد والمُقيّم العالمي (Rater & Critic Persona):** ما الذي يجب إضافته أو ربطه في منتصف الدرس ليصبح الدرس متماسكاً ومثالياً 100%؟
+        2. **👨‍🏫 الأستاذ الخبير (Master Teacher Persona):** ما الذي ينقص الدرس علمياً وبيداغوجياً؟ وما هو العنصر الزائد/الحشو الذي يجب حذفه أو تعديله؟
+        3. **🎓 التلميذ الذكي (Student Persona):** ماذا يحتاج الطالب في هذا المستوى تحديداً أن نضيف له في منتصف الدرس (مثلاً: تمرين املأ الفراغ بصيغة [[الصواب | خطأ1 | خطأ2]]، أو شفرة ذاكرة مبسطة، أو مثال توضيحي) لكي يفهم الدرس بسرعة البرق؟
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "qualityScore": 90,
+          "raterVerdict": "التقييم العام للدرس في سطر واحد مركز...",
+          "personas": {
+            "rater": {
+              "roleTitle": "🧐 رؤية الناقد والمُقيّم العالمي (Rater)",
+              "diagnosis": "تشخيص تماسك الدرس وما يحتاجه للوصول للكمال...",
+              "suggestionTitle": "عنوان الإضافة المقترحة لرفع التماسك",
+              "command": "الأمر الجراحي الدقيق لتنفيذ توصية الناقد في الدرس..."
+            },
+            "teacher": {
+              "roleTitle": "👨‍🏫 رؤية الأستاذ الخبير (إضافة + حذف/تعديل)",
+              "whatIsMissing": "ما ينقص الدرس من وجهة نظر الأستاذ...",
+              "whatToDeleteOrEdit": "ما يجب حذفه أو تعديله من حشو أو غموض...",
+              "suggestionTitle": "عنوان التعديل البيداغوجي للأستاذ",
+              "command": "الأمر الجراحي الدقيق لإضافة ما ينقص وحذف/تعديل الحشو..."
+            },
+            "student": {
+              "roleTitle": "🎓 رؤية التلميذ (لتسهيل الفهم وكسر الملل بالمنتصف)",
+              "studentNeed": "ما يتمناه الطالب في هذا الدرس ليفهم أسرع...",
+              "suggestionTitle": "عنوان الإضافة التفاعلية في منتصف الدرس للطالب",
+              "command": "أضف في منتصف الدرس (بعد جدول المفردات أو سُلّم البناء) قسماً تفاعلياً يلبّي حاجة الطالب مع تمرين املأ الفراغ بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]..."
+            }
+          },
+          "applyAllCommand": "أمر جراحي شامل يدمج توصية الناقد + تعديل وحذف الأستاذ + إضافة التلميذ التفاعلية في منتصف الدرس (بما في ذلك تمرين املأ الفراغ بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]) دفعة واحدة بدقة متناهية.",
+          "midLessonSuggestions": [
+            {
+              "id": "rater_sug",
+              "persona": "rater",
+              "badge": "🧐 توصية الناقد (Rater)",
+              "title": "عنوان توصية الناقد...",
+              "why": "لماذا تجعل الدرس متماسكاً ومثالياً؟",
+              "operationType": "inject_mid_custom",
+              "command": "الأمر الجراحي لتوصية الناقد..."
+            },
+            {
+              "id": "teacher_sug",
+              "persona": "teacher",
+              "badge": "👨‍🏫 توصية الأستاذ (إضافة وتنقيح)",
+              "title": "عنوان توصية الأستاذ...",
+              "why": "ما سيُضاف وما سيُحذف أو يُعدّل...",
+              "operationType": "inject_mid_custom",
+              "command": "الأمر الجراحي لتوصية الأستاذ..."
+            },
+            {
+              "id": "student_sug",
+              "persona": "student",
+              "badge": "🎓 طلب التلميذ (في منتصف الدرس)",
+              "title": "عنوان طلب التلميذ لسهولة الفهم...",
+              "why": "كيف يسهّل الفهم ويكسر الملل؟",
+              "operationType": "inject_mid_fill_blank",
+              "command": "الأمر الجراحي لطلب التلميذ مع تمرين املأ الفراغ [[الصواب | خطأ1 | خطأ2]]..."
+            }
+          ],
+          "fluffToPrune": {
+            "title": "✂️ توصية الأستاذ لحذف الحشو وتكثيف الدرس",
+            "whatToRemove": "العنصر غير المهم الذي يقترح الأستاذ حذفه أو اختصاره...",
+            "command": "احذف الحشو والتكرار المذكور وركز الشرح بأسلوب صافي ومباشر."
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `حلل الدرس "${lesson.title}" من منظور (الناقد، والأستاذ، والتلميذ) بصيغة JSON.`,
+            0.7,
+            4500
+        );
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في مجلس الحكماء الثلاثي:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تحليل الدرس حالياً.' });
+    }
+});
+
+// ============================================================================
+// 🔬 18. مسار تعديل قسم واحد فقط من الدرس بالذكاء الاصطناعي (Block-Level AI Section Editor)
+// يعدل الفقرة أو القسم المحدد فقط (كما في الصورة 3) بسرعة فائقة دون المساس بباقي الدرس!
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-section', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseOrder = 1,
+        lessonTitle = '',
+        sectionMarkdown = '',
+        userInstruction = '',
+        targetLanguage = ''
+    } = req.body;
+
+    if (!sectionMarkdown || !userInstruction) {
+        return res.status(400).json({ success: false, error: 'نص القسم والتعليمات مطلوبان.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(courseTitle, '', lessonTitle, '', courseOrder, targetLanguage);
+        const { langProfile } = tierSpec;
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت محرر جراحي دقيق لقسم واحد فقط داخل درس "${lessonTitle}" في اللغة **${langProfile.nameAr}** (المستوى: ${tierSpec.cefrLabel}).
+
+        القسم الحالي المراد تعديله:
+        """
+        ${sectionMarkdown}
+        """
+
+        أمر التعديل المطلوب على هذا القسم تحديداً:
+        "${userInstruction}"
+
+        🚨 تعليمات صارمة:
+        1. عدّل هذا القسم فقط لتنفيذ أمر المستخدم بدقة مع الحفاظ على عنوان القسم الرئيسي (الذي يبدأ بـ ###) ما لم يطلب تغيير العنوان.
+        2. إذا طلب إضافة تمرين "املأ الفراغ"، استخدم الصيغة التفاعلية: \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`.
+        3. التزم بمستوى (${tierSpec.cefrLabel}) واللغة (${langProfile.nameAr}).
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "updatedSectionMarkdown": "نص الـ Markdown المحدث لهذا القسم فقط...",
+          "summary": "ما تم تعديله في جملة قصيرة..."
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `عدّل هذا القسم حسب الأمر: "${userInstruction}" وأعده بصيغة JSON.`,
+            0.65,
+            5000
+        );
+        const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
+
+        res.json({
+            success: true,
+            updatedSectionMarkdown: parsed.updatedSectionMarkdown || sectionMarkdown,
+            summary: parsed.summary || 'تم تعديل القسم بنجاح!'
+        });
+    } catch (error) {
+        console.error('❌ خطأ في تعديل القسم:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تعديل القسم حالياً.' });
+    }
+});
+
+// ============================================================================
+// 💾 19. مسار حفظ تعديلات الدرس مباشرة في قاعدة البيانات MongoDB Atlas!
+// يضمن حفظ أي تعديل تقوم به في Classroom داخل قاعدة البيانات بشكل دائم!
+// ============================================================================
+app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
+    const { lessonId, courseId, updatedLesson } = req.body;
+    if (!updatedLesson) {
+        return res.status(400).json({ success: false, error: 'بيانات الدرس المحدثة مطلوبة.' });
+    }
+
+    try {
+        let dbUpdated = false;
+
+        // تحديث وثيقة الدرس في مجموعة lessons في MongoDB إن كان لها ObjectId صالح
+        if (lessonId && mongoose.Types.ObjectId.isValid(lessonId)) {
+            const result = await mongoose.connection.collection('lessons').updateOne(
+                { _id: new mongoose.Types.ObjectId(lessonId) },
+                {
+                    $set: {
+                        title: updatedLesson.title,
+                        description: updatedLesson.description,
+                        content: updatedLesson.content,
+                        codeSnippet: updatedLesson.codeSnippet,
+                        codeExplanation: updatedLesson.codeExplanation,
+                        codingPractice: updatedLesson.codingPractice,
+                        dailyQuest: updatedLesson.dailyQuest,
+                        bossQuiz: updatedLesson.bossQuiz,
+                        updatedAt: new Date()
+                    }
+                }
+            );
+            if (result.matchedCount > 0) dbUpdated = true;
+        }
+
+        res.json({
+            success: true,
+            dbUpdated,
+            message: dbUpdated
+                ? '☁️ تم حفظ التعديلات نهائياً في قاعدة البيانات (MongoDB) وفي ذاكرة المتصفح!'
+                : '💾 تم حفظ التعديلات في ذاكرة المتصفح الدائمة وتجهيزها للتصدير!'
+        });
+    } catch (error) {
+        console.error('❌ خطأ في حفظ الدرس بقاعدة البيانات:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر الحفظ في قاعدة البيانات.' });
+    }
+});
 
 
 
