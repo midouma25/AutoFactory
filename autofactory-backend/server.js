@@ -5820,6 +5820,7 @@ app.post('/api/academy2/project-cert/forge-build-step', async (req, res) => {
     }
 });
 
+
 // ============================================================================
 // 🌍 14. مسارات "أكاديمية اللغات والاختبارات العالمية" (بمصفوفة التصعيد السداسية من A0 إلى C2)
 // معزولة بالكامل تحت بادئة: /api/academy2/lang-cert/...
@@ -6331,8 +6332,8 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
 
 
 // ============================================================================
-// 🧐 16. مسار "مجلس الحكماء الثلاثي" (الناقد Rater + الأستاذ + التلميذ) + أمر تطبيق الكل!
-// استبدل مسار /api/academy2/surgeon/critique-and-suggest القديم بهذا الكود:
+// 🧐 16. مسار "مجلس الحكماء الثلاثي للدرس" المترابط هرمياً (Course -> Unit -> Lesson)
+// يحلل الدرس في سياق دروس الوحدة المحيطة به ويفحص جميع ودجاته التفاعلية
 // ============================================================================
 app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
     const {
@@ -6340,9 +6341,11 @@ app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
         courseDescription = '',
         courseOrder = 1,
         sectionName = '',
+        unitLessonsTitles = [],
+        prevLessonTitle = '',
+        nextLessonTitle = '',
         lesson = {},
-        targetLanguage = '',
-        personaFocus = 'all' // 'all' | 'rater' | 'teacher' | 'student'
+        targetLanguage = ''
     } = req.body;
 
     if (!lesson || !lesson.title) {
@@ -6360,90 +6363,108 @@ app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
         );
         const { langProfile } = tierSpec;
 
-        console.log(`\n🧐 [3-Persona Council - ${langProfile.nameAr} - ${tierSpec.tierId}] تحليل الدرس (${personaFocus}): "${lesson.title}"...`);
+        console.log(`\n🧐 [Lesson Council V2 - ${langProfile.nameAr} ${tierSpec.tierId}] تشخيص مترابط لدرس: "${lesson.title}"...`);
 
         const systemPrompt = `${langProfile.instituteRole}
-        أنت الآن تقود **"مجلس الحكماء الثلاثي لتطوير المناهج العالمية"** لفحص وتحسين هذا الدرس:
-        - الكراش كورس: "${courseTitle}" (المستوى الصارم: ${tierSpec.cefrLabel})
-        - الوحدة: "${sectionName}"
-        - عنوان الدرس: "${lesson.title}"
-        - محتوى الدرس الحالي:
+        أنت تقود **"مجلس الحكماء الثلاثي لهندسة الدروس العالمية (AI Lesson Surgeon Council)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى الصارم **(${tierSpec.cefrLabel})**.
+
+        🔗 **سلسلة الترابط الهرمي (Hierarchical Context):**
+        - الكراش كورس: "${courseTitle}" (الوصف: ${courseDescription.slice(0, 250)})
+        - الوحدة الحالية: "${sectionName}"
+        - خريطة دروس هذه الوحدة بالترتيب: ${JSON.stringify(unitLessonsTitles)}
+        - الدرس السابق مباشرة: "${prevLessonTitle || 'هذا أول درس في الوحدة'}"
+        - 📌 **الدرس الحالي قيد الفحص:** "${lesson.title}"
+        - الدرس التالي مباشرة: "${nextLessonTitle || 'هذا آخر درس في الوحدة'}"
+
+        📄 **محتوى الدرس الحالي (Markdown):**
         """
-        ${(lesson.content || '').slice(0, 4800)}
+        ${(lesson.content || '').slice(0, 5500)}
+        """
+        🎧 **استوديو الصوتيات الحالي (codeSnippet):**
+        """
+        ${(lesson.codeSnippet || '').slice(0, 1000)}
         """
 
-        المطلوب منك توليد تحليل دقيق واقتراحات قابلة للتنفيذ الفوري من 3 زوايا (Personas) تتناسب 100% مع مستوى (${tierSpec.tierId}) واللغة (${langProfile.nameAr}):
-        1. **🧐 الناقد والمُقيّم العالمي (Rater & Critic Persona):** ما الذي يجب إضافته أو ربطه في منتصف الدرس ليصبح الدرس متماسكاً ومثالياً 100%؟
-        2. **👨‍🏫 الأستاذ الخبير (Master Teacher Persona):** ما الذي ينقص الدرس علمياً وبيداغوجياً؟ وما هو العنصر الزائد/الحشو الذي يجب حذفه أو تعديله؟
-        3. **🎓 التلميذ الذكي (Student Persona):** ماذا يحتاج الطالب في هذا المستوى تحديداً أن نضيف له في منتصف الدرس (مثلاً: تمرين املأ الفراغ بصيغة [[الصواب | خطأ1 | خطأ2]]، أو شفرة ذاكرة مبسطة، أو مثال توضيحي) لكي يفهم الدرس بسرعة البرق؟
+        المطلوب منك فحص هذا الدرس بدقة فائقة وتوليد **إلهامات جراحية احترافية ومحددة جداً** (لا تعطِ كلاماً عاماً، بل اذكر القواعد والمفردات والأمثلة بالاسم من صلب الدرس "${lesson.title}" وما يربطه بـ "${prevLessonTitle}" و"${nextLessonTitle}"):
+
+        1. **🧐 الناقد والمُقيّم العالمي (Rater Persona):** يفحص التماسك البنيوي، الربط بين الدرس السابق واللاحق، ودقة معايير (${tierSpec.cefrLabel}). يقترح إضافة محددة (مثل: جدول مقارن، أو جسر صوتي/نحوي، أو حوار تطبيقي ناطق) مع ذكر ما سيُضاف بالتفصيل.
+        2. **👨‍🏫 الأستاذ الخبير (Master Teacher Persona):** يكشف الفجوة العلمية أو الصوتية التي قد تربك الطالب في ("${lesson.title}")، ويحدد الحشو أو التكرار الواجب تنقيحه، ويقترح إضافة بيداغوجية عميقة (معادلة مكعبات ليغو [...] + [...] = [...], أو أمثلة صوتية IPA جديدة، أو قاعدة ذهبية).
+        3. **🎓 التلميذ الذكي (Smart Student Persona):** يطلب أداة تفاعلية ممتعة في منتصف الدرس تكسر الرتابة وتثبت المعلومة فوراً (تحدي املأ الفراغ [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]], أو شفرة ذاكرة بصرية، أو سيناريو محادثة سريع).
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "qualityScore": 90,
-          "raterVerdict": "التقييم العام للدرس في سطر واحد مركز...",
+          "qualityScore": 91,
+          "raterVerdict": "تشخيص معماري دقيق للدرس وموقعه في الوحدة في سطرين...",
+          "contextLinkageNote": "كيف يرتبط هذا الدرس بالدرس السابق (${prevLessonTitle || 'البداية'}) ويمهد للدرس التالي (${nextLessonTitle || 'الختام'})...",
           "personas": {
             "rater": {
-              "roleTitle": "🧐 رؤية الناقد والمُقيّم العالمي (Rater)",
-              "diagnosis": "تشخيص تماسك الدرس وما يحتاجه للوصول للكمال...",
-              "suggestionTitle": "عنوان الإضافة المقترحة لرفع التماسك",
-              "command": "الأمر الجراحي الدقيق لتنفيذ توصية الناقد في الدرس..."
+              "roleTitle": "🧐 رؤية الناقد والمُقيّم العالمي (CEFR Rater)",
+              "diagnosis": "تشخيص دقيق ومفصل لما ينقص الدرس ليحقق الترابط والكمال...",
+              "whatWillBeAdded": ["عنصر محدد 1 سيُضاف", "عنصر محدد 2 سيُضاف"],
+              "suggestionTitle": "عنوان الترقية المعمارية المقترحة من الناقد",
+              "command": "أمر جراحي تفصيلي ودقيق لتنفيذ توصية الناقد داخل الدرس مع أمثلة باللغة ${langProfile.nameAr}..."
             },
             "teacher": {
-              "roleTitle": "👨‍🏫 رؤية الأستاذ الخبير (إضافة + حذف/تعديل)",
-              "whatIsMissing": "ما ينقص الدرس من وجهة نظر الأستاذ...",
-              "whatToDeleteOrEdit": "ما يجب حذفه أو تعديله من حشو أو غموض...",
+              "roleTitle": "👨‍🏫 رؤية الأستاذ الخبير (إثراء وتنقيح)",
+              "whatIsMissing": "الفجوة العلمية أو الصوتية التي اكتشفها الأستاذ في هذا الدرس...",
+              "whatToDeleteOrEdit": "الحشو أو الجزئية التي يجب تنظيفها أو إعادة صياغتها...",
+              "whatWillBeAdded": ["قاعدة أو جدول محدد", "أمثلة صوتية ناطقة"],
               "suggestionTitle": "عنوان التعديل البيداغوجي للأستاذ",
-              "command": "الأمر الجراحي الدقيق لإضافة ما ينقص وحذف/تعديل الحشو..."
+              "command": "أمر جراحي تفصيلي لإضافة ما ينقص وتنقيح الحشو بأمثلة ناطقة باللغة ${langProfile.nameAr}..."
             },
             "student": {
-              "roleTitle": "🎓 رؤية التلميذ (لتسهيل الفهم وكسر الملل بالمنتصف)",
-              "studentNeed": "ما يتمناه الطالب في هذا الدرس ليفهم أسرع...",
-              "suggestionTitle": "عنوان الإضافة التفاعلية في منتصف الدرس للطالب",
-              "command": "أضف في منتصف الدرس (بعد جدول المفردات أو سُلّم البناء) قسماً تفاعلياً يلبّي حاجة الطالب مع تمرين املأ الفراغ بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]..."
+              "roleTitle": "🎓 رؤية التلميذ الذكي (تفاعل وكسر الملل)",
+              "studentNeed": "ما يحتاجه الطالب في هذا الدرس تحديداً ليفهم القاعدة بدون تعقيد...",
+              "whatWillBeAdded": ["شفرة ذاكرة سريعة", "تمرين املأ الفراغ من 4 جمل تفاعلية"],
+              "suggestionTitle": "عنوان المحطة التفاعلية للطالب",
+              "command": "أضف في منتصف الدرس قسماً تفاعلياً يبسط القاعدة بشفرة ذاكرة مع 4 جمل تمرين املأ الفراغ بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] مع ترجمتها العربية..."
             }
           },
-          "applyAllCommand": "أمر جراحي شامل يدمج توصية الناقد + تعديل وحذف الأستاذ + إضافة التلميذ التفاعلية في منتصف الدرس (بما في ذلك تمرين املأ الفراغ بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]) دفعة واحدة بدقة متناهية.",
+          "applyAllCommand": "أمر جراحي شامل يدمج توصية الناقد + إثراء وتنقيح الأستاذ + محطة التلميذ التفاعلية (شاملة تمرين املأ الفراغ [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] وأمثلة صوتية جديدة في codeSnippet) بتناغم تام.",
           "midLessonSuggestions": [
             {
               "id": "rater_sug",
               "persona": "rater",
               "badge": "🧐 توصية الناقد (Rater)",
-              "title": "عنوان توصية الناقد...",
-              "why": "لماذا تجعل الدرس متماسكاً ومثالياً؟",
+              "title": "عنوان محدد لتوصية الناقد...",
+              "why": "كيف ترفع هذه الإضافة جودة الدرس وترابطه مع الوحدة؟",
+              "deliverables": "ماذا سيُضاف للدرس بدقة؟",
               "operationType": "inject_mid_custom",
-              "command": "الأمر الجراحي لتوصية الناقد..."
+              "command": "الأمر الجراحي الكامل لتوصية الناقد..."
             },
             {
               "id": "teacher_sug",
               "persona": "teacher",
-              "badge": "👨‍🏫 توصية الأستاذ (إضافة وتنقيح)",
-              "title": "عنوان توصية الأستاذ...",
-              "why": "ما سيُضاف وما سيُحذف أو يُعدّل...",
+              "badge": "👨‍🏫 توصية الأستاذ الخبير",
+              "title": "عنوان محدد لتوصية الأستاذ...",
+              "why": "كيف تعالج الفجوة العلمية وتنقي الدرس؟",
+              "deliverables": "ماذا سيُضاف أو يُنقح في الدرس؟",
               "operationType": "inject_mid_custom",
-              "command": "الأمر الجراحي لتوصية الأستاذ..."
+              "command": "الأمر الجراحي الكامل لتوصية الأستاذ..."
             },
             {
               "id": "student_sug",
               "persona": "student",
-              "badge": "🎓 طلب التلميذ (في منتصف الدرس)",
-              "title": "عنوان طلب التلميذ لسهولة الفهم...",
-              "why": "كيف يسهّل الفهم ويكسر الملل؟",
+              "badge": "🎓 طلب التلميذ الذكي",
+              "title": "عنوان محدد لطلب التلميذ...",
+              "why": "كيف يثبت المعلومة عملياً وبسرعة؟",
+              "deliverables": "تمرين تفاعلي [[...]] + شفرة ذاكرة",
               "operationType": "inject_mid_fill_blank",
-              "command": "الأمر الجراحي لطلب التلميذ مع تمرين املأ الفراغ [[الصواب | خطأ1 | خطأ2]]..."
+              "command": "الأمر الجراحي الكامل لطلب التلميذ..."
             }
           ],
           "fluffToPrune": {
-            "title": "✂️ توصية الأستاذ لحذف الحشو وتكثيف الدرس",
-            "whatToRemove": "العنصر غير المهم الذي يقترح الأستاذ حذفه أو اختصاره...",
-            "command": "احذف الحشو والتكرار المذكور وركز الشرح بأسلوب صافي ومباشر."
+            "title": "✂️ تنظيف وتكثيف الشرح",
+            "whatToRemove": "وصف دقيق لأي تكرار أو شرح نظري جاف يُنصح بتكثيفه وتحويله لنقاط واضحة...",
+            "command": "قم بتنظيف أي حشو أو تكرار في الدرس، وحوّل الفقرات الطويلة إلى نقاط وجداول منظمة وسهلة القراءة مع الحفاظ على جميع الأمثلة والتمارين."
           }
         }`;
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `حلل الدرس "${lesson.title}" من منظور (الناقد، والأستاذ، والتلميذ) بصيغة JSON.`,
+            `حلل الدرس "${lesson.title}" في سياق الوحدة "${sectionName}" والكورس "${courseTitle}" بصيغة JSON.`,
             0.7,
-            4500
+            5000
         );
         const parsed = safeParseAIJson(rawContent);
 
@@ -6455,9 +6476,10 @@ app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
 });
 
 
+
 // ============================================================================
-// 🩺 17. المسار الجراحي الشامل لتعديل وإثراء الدرس (Full Lesson AI Surgeon)
-// يعالج مشكلة 404 ويدعم: (Apply All + توصيات الثلاثي + املأ الفراغ + بناء الدرس الفارغ + تعديل الودجات)
+// 🩺 17. المسار الجراحي الشامل لتعديل وإثراء الدرس (Full Lesson AI Surgeon V2)
+// يضمن الترابط الهرمي + التزامن الصوتي التلقائي + صيغ الواجهة التفاعلية 100%
 // ============================================================================
 app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
     const {
@@ -6465,6 +6487,9 @@ app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
         courseDescription = '',
         courseOrder = 1,
         sectionName = '',
+        unitLessonsTitles = [],
+        prevLessonTitle = '',
+        nextLessonTitle = '',
         lesson = {},
         userCommand = '',
         operationType = 'custom',
@@ -6487,65 +6512,65 @@ app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
         const { langProfile } = tierSpec;
 
         const currentContent = (lesson.content || '').trim();
-        // فحص ما إذا كان الدرس مجرد عنصر نائب فارغ تم إنشاؤه حديثاً
         const isStubLesson =
-            currentContent.length < 220 ||
+            currentContent.length < 240 ||
             currentContent.includes('افتح المُشرط الذكي لإثرائه الآن') ||
             currentContent.includes('تمت إضافته عبر جراح');
 
-        // تنظيف الوصف من العلامات البرمجية دون الحاجة لدالة خارجية
         const safeDescription = (lesson.description || lesson.title || '').split('|||')[0].trim();
 
-        console.log(`\n🩺 [Lesson Surgeon - ${langProfile.nameAr} ${tierSpec.tierId}] تنفيذ عملية (${operationType}) على درس: "${lesson.title}" (Stub: ${isStubLesson})...`);
+        console.log(`\n🩺 [Lesson Surgeon V2 - ${langProfile.nameAr} ${tierSpec.tierId}] تنفيذ (${operationType}) على درس: "${lesson.title}"...`);
 
         const systemPrompt = `${langProfile.instituteRole}
-        أنت الآن **"الجراح الأكاديمي الذكي (AI Lesson Surgeon)"** لتعديل وتطوير درس في اللغة **${langProfile.nameAr} (${langProfile.nameEn})** ضمن المستوى الصارم **(${tierSpec.cefrLabel})**.
+        أنت الآن **"كبير الجراحين الأكاديميين (Master AI Lesson Surgeon)"** لتطوير وهندسة درس في اللغة **${langProfile.nameAr} (${langProfile.nameEn})** ضمن المستوى **(${tierSpec.cefrLabel})**.
 
-        📋 بيانات الدرس الحالي:
+        🔗 **سياق الترابط الهرمي:**
         - الكورس: "${courseTitle}"
-        - الوحدة: "${sectionName}"
-        - عنوان الدرس: "${lesson.title}"
-        - نوع العملية: "${operationType}"
-        - محتوى الدرس الحالي (Markdown):
+        - الوحدة: "${sectionName}" (دروس الوحدة: ${JSON.stringify(unitLessonsTitles)})
+        - الدرس السابق: "${prevLessonTitle || 'بداية الوحدة'}" | الدرس الحالي: "${lesson.title}" | الدرس التالي: "${nextLessonTitle || 'نهاية الوحدة'}"
+
+        📋 **محتوى الدرس الحالي (Markdown):**
         """
-        ${currentContent || '(درس جديد فارغ يحتاج لبناء كامل)'}
+        ${currentContent || '(درس جديد فارغ يحتاج لبناء كامل ومفصل)'}
         """
-        - استوديو الصوتيات الحالي (codeSnippet):
+        🎧 **استوديو الصوتيات الحالي (codeSnippet):**
         """
         ${lesson.codeSnippet || ''}
         """
-        - دليل تدريب الأذن الحالي (codeExplanation):
+        🔬 **دليل تدريب الأذن الحالي (codeExplanation):**
         """
         ${lesson.codeExplanation || ''}
         """
-        - التمرين التطبيقي الحالي (codingPractice):
+        ✍️ **التمرين التطبيقي الحالي (codingPractice):**
         ${JSON.stringify(lesson.codingPractice || null)}
-        - سؤال التحدي السريع الحالي (dailyQuest):
+        🧠 **سؤال التحدي السريع الحالي (dailyQuest):**
         ${JSON.stringify(lesson.dailyQuest || null)}
 
-        🎯 الأمر الجراحي المطلوب تنفيذه بدقة 100%:
+        🎯 **الأمر الجراحي المطلوب تنفيذه بدقة واحترافية 100%:**
         "${userCommand}"
 
         ${tierSpec.pedagogyRules}
 
-        🚨 قوانين التنفيذ الجراحي الصارمة:
+        🚨 **قوانين التوافق الديناميكي الصارمة مع واجهة المنصة (UI Dynamic Compatibility Rules):**
         1. ${isStubLesson
-            ? `بما أن هذا الدرس الجديد لا يزال فارغاً أو مقتضباً، قم ببناء درس متكامل وغني ومفصل في حقل "content" (يضم أقساماً واضحة بعناوين ###، وجدول مفردات باللغة ${langProfile.nameAr} مع الرمز الصوتي IPA والمعنى العربي، وسُلّم بناء تراكمي ### 🪜، وورشة أخطاء شائعة ❌ و ✅ و 💡) مع تطبيق الأمر الجراحي أعلاه بالكامل!`
-            : `حافظ على هيكل وأقسام الدرس الحالية في "content"، وقم بدمج أو تعديل أو حذف ما طلبه الأمر الجراحي بدقة متناهية وفي الموضع الصحيح دون إفساد باقي أقسام الدرس.`}
-        2. إذا طلب الأمر إضافة تمرين **"املأ الفراغ التفاعلي"** (أو كان نوع العملية inject_mid_fill_blank أو apply_all_personas)، يجب إضافته داخل حقل "content" بصيغة القوسين المزدوجين التفاعلية حصراً هكذا:
-           \`- الجملة باللغة ${langProfile.nameAr} [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] (الترجمة العربية).\`
-           (مع وضع الإجابة الصحيحة أولاً دائماً داخل القوسين المزدوجين).
-        3. قم بتحديث أو إثراء الحقول التفاعلية المرافقة ("codeSnippet" بـ 5 جمل مرقمة مع سطر 🔊 IPA: /.../ | المعنى: ... لكل جملة، و "codeExplanation"، و "codingPractice"، و "dailyQuest") إذا كان الأمر يخصها أو إذا كانت فارغة في الدرس الحالي.
-        4. التزم بنسبة 100% باللغة المستهدفة (${langProfile.nameAr}) ومستوى الطالب (${tierSpec.tierId}).
+            ? `بما أن هذا الدرس لا يزال فارغاً أو مقتضباً، قم بتأليف درس كامل ومفصل وغني جداً في حقل "content" يضم 6 أقسام واضحة بعناوين ### (1. القاعدة ومعادلة الليغو، 2. جدول المفردات مع IPA والنطق العربي والـ 🔵/🔴، 3. سُلّم البناء التراكمي ### 🪜، 4. قراءة وحوار واقعي، 5. ورشة أخطاء شائعة ❌ و ✅ و 💡، 6. تمرين املأ الفراغ التفاعلي) مع تنفيذ الأمر الجراحي أعلاه بالكامل!`
+            : `**إياك أن تختصر أو تحذف أقسام الدرس الأصلية السليمة!** حافظ على جميع الأقسام والجداول والفقرات الموجودة في "content"، وقم بحقن أو تعديل أو تطوير ما طلبه الأمر الجراحي في الموضع المنطقي الأنسب بغزارة علمية وتنسيق Markdown فخم.`}
+        2. **قانون التفعيل الصوتي للكلمات والجمل:** أي كلمة أو جملة باللغة ${langProfile.nameAr} تذكرها داخل الشرح أو الأمثلة، ضعها إما بين علامتي كود مفردة هكذا word أو داخل جدول Markdown، لكي تضع الواجهة بجانبها زر نطق صوتي 🔊 تلقائياً!
+        3. **قانون المحادثات الناطقة (Interactive Dialogues):** إذا أضفت حواراً أو محادثة، اكتبه في أسطر تبدأ بـ - **اسم المتحدث:** الجملة باللغة ${langProfile.nameAr} (الترجمة العربية) لكي تحوله الواجهة إلى مشغل حوار صوتي تفاعلي!
+        4. **قانون معادلات مكعبات الليغو (Lego Formulas):** عند إضافة معادلة تركيب، اكتبها في سطر مستقل بصيغة الأقواس المربعة:
+           [المكعب 1: ...] + [المكعب 2: ...] = [النتيجة: ...]
+        5. **قانون تمرين املأ الفراغ التفاعلي:** أي تمرين املأ الفراغ يُطلب إضافته يجب أن يُكتب حصراً بصيغة القوسين المزدوجين التفاعلية (والإجابة الصحيحة هي الخيار الأول دائماً):
+           - الجملة باللغة ${langProfile.nameAr} [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] (الترجمة العربية).
+        6. **التزامن التلقائي مع استوديو الصوتيات (codeSnippet):** إذا أضفت مفردات أو جملاً جديدة للدرس، قم بتحديث وإثراء حقل "codeSnippet" ليضم من 5 إلى 7 جمل مرقمة متبوعة بسطر 🔊 IPA: /.../ | المعنى: ... لكل جملة حتى تظهر فوراً في جدول الصوتيات وبطاقات الذاكرة ولعبة المكعبات!
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "surgeonReport": "ملخص دقيق ومختصر في سطر واحد لما قمت بتعديله أو إضافته في الدرس...",
+          "surgeonReport": "تقرير جراحي واضح يذكر بدقة ما تم حقنه وتطويره في الدرس وكيف تم ربطه بالوحدة...",
           "updatedLesson": {
             "title": "${lesson.title}",
             "description": "${safeDescription}",
-            "content": "نص الـ Markdown الكامل والمحدث للدرس بعد تنفيذ الجراحة...",
-            "codeSnippet": "🎧 استوديو الاستماع والترديد (Audio Shadowing):\\n1. ...\\n🔊 IPA: /.../ | المعنى: ...",
+            "content": "نص الـ Markdown الكامل والمحدث للدرس بعد تنفيذ الجراحة دون اختصار أي قسم أصلي...",
+            "codeSnippet": "🎧 استوديو الاستماع والترديد (Audio Shadowing):\\n1. ...\\n🔊 IPA: /.../ | المعنى: ...\\n2. ...\\n🔊 IPA: /.../ | المعنى: ...",
             "codeExplanation": "🔬 دليل تدريب الأذن والنطق (Shadowing Anatomy):\\n- ...",
             "codingPractice": {
               "hasPractice": true,
@@ -6566,9 +6591,9 @@ app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `نفّذ هذا الأمر الجراحي على الدرس الآن وأعد النتيجة بصيغة JSON: "${userCommand}"`,
-            0.7,
-            14000
+            `نفّذ هذا الأمر الجراحي على الدرس "${lesson.title}" مع الحفاظ على كامل ثراء الدرس وتنسيق العناصر التفاعلية بصيغة JSON: "${userCommand}"`,
+            0.68,
+            16000
         );
 
         const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
@@ -6579,15 +6604,15 @@ app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
             title: rawUpdated.title || lesson.title,
             description: rawUpdated.description || safeDescription,
             content: rawUpdated.content || lesson.content,
-            codeSnippet: rawUpdated.codeSnippet !== undefined ? rawUpdated.codeSnippet : lesson.codeSnippet,
-            codeExplanation: rawUpdated.codeExplanation !== undefined ? rawUpdated.codeExplanation : lesson.codeExplanation,
-            codingPractice: rawUpdated.codingPractice !== undefined ? rawUpdated.codingPractice : lesson.codingPractice,
-            dailyQuest: rawUpdated.dailyQuest !== undefined ? rawUpdated.dailyQuest : lesson.dailyQuest
+            codeSnippet: rawUpdated.codeSnippet || lesson.codeSnippet,
+            codeExplanation: rawUpdated.codeExplanation || lesson.codeExplanation,
+            codingPractice: rawUpdated.codingPractice || lesson.codingPractice,
+            dailyQuest: rawUpdated.dailyQuest || lesson.dailyQuest
         };
 
         res.json({
             success: true,
-            surgeonReport: parsed.surgeonReport || 'تم تنفيذ التعديل الجراحي على الدرس بنجاح!',
+            surgeonReport: parsed.surgeonReport || 'تم تنفيذ التعديل الجراحي على الدرس ومزامنة عناصره التفاعلية بنجاح!',
             updatedLesson: finalUpdatedLesson
         });
     } catch (error) {
@@ -6599,15 +6624,24 @@ app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
 
 
 
+
+
+
 // ============================================================================
-// 🔬 18. مسار تعديل قسم واحد فقط من الدرس بالذكاء الاصطناعي (Block-Level AI Section Editor)
-// يعدل الفقرة أو القسم المحدد فقط (كما في الصورة 3) بسرعة فائقة دون المساس بباقي الدرس!
+// 🔬 18. مسار تعديل شريحة واحدة من الدرس بالذكاء الاصطناعي (Block-Level AI Section Editor V2)
+// يضمن الترابط مع الشريحة السابقة واللاحقة والدرس + التفاعل الصوتي والديناميكي الكامل!
 // ============================================================================
 app.post('/api/academy2/surgeon/operate-section', async (req, res) => {
     const {
         courseTitle = '',
         courseOrder = 1,
+        sectionName = '',
         lessonTitle = '',
+        lessonDescription = '',
+        allBlocksHeadings = [],
+        blockIndex = 0,
+        prevBlockHeading = '',
+        nextBlockHeading = '',
         sectionMarkdown = '',
         userInstruction = '',
         targetLanguage = ''
@@ -6618,43 +6652,58 @@ app.post('/api/academy2/surgeon/operate-section', async (req, res) => {
     }
 
     try {
-        const tierSpec = getCEFRProgressionSpec(courseTitle, '', lessonTitle, '', courseOrder, targetLanguage);
+        const tierSpec = getCEFRProgressionSpec(courseTitle, sectionName, lessonTitle, '', courseOrder, targetLanguage);
         const { langProfile } = tierSpec;
 
         const systemPrompt = `${langProfile.instituteRole}
-        أنت محرر جراحي دقيق لقسم واحد فقط داخل درس "${lessonTitle}" في اللغة **${langProfile.nameAr}** (المستوى: ${tierSpec.cefrLabel}).
+        أنت **"الجراح المجهري للشرائح التعليمية (Micro-Block AI Surgeon)"** في اللغة **${langProfile.nameAr} (${langProfile.nameEn})** للمستوى **(${tierSpec.cefrLabel})**.
 
-        القسم الحالي المراد تعديله:
+        🔗 **سياق الترابط الهرمي للشريحة الحالية:**
+        - الكورس: "${courseTitle}"
+        - الوحدة: "${sectionName}"
+        - الدرس: "${lessonTitle}" (${lessonDescription})
+        - خريطة أقسام هذا الدرس: ${JSON.stringify(allBlocksHeadings)}
+        - القسم السابق: "${prevBlockHeading || 'هذه هي الشريحة الافتتاحية للدرس'}"
+        - 📌 **ترتيب الشريحة الحالية:** القسم رقم (${blockIndex + 1})
+        - القسم التالي: "${nextBlockHeading || 'هذه هي الشريحة الختامية للدرس'}"
+
+        📄 **محتوى الشريحة الحالية المراد تطويرها:**
         """
         ${sectionMarkdown}
         """
 
-        أمر التعديل المطلوب على هذا القسم تحديداً:
+        🎯 **أمر التطوير المطلوب تنفيذه على هذه الشريحة:**
         "${userInstruction}"
 
-        🚨 تعليمات صارمة:
-        1. عدّل هذا القسم فقط لتنفيذ أمر المستخدم بدقة مع الحفاظ على عنوان القسم الرئيسي (الذي يبدأ بـ ###) ما لم يطلب تغيير العنوان.
-        2. إذا طلب إضافة تمرين "املأ الفراغ"، استخدم الصيغة التفاعلية: \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`.
-        3. التزم بمستوى (${tierSpec.cefrLabel}) واللغة (${langProfile.nameAr}).
+        🚨 **قوانين الإخراج الديناميكي الصارمة (لضمان تفاعل الواجهة 100%):**
+        1. حافظ على عنوان القسم الرئيسي الذي يبدأ بـ \`###\` في أول سطر (إلا إذا طُلب تغييره)، وطوّر محتوى الشريحة بعمق وتنسيق Markdown احترافي يترابط مع القسم السابق واللاحق.
+        2. أي كلمة أو عبارة أجنبية باللغة ${langProfile.nameAr} تذكرها في الشرح أو القوائم ضعها داخل علامتي كود مفردة \`كلمة\` أو في جدول Markdown لكي يظهر بجانبها زر الاستماع الصوتي 🔊 وشارة الجنس النحوي (🔵 مذكر / 🔴 مؤنث) تلقائياً!
+        3. إذا أضفت محادثة أو حواراً، اكتبه بصيغة: \`- **المتحدث:** الجملة باللغة ${langProfile.nameAr} (الترجمة العربية)\`.
+        4. إذا أضفت معادلة تركيب، اكتبها بصيغة مكعبات الليغو: \`[المكعب 1: ...] + [المكعب 2: ...] = [النتيجة: ...]\`.
+        5. إذا أضفت تمرين "املأ الفراغ"، استخدم الصيغة التفاعلية حصراً:
+           \`- الجملة باللغة ${langProfile.nameAr} [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] (الترجمة العربية).\`
+        6. إذا أضفت جملاً صوتية جديدة مهمة في هذه الشريحة، ضعها أيضاً في حقل "newAudioStudioLines" بصيغة (الجملة + سطر 🔊 IPA: /.../ | المعنى: ...) ليتم إلحاقها باستوديو الصوتيات للدرس!
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
         {
-          "updatedSectionMarkdown": "نص الـ Markdown المحدث لهذا القسم فقط...",
-          "summary": "ما تم تعديله في جملة قصيرة..."
+          "updatedSectionMarkdown": "نص الـ Markdown المحدث والغني لهذه الشريحة فقط...",
+          "newAudioStudioLines": "اختياري: إذا أضفت جملاً صوتية جديدة، اكتبها هنا بصيغة:\\n- الجملة\\n🔊 IPA: /.../ | المعنى: ... (أو اتركها فارغة)",
+          "summary": "ملخص دقيق في سطر واحد لما تم تطويره وإضافته في هذه الشريحة..."
         }`;
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `عدّل هذا القسم حسب الأمر: "${userInstruction}" وأعده بصيغة JSON.`,
+            `نفّذ هذا التطوير الجراحي على الشريحة: "${userInstruction}" وأعد النتيجة بصيغة JSON.`,
             0.65,
-            5000
+            6000
         );
         const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
 
         res.json({
             success: true,
             updatedSectionMarkdown: parsed.updatedSectionMarkdown || sectionMarkdown,
-            summary: parsed.summary || 'تم تعديل القسم بنجاح!'
+            newAudioStudioLines: parsed.newAudioStudioLines || '',
+            summary: parsed.summary || 'تم تطوير الشريحة بنجاح!'
         });
     } catch (error) {
         console.error('❌ خطأ في تعديل القسم:', error.message);
@@ -6662,9 +6711,11 @@ app.post('/api/academy2/surgeon/operate-section', async (req, res) => {
     }
 });
 
+
+
+
 // ============================================================================
-// 💾 19. مسار حفظ تعديلات الدرس مباشرة في قاعدة البيانات MongoDB Atlas!
-// يضمن حفظ أي تعديل تقوم به في Classroom داخل قاعدة البيانات بشكل دائم!
+// 💾 19. مسار حفظ تعديلات الدرس مباشرة في قاعدة البيانات MongoDB Atlas
 // ============================================================================
 app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
     const { lessonId, courseId, updatedLesson } = req.body;
@@ -6674,8 +6725,6 @@ app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
 
     try {
         let dbUpdated = false;
-
-        // تحديث وثيقة الدرس في مجموعة lessons في MongoDB إن كان لها ObjectId صالح
         if (lessonId && mongoose.Types.ObjectId.isValid(lessonId)) {
             const result = await mongoose.connection.collection('lessons').updateOne(
                 { _id: new mongoose.Types.ObjectId(lessonId) },
@@ -6700,8 +6749,8 @@ app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
             success: true,
             dbUpdated,
             message: dbUpdated
-                ? '☁️ تم حفظ التعديلات نهائياً في قاعدة البيانات (MongoDB) وفي ذاكرة المتصفح!'
-                : '💾 تم حفظ التعديلات في ذاكرة المتصفح الدائمة وتجهيزها للتصدير!'
+                ? '☁️ تم حفظ التعديلات نهائياً في قاعدة البيانات (MongoDB)!'
+                : '💾 تم حفظ التعديلات في ذاكرة المتصفح الدائمة!'
         });
     } catch (error) {
         console.error('❌ خطأ في حفظ الدرس بقاعدة البيانات:', error.message);
@@ -6709,43 +6758,211 @@ app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
     }
 });
 
+
+
+
+
 // ============================================================================
-// 🏗️ 20. مسار جراح المناهج الشامل (مستوى الوحدة - Unit Level Surgeon)
-// يتيح إضافة، حذف، أو إعادة ترتيب الدروس داخل الوحدة بضغطة زر!
+// 🏗️✨ 20-A. مسار "مجلس الحكماء الثلاثي لإلهام وهندسة الوحدة" (Unit Inspiration Council)
+// يحلل الوحدة الحالية في سياق الوحدات السابقة واللاحقة في الكورس ويقدم مقترحات مفصلة
+// ============================================================================
+app.post('/api/academy2/surgeon/inspire-unit', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        allUnitsNames = [],
+        prevUnitName = '',
+        nextUnitName = '',
+        currentLessons = [],
+        targetLanguage = ''
+    } = req.body;
+
+    if (!sectionName) {
+        return res.status(400).json({ success: false, error: 'اسم الوحدة مطلوب.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            '',
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🏗️✨ [Unit Inspiration Council - ${langProfile.nameAr} ${tierSpec.tierId}] تحليل وهندسة الوحدة: "${sectionName}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت تقود **"مجلس الحكماء الثلاثي لهندسة الوحدات الدراسية (Unit Curriculum Council)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+
+        🔗 **سياق الترابط الهرمي للوحدة:**
+        - الكراش كورس: "${courseTitle}"
+        - خريطة جميع وحدات الكورس: ${JSON.stringify(allUnitsNames)}
+        - الوحدة السابقة: "${prevUnitName || 'هذه هي الوحدة الأولى في الكورس'}"
+        - 📌 **الوحدة الحالية قيد الفحص:** "${sectionName}"
+        - الوحدة التالية: "${nextUnitName || 'هذه هي الوحدة الأخيرة في الكورس'}"
+        - الدروس الحالية داخل هذه الوحدة (${currentLessons.length} دروس):
+        ${JSON.stringify(currentLessons.map((l, i) => ({ order: i + 1, title: l.title, type: l.type, description: (l.description || '').split('|||')[0] })))}
+
+        المطلوب منك فحص هيكل هذه الوحدة وتوليد **تشخيص معماري + 3 رؤى إلهامية مفصلة جداً** من منظور:
+        1. **🧐 الناقد والمُقيّم العالمي (Rater):** كيف نجعل تسلسل دروس هذه الوحدة متماسكاً 100% ويربط بين ما تعلمه الطالب في ("${prevUnitName || 'البداية'}") وما سيتعلمه في ("${nextUnitName || 'المستوى التالي'}")؟ وما الدرس الذي يجب إضافته لتحقيق معايير (${tierSpec.cefrLabel})؟
+        2. **👨‍🏫 الأستاذ الخبير (Master Teacher):** ما الفجوة العلمية أو الصوتية أو التطبيقية الناقصة في قائمة دروس هذه الوحدة؟ وما الدروس التي يجب دمجها أو إعادة ترتيبها أو إضافتها؟
+        3. **🎓 التلميذ الذكي (Smart Student):** ما الدرس التطبيقي أو الورشة الحوارية/الصوتية التي يحتاجها الطالب داخل هذه الوحدة لكي يمارس ما تعلمه عملياً بدون ملل؟
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "unitScore": 92,
+          "unitDiagnosis": "تشخيص شامل لتماسك دروس الوحدة الحالية وموقعها داخل الكورس في سطرين...",
+          "unitBridgeNote": "كيف تبني هذه الوحدة على (${prevUnitName || 'نقطة الانطلاق'}) وتمهد لـ (${nextUnitName || 'الوحدة القادمة'})...",
+          "applyAllUnitCommand": "أمر جراحي شامل يعيد هيكلة وترتيب دروس الوحدة ويضيف الدروس التطبيقية والجسور المفقودة التي أوصى بها الثلاثي (الناقد + الأستاذ + التلميذ) بتناغم تام.",
+          "personas": {
+            "rater": {
+              "badge": "🧐 رؤية الناقد العالمي (CEFR Rater)",
+              "title": "عنوان الترقية الهيكلية للوحدة من منظور الناقد",
+              "diagnosis": "تحليل عميق لتسلسل الدروس الحالي وما ينقصه...",
+              "whatItWillChange": ["إضافة درس جسر مترابط: ...", "إعادة ضبط تسلسل: ..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ رؤية الناقد على هذه الوحدة..."
+            },
+            "teacher": {
+              "badge": "👨‍🏫 رؤية الأستاذ الخبير",
+              "title": "عنوان الإثراء العلمي والتطبيقي للوحدة",
+              "diagnosis": "الفجوة التعليمية أو الصوتية التي يجب سدها في هذه الوحدة...",
+              "whatItWillChange": ["إضافة درس متخصص في: ...", "تنقيح أو دمج: ..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ رؤية الأستاذ على هذه الوحدة..."
+            },
+            "student": {
+              "badge": "🎓 رؤية التلميذ الذكي",
+              "title": "عنوان الورشة التطبيقية والمحادثة الممتعة للوحدة",
+              "diagnosis": "ما يحتاجه الطالب ليطبق مفردات وقواعد هذه الوحدة في الواقع...",
+              "whatItWillChange": ["إضافة ورشة تطبيقية/حوارية: ...", "تحدي تثبيت سمعي: ..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ رؤية التلميذ على هذه الوحدة..."
+            }
+          },
+          "suggestedNewLessons": [
+            {
+              "title": "عنوان مقترح لدرس جديد يثري هذه الوحدة...",
+              "description": "وصف دقيق للمهارات والصوتيات والتمارين التي سيقدمها هذا الدرس...",
+              "whyNeeded": "لماذا يعتبر هذا الدرس إضافة ذهبية لهذه الوحدة تحديداً؟"
+            },
+            {
+              "title": "عنوان مقترح ثانٍ لدرس تطبيقي أو حواري...",
+              "description": "وصف دقيق لما سيتقنه الطالب في هذا الدرس...",
+              "whyNeeded": "كيف يربط دروس الوحدة ببعضها؟"
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `حلل الوحدة "${sectionName}" وولّد توصيات الثلاثي والدروس المقترحة بصيغة JSON.`,
+            0.7,
+            5000
+        );
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في إلهام الوحدة (inspire-unit):', error.message);
+        res.status(500).json({ success: false, error: 'تعذر توليد إلهام الوحدة حالياً.' });
+    }
+});
+
+
+// ============================================================================
+// 🏗️ 20-B. مسار جراح المناهج الشامل للوحدة (Unit Level Surgeon V2)
+// يحافظ على الدروس القديمة، ويبني محتوى غنياً وتفاعلياً كاملاً لأي درس جديد يضاف!
 // ============================================================================
 app.post('/api/academy2/surgeon/operate-unit', async (req, res) => {
-    const { courseTitle, sectionName, currentLessons, userCommand } = req.body;
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        prevUnitName = '',
+        nextUnitName = '',
+        currentLessons = [],
+        userCommand = '',
+        targetLanguage = ''
+    } = req.body;
 
     if (!sectionName || !userCommand) {
         return res.status(400).json({ success: false, error: 'اسم الوحدة وأمر التعديل مطلوبان.' });
     }
 
     try {
-        console.log(`\n🏗️ [Unit Surgeon] جاري تعديل هيكل الوحدة (${sectionName}) بناءً على: "${userCommand}"...`);
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            '',
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
 
-        const systemPrompt = `أنت عميد أكاديمية ومخطط مناهج خبير (Curriculum Architect).
-        أنت الآن تقوم بعملية جراحية على هيكل "وحدة دراسية" (Section) ضمن كورس: "${courseTitle}".
-        
-        - اسم الوحدة: "${sectionName}"
+        console.log(`\n🏗️ [Unit Surgeon V2 - ${langProfile.nameAr} ${tierSpec.tierId}] تعديل الوحدة (${sectionName}) بناءً على: "${userCommand}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت **"عميد هندسة الوحدات الدراسية (Master Unit Architect)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+
+        🔗 **سياق الترابط:**
+        - الكورس: "${courseTitle}"
+        - الوحدة السابقة: "${prevUnitName || 'بداية الكورس'}" | الوحدة الحالية: "${sectionName}" | الوحدة التالية: "${nextUnitName || 'نهاية الكورس'}"
         - قائمة الدروس الحالية في هذه الوحدة:
-        ${JSON.stringify(currentLessons.map(l => ({ title: l.title, type: l.type, description: l.description })))}
+        ${JSON.stringify(currentLessons.map(l => ({ title: l.title, type: l.type, description: (l.description || '').split('|||')[0] })))}
 
-        أمر المخرج (المستخدم):
+        🎯 **أمر التعديل الجراحي المطلوب على الوحدة:**
         "${userCommand}"
 
-        المطلوب:
-        قم بتعديل هيكل هذه الوحدة (إضافة درس جديد، حذف درس، أو إعادة ترتيب الدروس) بناءً على أمر المخرج.
-        إذا طلب إضافة درس جديد، ضع له وصفاً مبدئياً واجعل نوعه "video" أو "code".
+        🚨 **قوانين التنفيذ الصارمة:**
+        1. بالنسبة للدروس الموجودة مسبقاً والتي لم يُطلب حذفها أو دمجها، **حافظ على عنوانها ("title") كما هو** وضَع \`"isNewOrModified": false\` لكي نحتفظ بمحتواها الكامل.
+        2. بالنسبة لأي **درس جديد تماماً** تضيفه (أو درس ناتج عن دمج درسين)، ضع \`"isNewOrModified": true\` وقم بتوليد **محتوى تأسيسي وتفاعلي كامل وغني جداً له** في حقل \`"content"\` (يشمل أقسام \`###\`، معادلة ليغو \`[...] + [...] = [...]\`، جدول مفردات باللغة ${langProfile.nameAr} مع IPA والـ 🔵/🔴، سُلّم بناء تراكمي \`### 🪜\`، حوار واقعي، وتمرين املأ الفراغ \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`) بالإضافة إلى \`"codeSnippet"\` (5 جمل صوتية مع IPA) و \`"codingPractice"\` و \`"dailyQuest"\` حتى يظهر الدرس الجديد كاملاً ومتفاعلاً فوراً على الواجهة!
 
-        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "surgeonReport": "ماذا فعلت باختصار؟ (مثال: تم دمج درسين وإضافة درس تطبيقي جديد)",
+          "surgeonReport": "ملخص دقيق ومفصل لما قمت به في هيكل الوحدة والدروس التي أضفتها أو طورتها...",
+          "updatedUnitSummary": {
+            "unitSummary": "ملخص محدث للوحدة...",
+            "whatYouLearn": "ماذا سيتقن الطالب في هذه الوحدة بعد التحديث...",
+            "whyItMatters": "أهمية هذه الوحدة وترابطها مع الكورس..."
+          },
           "updatedLessonsBlueprint": [
-            { "title": "عنوان الدرس", "description": "وصف مبسط", "type": "video" }
+            {
+              "title": "عنوان الدرس",
+              "description": "وصف الدرس الواضح",
+              "type": "video",
+              "isNewOrModified": false,
+              "content": "إذا كان isNewOrModified=true اكتب هنا نص الـ Markdown الكامل والغني للدرس الجديد...",
+              "codeSnippet": "إذا كان isNewOrModified=true اكتب هنا 5 جمل مرقمة لاستوديو الصوتيات مع سطر 🔊 IPA: /.../ | المعنى: ...",
+              "codeExplanation": "🔬 دليل تدريب الأذن والنطق...",
+              "codingPractice": {
+                "hasPractice": true,
+                "taskQuestion": "✍️ التمرين التطبيقي...",
+                "starterCode": "// اكتب إجابتك هنا:\\n1. \\n2. ",
+                "hints": ["💡 تلميح 1: ...", "🛠️ تلميح 2: ..."],
+                "solutionCode": "✅ الحل النموذجي:..."
+              },
+              "dailyQuest": {
+                "question": "سؤال التحدي السريع...",
+                "options": ["الخيار 1", "الخيار 2", "الخيار 3", "الخيار 4"],
+                "correctAnswerIndex": 0,
+                "explanation": "شرح الإجابة الصحيحة...",
+                "bonusExp": 50
+              }
+            }
           ]
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "نفذ أمر تعديل الوحدة الآن بصيغة JSON.", 0.7, 5000);
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `نفذ أمر تعديل الوحدة "${sectionName}" الآن مع بناء محتوى كامل لأي درس جديد بصيغة JSON.`,
+            0.7,
+            14000
+        );
         const parsed = safeParseAIJson(rawContent);
 
         res.json({ success: true, data: parsed });
@@ -6755,44 +6972,186 @@ app.post('/api/academy2/surgeon/operate-unit', async (req, res) => {
     }
 });
 
+
 // ============================================================================
-// 🌍 21. مسار جراح المناهج الشامل (مستوى الكورس بالكامل - Course Level Surgeon)
-// يتيح إضافة وحدات جديدة، دمج وحدات، أو تغيير مسار الكورس كلياً!
+// 🌍✨ 21-A. مسار "مجلس الحكماء الثلاثي لإلهام وهندسة الكورس الشامل" (Course Inspiration Council)
+// يحلل جميع وحدات الكورس ودروسها ويقترح ترقيات استراتيجية مترابطة من (الناقد + الأستاذ + التلميذ)
 // ============================================================================
-app.post('/api/academy2/surgeon/operate-course-blueprint', async (req, res) => {
-    const { courseTitle, currentBlueprint, userCommand } = req.body;
+app.post('/api/academy2/surgeon/inspire-course', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        parentCertTitle = '',
+        currentBlueprint = [],
+        targetLanguage = ''
+    } = req.body;
 
     try {
-        console.log(`\n🌍 [Course Surgeon] جاري تعديل الهيكل الكامل للكورس (${courseTitle}) بناءً على: "${userCommand}"...`);
+        const tierSpec = getCEFRProgressionSpec(
+            `${parentCertTitle} ${courseTitle} ${courseDescription}`,
+            '',
+            '',
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
 
- const systemPrompt = `أنت كبير الاستراتيجيين التعليميين (Chief Education Strategist).
-        أنت الآن تعالج "الهيكل العام" (Blueprint) لكورس كامل: "${courseTitle}".
+        console.log(`\n🌍✨ [Course Inspiration Council - ${langProfile.nameAr} ${tierSpec.tierId}] تشخيص هيكل الكورس: "${courseTitle}"...`);
 
-        - الهيكل الحالي (الوحدات والدروس الفعلية بداخلها):
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت تقود **"المجلس الأعلى لهندسة المناهج والكورسات العالمية (Course-Level Strategic Council)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+
+        🔗 **بيانات الكراش كورس الحالي:**
+        - الشهادة الأم: "${parentCertTitle || 'مسار احترافي شامل'}"
+        - عنوان الكراش كورس (رقم ${courseOrder}): "${courseTitle}"
+        - الوصف: "${courseDescription}"
+        - الهيكل الحالي للوحدات والدروس (${currentBlueprint.length} وحدات):
+        ${JSON.stringify(currentBlueprint.map((sec, idx) => ({
+            unitOrder: idx + 1,
+            sectionName: sec.sectionName,
+            lessonsCount: sec.lessons?.length || 0,
+            lessonTitles: (sec.lessons || []).map(l => l.title)
+        })))}
+
+        المطلوب منك فحص المعمارية الكاملة لهذا الكورس وتوليد **تشخيص استراتيجي + 3 رؤى إلهامية مفصلة** من منظور:
+        1. **🧐 الناقد والمُقيّم العالمي (CEFR Rater):** هل تغطي وحدات هذا الكورس جميع متطلبات مستوى (${tierSpec.cefrLabel}) بتدرج سليم؟ ما الوحدة الانتقالية أو التكميلية التي يجب إضافتها لربط الوحدات ببعضها؟
+        2. **👨‍🏫 الأستاذ الخبير (Master Teacher):** ما الموضوع الحيوي أو القاعدة أو المهارة الصوتية التي أغفلها الكورس؟ وكيف نعيد تنظيم الوحدات أو نضيف وحدة متخصصة ترفع القيمة العلمية للكورس؟
+        3. **🎓 التلميذ الذكي (Smart Student):** ما الوحدة التطبيقية الحياتية (مثل: مواقف السفر، المحادثة السريعة، أو معسكر المراجعة التفاعلي) التي يتمنى الطالب وجودها ليستمتع بالكورس ويتحدث بطلاقة؟
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "courseQualityScore": 93,
+          "architecturalVerdict": "تشخيص معماري شامل لتسلسل وحدات الكورس الحالية ومدى تغطيتها للمستوى في سطرين...",
+          "applyAllCourseCommand": "أمر جراحي شامل يطبق توصيات الثلاثي على هيكل الكورس (إضافة الوحدات التكميلية والتطبيقية مع دروسها الكاملة وترتيب مسار الكورس بتناغم 100%).",
+          "personas": {
+            "rater": {
+              "badge": "🧐 رؤية الناقد العالمي (Course Rater)",
+              "title": "عنوان الترقية المعمارية للكورس من منظور الناقد",
+              "diagnosis": "تحليل عميق لتسلسل الوحدات وما ينقصها لتحقيق معايير (${tierSpec.cefrLabel})...",
+              "proposedChanges": ["إضافة وحدة متكاملة بعنوان: ...", "ربط التدرج بين الوحدات: ..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ توصية الناقد على هيكل الكورس..."
+            },
+            "teacher": {
+              "badge": "👨‍🏫 رؤية الأستاذ الخبير",
+              "title": "عنوان الإثراء الأكاديمي والصوتي للكورس",
+              "diagnosis": "المهارة أو الوحدة المحورية التي يرى الأستاذ ضرورة إضافتها للكورس...",
+              "proposedChanges": ["إضافة وحدة تخصصية بعنوان: ...", "تطوير محاور: ..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ توصية الأستاذ على هيكل الكورس..."
+            },
+            "student": {
+              "badge": "🎓 رؤية التلميذ الذكي",
+              "title": "عنوان وحدة المواقف الحية والممارسة العملية",
+              "diagnosis": "ما يحتاجه الطالب في هذا الكورس ليطبق اللغة في مواقف حقيقية ممتعة...",
+              "proposedChanges": ["إضافة وحدة مواقف وتحديات بعنوان: ...", "محطات محادثة وتثبيت..."],
+              "command": "الأمر الجراحي الدقيق لتنفيذ توصية التلميذ على هيكل الكورس..."
+            }
+          },
+          "suggestedNewUnits": [
+            {
+              "sectionName": "الوحدة المقترحة 1: [عنوان واضح ومشوق باللغة العربية مع مصطلح ${langProfile.nameAr}]",
+              "whyNeeded": "لماذا تعتبر هذه الوحدة إضافة استراتيجية للكورس؟",
+              "proposedLessons": ["الدرس 1: ...", "الدرس 2: ...", "الدرس 3: ...", "الدرس 4: ..."]
+            },
+            {
+              "sectionName": "الوحدة المقترحة 2: [عنوان واضح ومشوق]",
+              "whyNeeded": "كيف ترفع طلاقة الطالب وتربط وحدات الكورس؟",
+              "proposedLessons": ["الدرس 1: ...", "الدرس 2: ...", "الدرس 3: ...", "الدرس 4: ..."]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `حلل الهيكل الكامل للكورس "${courseTitle}" وولّد توصيات الثلاثي والوحدات المقترحة بصيغة JSON.`,
+            0.7,
+            5500
+        );
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في إلهام الكورس (inspire-course):', error.message);
+        res.status(500).json({ success: false, error: 'تعذر توليد إلهام الكورس حالياً.' });
+    }
+});
+
+// ============================================================================
+// 🌍 21-B. مسار جراح المناهج الشامل للكورس (Course Level Surgeon V2)
+// يحافظ على جميع الدروس القديمة، ويبني محتوى غنياً وملخصات بوصلة للوحدات الجديدة!
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-course-blueprint', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        currentBlueprint = [],
+        userCommand = '',
+        targetLanguage = ''
+    } = req.body;
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            '',
+            '',
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n🌍 [Course Surgeon V2 - ${langProfile.nameAr} ${tierSpec.tierId}] تعديل هيكل الكورس (${courseTitle}) بناءً على: "${userCommand}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت **"كبير مهندسي المناهج الشاملة (Chief Course Blueprint Surgeon)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+
+        - الكورس الحالي: "${courseTitle}"
+        - الهيكل الحالي للوحدات والدروس:
         ${JSON.stringify(currentBlueprint)}
 
-        أمر المخرج (المستخدم):
+        🎯 **أمر المخرج (المستخدم) لتعديل هيكل الكورس:**
         "${userCommand}"
 
-        🚨 تعليمات صارمة جداً (CRITICAL):
+        🚨 **تعليمات التنفيذ الصارمة جداً (CRITICAL):**
         1. نفّذ أمر المخرج على مستوى الوحدات (إضافة وحدة جديدة، دمج وحدتين، إعادة ترتيب الوحدات، أو حذف وحدة طُلب حذفها).
-        2. **حافظ حرفياً على عناوين الدروس الحالية ("title")** داخل الوحدات التي لم يُطلب حذفها لكي لا نفقد محتواها المشروح!
-        3. إذا أضفت وحدة جديدة، ضع بداخلها من 4 إلى 6 دروس واضحة ومفصلة تناسب موضوع الوحدة الجديدة.
+        2. **حافظ حرفياً على عناوين الدروس الحالية ("title")** داخل الوحدات القديمة التي لم يُطلب حذفها، وضع لها \`"isNewLesson": false\`.
+        3. لأي **وحدة جديدة** تضيفها (أو أي **درس جديد** تضيفه):
+           - ضع للوحدة الجديدة ملخص بوصلة كامل في \`"unitDeepSummary"\` (\`unitSummary\`, \`whatYouLearn\`, \`whyItMatters\`).
+           - ضع داخل الوحدة الجديدة من 4 إلى 5 دروس متسلسلة، وضع لكل درس جديد \`"isNewLesson": true\` مع توليد **محتوى تأسيسي وتفاعلي غني له** في حقل \`"content"\` (يشمل شرح القاعدة، معادلة ليغو \`[...] + [...] = [...]\`، جدول مفردات باللغة ${langProfile.nameAr} مع IPA والـ 🔵/🔴، سُلّم بناء \`### 🪜\`، وتمرين املأ الفراغ \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`) + \`"codeSnippet"\` (4 جمل صوتية مع IPA) حتى تكون الوحدة الجديدة جاهزة للدراسة فوراً دون دروس فارغة!
 
-        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "surgeonReport": "ملخص دقيق لما قمت به في هيكل الكورس...",
+          "surgeonReport": "ملخص دقيق لما قمت به في هيكل الكورس والوحدات المضافة أو المعدلة...",
           "updatedBlueprint": [
             {
               "sectionName": "اسم الوحدة",
+              "unitDeepSummary": {
+                "unitSummary": "ملخص الوحدة...",
+                "whatYouLearn": "ماذا ستتقن في هذه الوحدة...",
+                "whyItMatters": "لماذا هذه الوحدة حاسمة..."
+              },
               "lessons": [
-                { "title": "عنوان الدرس تماماً كما كان أو عنوان الدرس الجديد", "description": "وصف الدرس", "type": "video" }
+                {
+                  "title": "عنوان الدرس",
+                  "description": "وصف الدرس",
+                  "type": "video",
+                  "isNewLesson": false,
+                  "content": "إذا كان isNewLesson=true اكتب هنا شرح Markdown غني ومتكامل للدرس...",
+                  "codeSnippet": "إذا كان isNewLesson=true اكتب هنا 4 جمل صوتية مع سطر 🔊 IPA: /.../ | المعنى: ..."
+                }
               ]
             }
           ]
         }`;
 
-        const rawContent = await generateContentSmart(systemPrompt, "نفذ أمر تعديل الكورس بالكامل الآن بصيغة JSON.", 0.7, 10000);
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `نفذ أمر تعديل هيكل الكورس الآن بصيغة JSON: "${userCommand}"`,
+            0.7,
+            16000
+        );
         const parsed = safeParseAIJson(rawContent);
 
         res.json({ success: true, data: parsed });
@@ -6801,6 +7160,7 @@ app.post('/api/academy2/surgeon/operate-course-blueprint', async (req, res) => {
         res.status(500).json({ success: false, error: 'تعذر تعديل هيكل الكورس.' });
     }
 });
+
 
 
 // ============================================================================
@@ -6910,15 +7270,22 @@ app.post('/api/academy2/surgeon/sync-full-course', async (req, res) => {
 
 
 // ============================================================================
-// ✨ 18-B. مسار محرك الإلهام المجهري لتطوير شريحة أو عنصر واحد من الدرس
-// يحلل الفقرة/الشريحة المحددة ويقترح 4 ترقيات عبقرية مخصصة لها + أمر ترقية شامل!
+// ✨ 18-B. مسار محرك الإلهام المجهري المترابط لتطوير شريحة من الدرس (Micro-Slice Inspiration V2)
+// يقرأ الشريحة + الدرس + الوحدة + الكورس ويقترح 4 ترقيات عميقة ومفصلة جداً!
 // ============================================================================
 app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
     const {
         courseTitle = '',
+        courseDescription = '',
         courseOrder = 1,
         sectionName = '',
+        unitLessonsTitles = [],
         lessonTitle = '',
+        lessonDescription = '',
+        allBlocksHeadings = [],
+        blockIndex = 0,
+        prevBlockHeading = '',
+        nextBlockHeading = '',
         sectionMarkdown = '',
         targetLanguage = ''
     } = req.body;
@@ -6929,7 +7296,7 @@ app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
 
     try {
         const tierSpec = getCEFRProgressionSpec(
-            courseTitle,
+            `${courseTitle} ${courseDescription}`,
             sectionName,
             lessonTitle,
             '',
@@ -6938,63 +7305,75 @@ app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
         );
         const { langProfile } = tierSpec;
 
-        console.log(`\n✨ [Block Inspiration - ${langProfile.nameAr} ${tierSpec.tierId}] توليد إلهام لتطوير شريحة في درس: "${lessonTitle}"...`);
+        console.log(`\n✨ [Contextual Block Inspiration V2 - ${langProfile.nameAr} ${tierSpec.tierId}] إلهام للشريحة (${blockIndex + 1}) في درس "${lessonTitle}"...`);
 
         const systemPrompt = `${langProfile.instituteRole}
-        أنت الآن **"خبير هندسة المحتوى التعليمي الفائق (Micro-Section Inspiration Architect)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+        أنت الآن **"كبير مهندسي الإلهام التعليمي المجهري (Contextual Micro-Slice Inspiration Architect)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
 
-        أمامك شريحة واحدة (قسم فرعي) من درس "${lessonTitle}" ضمن وحدة "${sectionName}":
+        🔗 **الخريطة الهرمية الكاملة التي تنتمي إليها هذه الشريحة (يجب أن تتطابق أفكارك معها 100%):**
+        1. **الكراش كورس:** "${courseTitle}" (${courseDescription.slice(0, 200)})
+        2. **الوحدة الدراسية:** "${sectionName}" (دروس الوحدة: ${JSON.stringify(unitLessonsTitles)})
+        3. **الدرس الحالي:** "${lessonTitle}" (${lessonDescription})
+        4. **موقع الشريحة داخل الدرس:** هي الشريحة رقم (${blockIndex + 1} من ${allBlocksHeadings.length || 1})
+           - الشريحة السابقة لها: "${prevBlockHeading || 'لا يوجد (هذه فاتحة الدرس)'}"
+           - الشريحة التالية لها: "${nextBlockHeading || 'لا يوجد (هذه خاتمة الدرس)'}"
+
+        📄 **النص الفعلي للشريحة المراد تطويرها:**
         """
         ${sectionMarkdown}
         """
 
-        المطلوب منك فحص هذه الشريحة بدقة وتوليد **4 أفكار إلهامية عبقرية ومحددة جداً** تجعل هذه الشريحة أفضل 10 مرات، بحيث ترتبط الأفكار مباشرة بالمفهوم المشروح داخل هذه الشريحة تحديداً:
-        1. **🧠 شفرة ذاكرة وتبسيط بصري (visual_hook):** كيف نبسط قاعدة هذه الشريحة بتشبيه بصري أو مخطط أو جدول مقارن يثبت في الذاكرة؟
-        2. **🔊 إثراء صوتي وأمثلة حية (audio_examples):** ما الأمثلة الناطقة الإضافية (بخط كود \`inline\` ليظهر زر الصوت) أو ملاحظة النطق الأصيل التي ترفع قيمة هذه الشريحة؟
-        3. **🧩 تحدٍ تفاعلي مدمج (interactive_drill):** كيف نختبر الطالب في نهاية هذه الشريحة بتمرين "املأ الفراغ" بصيغة \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\` حول نفس القاعدة؟
-        4. **💎 صقل وتنسيق احترافي (deep_polish):** كيف نرتب الشرح أو نوضح استثناءً مهماً أو خطأً شائعاً يقع فيه الطلاب في هذه النقطة بالذات؟
+        المطلوب منك قراءة كل كلمة ومثال في هذه الشريحة، وفهم موقعها في الدرس والوحدة، ثم توليد **4 أفكار إلهامية احترافية وغير تقليدية** ترفع قيمة هذه الشريحة 10 أضعاف وتجعلها نابضة بالحياة في الواجهة التفاعلية:
+        - **الفكرة 1 (🧠 الهندسة البصرية ومعادلة الليغو / المخطط المقارن):** كيف نحول القاعدة المشروحة في هذه الشريحة إلى معادلة مكعبات ليغو \`[...] + [...] = [...]\` أو جدول مقارن ذكي مع إشارات صوتية؟
+        - **الفكرة 2 (🔊 المختبر الصوتي ومحادثة الموقف الحي):** ما هي الأمثلة الصوتية الناطقة (بخط \`inline code\` ومقاطع IPA) أو الحوار المصغر (3-4 أسطر) الذي يجسد هذه الشريحة في موقف واقعي من صلب الوحدة ("${sectionName}")؟
+        - **الفكرة 3 (🧩 التحدي التفاعلي الذكي الفوري):** تمرين "املأ الفراغ" من 3 إلى 4 جمل بصيغة \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\` يختبر أدق تفصيلة وردت في هذه الشريحة تحديداً!
+        - **الفكرة 4 (💎 رادار الأخطاء الشائعة وجسر الربط):** كشف الفخ الذي يقع فيه 90% من الطلاب في هذه الجزئية (❌ لا تقل ... ✅ بل قل ...) مع ربط ذكي يمهد للشريحة التالية ("${nextBlockHeading || 'التطبيق العملي'}").
 
         رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
         {
-          "blockDiagnosis": "تقييم سريع في سطر واحد لنقطة القوة وما يمكن تطويره في هذه الشريحة...",
-          "superchargeCommand": "أمر جراحي شامل يدمج تبسيط القاعدة بصرياً + إضافة أمثلة ناطقة باللغة ${langProfile.nameAr} + إضافة تمرين املأ الفراغ التفاعلي [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهاية هذا القسم مع الحفاظ على عنوان القسم الرئيسي.",
+          "blockDiagnosis": "تشخيص هندسي عميق في سطرين يوضح نقاط القوة في هذه الشريحة وما ينقصها لتكتمل وتقود الطالب بسلاسة نحو (${nextBlockHeading || 'إتقان الدرس'})...",
+          "superchargeCommand": "أمر جراحي شامل ومفصل يدمج: 1) معادلة ليغو بصرية أو جدول منظم، 2) أمثلة ناطقة باللغة ${langProfile.nameAr} بين علامات كود \`...\` مع نطقها، 3) تنبيه (❌ خطأ شائع مقابل ✅ صواب)، 4) تمرين املأ الفراغ من 3 جمل بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهاية الشريحة.",
           "inspirations": [
             {
-              "id": "insp_visual",
-              "badge": "🧠 تبسيط وشفرة ذاكرة",
-              "title": "عنوان الفكرة البصرية المخصصة لهذه الشريحة...",
-              "why": "كيف ستجعل الطالب يفهم هذه النقطة في 5 ثوانٍ؟",
-              "command": "الأمر الجراحي الدقيق لتنفيذ هذه الإضافة داخل هذا القسم..."
+              "id": "insp_visual_lego",
+              "badge": "🧠 هندسة بصرية ومعادلة ليغو",
+              "title": "عنوان محدد ومبتكر من صلب كلمات الشريحة...",
+              "why": "لماذا ستجعل هذه الإضافة الطالب يستوعب القاعدة بصرياً فوراً؟",
+              "whatItAdds": "معادلة [...] + [...] + جدول مقارن ناطق",
+              "command": "الأمر الجراحي التفصيلي والدقيق (مع ذكر الأمثلة باللغة ${langProfile.nameAr}) لتنفيذ هذه الفكرة على الشريحة..."
             },
             {
-              "id": "insp_audio",
-              "badge": "🔊 أمثلة ناطقة ونطق أصيل",
-              "title": "عنوان الإثراء الصوتي والأمثلة...",
-              "why": "لماذا يقوي هذا أذن ونطق الطالب في هذه القاعدة؟",
-              "command": "الأمر الجراحي الدقيق لإضافة أمثلة ناطقة وتوضيح صوتي في هذا القسم..."
+              "id": "insp_audio_dialogue",
+              "badge": "🔊 أمثلة ناطقة وحوار تطبيقي",
+              "title": "عنوان محدد للإثراء الصوتي والحواري...",
+              "why": "كيف يربط الشريحة بموضوع الوحدة (${sectionName}) ويدرب أذن الطالب؟",
+              "whatItAdds": "أمثلة صوتية بـ IPA + حوار واقعي قصير ناطق",
+              "command": "الأمر الجراحي التفصيلي لإضافة أمثلة ناطقة وحوار قصير باللغة ${langProfile.nameAr} مع الترجمة العربية وأسرار النطق..."
             },
             {
-              "id": "insp_interactive",
-              "badge": "🧩 تحدٍ تفاعلي فوري",
-              "title": "عنوان التمرين التفاعلي المدمج...",
-              "why": "يختبر فهم الطالب لهذه الشريحة فوراً قبل الانتقال لما بعدها.",
-              "command": "أضف في نهاية هذا القسم تمرين املأ الفراغ التفاعلي من 3 جمل يختبر هذه القاعدة تحديداً بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]."
+              "id": "insp_interactive_drill",
+              "badge": "🧩 محطة املأ الفراغ التفاعلية",
+              "title": "عنوان التمرين التفاعلي المخصص لهذه الشريحة...",
+              "why": "يختبر استيعاب الطالب لما قرأه في هذه الشريحة قبل الانتقال للشريحة التالية.",
+              "whatItAdds": "4 جمل تفاعلية بصيغة [[الصواب | خطأ1 | خطأ2]]",
+              "command": "أضف في نهاية هذا القسم محطة تفاعلية بعنوان (#### 🧩 اختبر فهمك السريع لهذه القاعدة) تضم 4 جمل تطبيقية حول ما ورد في هذه الشريحة بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] مع الترجمة العربية بين قوسين."
             },
             {
-              "id": "insp_polish",
-              "badge": "💎 تنبيه ذكي ومنع الأخطاء",
-              "title": "عنوان التنبيه أو المقارنة الاحترافية...",
-              "why": "يمنع الوقوع في الفخ اللغوي الشائع المرتبط بهذه الشريحة.",
-              "command": "الأمر الجراحي الدقيق لإضافة مقارنة (❌ خطأ شائع vs ✅ صواب) أو جدول منظم داخل هذا القسم..."
+              "id": "insp_trap_bridge",
+              "badge": "💎 كاشف الفخاخ وجسر الشريحة",
+              "title": "عنوان التنبيه اللغوي وجسر الربط...",
+              "why": "يحمي الطالب من الخطأ الكلاسيكي في هذه القاعدة ويمهد للشريحة القادمة.",
+              "whatItAdds": "مقارنة (❌ خطأ شائع vs ✅ صواب أصيل) + 💡 السبب",
+              "command": "الأمر الجراحي التفصيلي لإضافة صندوق كشف الأخطاء الشائعة (❌ و ✅ و 💡) في هذه الجزئية مع سطر تمهيدي يربطها بالقسم التالي..."
             }
           ]
         }`;
 
         const rawContent = await generateContentSmart(
             systemPrompt,
-            `حلل هذه الشريحة وولّد 4 إلهامات لتطويرها بصيغة JSON.`,
+            `حلل الشريحة رقم (${blockIndex + 1}) من درس "${lessonTitle}" ضمن وحدة "${sectionName}" وولّد 4 إلهامات احترافية مترابطة بصيغة JSON.`,
             0.7,
-            4000
+            4500
         );
 
         const parsed = safeParseAIJson(rawContent);
@@ -7002,8 +7381,8 @@ app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
         res.json({
             success: true,
             data: {
-                blockDiagnosis: parsed.blockDiagnosis || 'يمكن إثراء هذه الشريحة بأمثلة ناطقة وتمرين تفاعلي سريع.',
-                superchargeCommand: parsed.superchargeCommand || 'طوّر هذا القسم بإضافة تشبيه مبسط وأمثلة واضحة وتمرين املأ الفراغ التفاعلي [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهايته.',
+                blockDiagnosis: parsed.blockDiagnosis || 'شريحة تأسيسية ممتازة يمكن مضاعفة قوتها بمعادلة بصرية، أمثلة ناطقة، وتحدي املأ الفراغ.',
+                superchargeCommand: parsed.superchargeCommand || 'طوّر هذا القسم بإضافة معادلة ليغو بصرية، وأمثلة ناطقة، وتنبيه للأخطاء الشائعة، وتمرين املأ الفراغ التفاعلي [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهايته.',
                 inspirations: Array.isArray(parsed.inspirations) ? parsed.inspirations : []
             }
         });
@@ -7012,6 +7391,8 @@ app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
         res.status(500).json({ success: false, error: 'تعذر توليد الإلهام لهذه الشريحة حالياً.' });
     }
 });
+
+
 
 
 
