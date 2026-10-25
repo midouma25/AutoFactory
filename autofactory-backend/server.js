@@ -47,7 +47,10 @@ const app = express();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.toLocaleString('ar-EG', { month: 'long' });
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+
 const drawAiComparisonSlide = require('./templates/ai_comparison');
 const drawTripleComparisonSlide = require('./templates/triple_comparison');
 const drawAiRoadmapSlide = require('./templates/ai_roadmap'); // 👈 استدعاء رسام خرائط الطريق
@@ -6326,233 +6329,6 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
 });
 
 
-// ============================================================================
-// 🧐 16. مسار "الناقد الأكاديمي ومقترح إضافات منتصف الدرس" (AI Lesson Critic & Mid-Lesson Proposer)
-// يحلل محتوى الدرس ومستوى الكراش كورس ويقترح إضافات في منتصف الدرس + عناصر للحذف!
-// ============================================================================
-app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
-    const {
-        courseTitle = '',
-        courseDescription = '',
-        courseOrder = 1,
-        sectionName = '',
-        lesson = {},
-        targetLanguage = ''
-    } = req.body;
-
-    if (!lesson || !lesson.title) {
-        return res.status(400).json({ success: false, error: 'بيانات الدرس مطلوبة للتحليل.' });
-    }
-
-    try {
-        const tierSpec = getCEFRProgressionSpec(
-            `${courseTitle} ${courseDescription}`,
-            sectionName,
-            lesson.title,
-            '',
-            courseOrder,
-            targetLanguage
-        );
-        const { langProfile } = tierSpec;
-
-        console.log(`\n🧐 [AI Critic - ${langProfile.nameAr} - ${tierSpec.tierId}] جاري فحص الدرس واقتراح إضافات منتصف الدرس: "${lesson.title}"...`);
-
-        const systemPrompt = `${langProfile.instituteRole}
-        أنت الآن تعمل كـ **"أفضل ناقد ومقيّم مناهج في العالم (World-Class Curriculum Rater) ومطور دروس تفاعلية"**.
-        أمامك الدرس التالي:
-        - الكراش كورس: "${courseTitle}" (المستوى الصارم: ${tierSpec.cefrLabel})
-        - الوحدة: "${sectionName}"
-        - عنوان الدرس: "${lesson.title}"
-        - محتوى الدرس الحالي:
-        """
-        ${(lesson.content || '').slice(0, 4500)}
-        """
-
-        مهمتك الدقيقة:
-        1. تقييم جودة الدرس الحالية من 100 ومدى مطابقته لمستوى (${tierSpec.tierId}).
-        2. اقتراح **3 عناصر إبداعية محددة لإضافتها في "منتصف الدرس" (Mid-Lesson Injections)** (مثلاً بعد القسم 2 جدول المفردات أو بعد القسم 3 سُلّم البناء) لكسر الملل وتثبيت المعلومة، مثل:
-           - تمرين "املأ الفراغ التفاعلي" (Fill-in-the-Blank) في منتصف الدرس من مفردات الدرس نفسه.
-           - بطاقة "شفرة الذاكرة السريعة" (Memory Trick / Cheat Sheet) أو مقارنة بصرية سريعة.
-           - موقف حواري مصغر أو تحدي "اكتشف الخطأ في الجملة" في منتصف الشرح.
-        3. تحديد **عنصر واحد غير مهم أو مكرر أو حشو (Fluff Removal)** داخل الدرس تقترح حذفه أو تكثيفه لجعل الدرس أكثر رشاقة.
-
-        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
-        {
-          "qualityScore": 92,
-          "raterVerdict": "تقييم نقدي مركز في سطر واحد يوضح نقطة قوة الدرس وما ينقصه...",
-          "midLessonSuggestions": [
-            {
-              "id": "fill_blank_mid",
-              "badge": "🧩 حقن في منتصف الدرس",
-              "title": "إضافة تمرين (املأ الفراغ التفاعلي) بعد جدول المفردات",
-              "why": "لتثبيت المفردات والأدوات التي قرأها الطالب للتو قبل الانتقال إلى سُلّم الجمل.",
-              "operationType": "inject_mid_fill_blank",
-              "command": "أضف في منتصف الدرس (مباشرة بعد القسم 2 جدول المفردات وقبل القسم 3) قسماً تفاعلياً بعنوان (### 🧩 محطة منتصف الدرس: املأ الفراغ التفاعلي) يضم 4 جمل قصيرة من مفردات الدرس بصيغة [[الكلمة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]."
-            },
-            {
-              "id": "memory_hook_mid",
-              "badge": "🧠 خدعة ذاكرة بالمنتصف",
-              "title": "عنوان اقتراح مخصص لقاعدة هذا الدرس تحديداً...",
-              "why": "لماذا يفيد الطالب في منتصف هذا الدرس؟",
-              "operationType": "inject_mid_custom",
-              "command": "الأمر التفصيلي الدقيق لحقن هذا العنصر في منتصف الدرس (بعد القسم 3 سُلّم البناء)..."
-            },
-            {
-              "id": "dialogue_drill_mid",
-              "badge": "⚡ تحدي سريع بالمنتصف",
-              "title": "عنوان اقتراح ثالث مخصص لمحتوى هذا الدرس...",
-              "why": "السبب البيداغوجي...",
-              "operationType": "inject_mid_custom",
-              "command": "الأمر التفصيلي الدقيق..."
-            }
-          ],
-          "fluffToPrune": {
-            "title": "✂️ تنظيف وحذف الحشو الزائد في الدرس",
-            "whatToRemove": "حدد بدقة الفقرة أو التكرار الذي يمكن حذفه أو تقليصه في هذا الدرس...",
-            "command": "احذف التكرار والحشو غير الضروري في الشرح، واجعل العبارات مركزة ومباشرة دون المساس بالجداول أو الأمثلة الأساسية."
-          }
-        }`;
-
-        const rawContent = await generateContentSmart(
-            systemPrompt,
-            `حلل الدرس "${lesson.title}" واقترح إضافات منتصف الدرس بصيغة JSON.`,
-            0.7,
-            3500
-        );
-        const parsed = safeParseAIJson(rawContent);
-
-        res.json({ success: true, data: parsed });
-    } catch (error) {
-        console.error('❌ خطأ في ناقد الدرس الذكي:', error.message);
-        res.status(500).json({ success: false, error: 'تعذر تحليل الدرس حالياً.' });
-    }
-});
-
-// ============================================================================
-// 🩺 17. مسار "المُشرط الجراحي للدرس" (AI Surgical Lesson Editor & Mid-Lesson Injector)
-// ينفذ الإضافة في منتصف الدرس، تمرين املأ الفراغ، الحذف، أو التعديل مع احترام الكورس والمستوى!
-// ============================================================================
-app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
-    const {
-        courseTitle = '',
-        courseDescription = '',
-        courseOrder = 1,
-        sectionName = '',
-        lesson = {},
-        userCommand = '',
-        operationType = 'custom', // 'inject_mid_fill_blank' | 'inject_mid_custom' | 'prune_fluff' | 'custom'
-        targetLanguage = ''
-    } = req.body;
-
-    if (!lesson || !userCommand) {
-        return res.status(400).json({ success: false, error: 'الدرس وأمر التعديل مطلوبان.' });
-    }
-
-    try {
-        const tierSpec = getCEFRProgressionSpec(
-            `${courseTitle} ${courseDescription}`,
-            sectionName,
-            lesson.title,
-            '',
-            courseOrder,
-            targetLanguage
-        );
-        const { langProfile } = tierSpec;
-
-        console.log(`\n🩺 [AI Lesson Surgeon - ${langProfile.nameAr} - ${tierSpec.tierId}] تنفيذ عملية (${operationType}): "${userCommand}"...`);
-
-        const fillBlankFormattingRule = `
-        🚨 قاعدة تنسيق تمرين "املأ الفراغ التفاعلي" في منتصف الدرس (CRITICAL INTERACTIVE SYNTAX):
-        إذا طُلب منك إضافة تمرين "املأ الفراغ" (Fill in the blank) في منتصف الدرس أو في أي مكان داخل "content":
-        1. ضعه تحت عنوان فرعي واضح في منتصف الدرس (مثلاً بين القسم 2 والقسم 3، أو بين القسم 3 والقسم 4):
-           \`### 🧩 محطة منتصف الدرس: املأ الفراغ التفاعلي (Mid-Lesson Check)\`
-        2. اكتب من 4 إلى 5 جمل مرقمة باللغة **${langProfile.nameAr}** تناسب مستوى (${tierSpec.cefrLabel})، وضع الفراغ داخل أقواس مزدوجة هكذا بالضبط:
-           \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\`
-           مثال للفرنسية مستوى A0:
-           \`1. C'est [[un | une | des]] petit chat. (هذا قط صغير)\`
-           \`2. La pomme [[est | sont | as]] rouge. (التفاحة حمراء)\`
-           (بحيث يكون الخيار الأول داخل الأقواس المزدوجة \`[[...]]\` هو الإجابة الصحيحة دائماً، وسيتولى النظام خلطها برمجياً للطالب!).`;
-
-        const systemPrompt = `${langProfile.instituteRole}
-        أنت الآن **"كبير جراحي المناهج التعليمية (Master Curriculum Surgeon)"**.
-        مهمتك تعديل الدرس المرفق بدقة جراحية بناءً على أمر المستخدم، مع الالتزام الصارم بـ:
-        - اللغة المستهدفة: **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**
-        - الكراش كورس: "${courseTitle}"
-        - المستوى اللغوي الإلزامي: **${tierSpec.cefrLabel}**
-        - الوحدة الحالية: "${sectionName}"
-
-        ${tierSpec.pedagogyRules}
-        ${fillBlankFormattingRule}
-
-        📌 أمر التعديل المطلوب تنفيذه الآن على الدرس:
-        "${userCommand}"
-
-        📄 بيانات الدرس الحالي قبل التعديل:
-        - العنوان: "${lesson.title}"
-        - المحتوى (content):
-        """
-        ${lesson.content || ''}
-        """
-        - استوديو الصوتيات (codeSnippet):
-        """
-        ${lesson.codeSnippet || ''}
-        """
-        - التمرين التطبيقي (codingPractice):
-        ${JSON.stringify(lesson.codingPractice || {})}
-        - سؤال التحدي (dailyQuest):
-        ${JSON.stringify(lesson.dailyQuest || {})}
-
-        🚨 القواعد الجراحية الصارمة:
-        1. نفّذ أمر المستخدم ("${userCommand}") بدقة 100% في المكان المطلوب (إذا طلب في منتصف الدرس، احقن القسم الجديد في منتصف "content" بعد القسم 2 أو القسم 3 مع الحفاظ على جميع الأقسام الـ 6 الأخرى سليمة وكاملة!).
-        2. إذا طلب حذف عنصر، احذفه بنظافة تامة دون ترك فراغات مشوهة.
-        3. إذا طلب إضافة مفردات جديدة، قم بتحديث جدول المفردات في "content" وأضفها أيضاً إلى "codeSnippet" لكي تنطق صوتياً!
-        4. إياك أن تختصر باقي أقسام الدرس التي لم يُطلب حذفها! أعد حقل "content" كاملاً شاملاً التعديل الجديد.
-
-        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
-        {
-          "surgeonReport": "ملخص سريع في سطر واحد لما قمت بإضافته أو تعديله أو حذفه في الدرس...",
-          "updatedLesson": {
-            "title": "${lesson.title}",
-            "description": "${lesson.description || ''}",
-            "content": "نص الـ Markdown الكامل للدرس بعد حقن التعديل أو تمرين منتصف الدرس...",
-            "codeSnippet": "نص استوديو الاستماع والترديد المحدث...",
-            "codeExplanation": "شرح تدريب الأذن المحدث...",
-            "codingPractice": {
-              "hasPractice": true,
-              "taskQuestion": "...",
-              "starterCode": "...",
-              "hints": ["...", "...", "..."],
-              "solutionCode": "..."
-            },
-            "dailyQuest": {
-              "question": "...",
-              "options": ["...", "...", "...", "..."],
-              "correctAnswerIndex": 1,
-              "explanation": "..."
-            }
-          }
-        }`;
-
-        const rawContent = await generateContentSmart(
-            systemPrompt,
-            `نفّذ العملية الجراحية ("${userCommand}") على الدرس "${lesson.title}" وأعد النتيجة بصيغة JSON كاملة.`,
-            0.65,
-            16000
-        );
-        const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
-
-        res.json({
-            success: true,
-            surgeonReport: parsed.surgeonReport || 'تم تحديث الدرس بنجاح وفق طلبك!',
-            updatedLesson: parsed.updatedLesson || lesson
-        });
-    } catch (error) {
-        console.error('❌ خطأ في جراحة الدرس:', error.message);
-        res.status(500).json({ success: false, error: 'حدث خطأ أثناء تعديل الدرس.' });
-    }
-});
-
-
 
 // ============================================================================
 // 🧐 16. مسار "مجلس الحكماء الثلاثي" (الناقد Rater + الأستاذ + التلميذ) + أمر تطبيق الكل!
@@ -6678,6 +6454,151 @@ app.post('/api/academy2/surgeon/critique-and-suggest', async (req, res) => {
     }
 });
 
+
+// ============================================================================
+// 🩺 17. المسار الجراحي الشامل لتعديل وإثراء الدرس (Full Lesson AI Surgeon)
+// يعالج مشكلة 404 ويدعم: (Apply All + توصيات الثلاثي + املأ الفراغ + بناء الدرس الفارغ + تعديل الودجات)
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-lesson', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseDescription = '',
+        courseOrder = 1,
+        sectionName = '',
+        lesson = {},
+        userCommand = '',
+        operationType = 'custom',
+        targetLanguage = ''
+    } = req.body;
+
+    if (!lesson || !userCommand) {
+        return res.status(400).json({ success: false, error: 'بيانات الدرس والأمر الجراحي مطلوبان.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            `${courseTitle} ${courseDescription}`,
+            sectionName,
+            lesson.title || '',
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        const currentContent = (lesson.content || '').trim();
+        // فحص ما إذا كان الدرس مجرد عنصر نائب فارغ تم إنشاؤه حديثاً
+        const isStubLesson =
+            currentContent.length < 220 ||
+            currentContent.includes('افتح المُشرط الذكي لإثرائه الآن') ||
+            currentContent.includes('تمت إضافته عبر جراح');
+
+        // تنظيف الوصف من العلامات البرمجية دون الحاجة لدالة خارجية
+        const safeDescription = (lesson.description || lesson.title || '').split('|||')[0].trim();
+
+        console.log(`\n🩺 [Lesson Surgeon - ${langProfile.nameAr} ${tierSpec.tierId}] تنفيذ عملية (${operationType}) على درس: "${lesson.title}" (Stub: ${isStubLesson})...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت الآن **"الجراح الأكاديمي الذكي (AI Lesson Surgeon)"** لتعديل وتطوير درس في اللغة **${langProfile.nameAr} (${langProfile.nameEn})** ضمن المستوى الصارم **(${tierSpec.cefrLabel})**.
+
+        📋 بيانات الدرس الحالي:
+        - الكورس: "${courseTitle}"
+        - الوحدة: "${sectionName}"
+        - عنوان الدرس: "${lesson.title}"
+        - نوع العملية: "${operationType}"
+        - محتوى الدرس الحالي (Markdown):
+        """
+        ${currentContent || '(درس جديد فارغ يحتاج لبناء كامل)'}
+        """
+        - استوديو الصوتيات الحالي (codeSnippet):
+        """
+        ${lesson.codeSnippet || ''}
+        """
+        - دليل تدريب الأذن الحالي (codeExplanation):
+        """
+        ${lesson.codeExplanation || ''}
+        """
+        - التمرين التطبيقي الحالي (codingPractice):
+        ${JSON.stringify(lesson.codingPractice || null)}
+        - سؤال التحدي السريع الحالي (dailyQuest):
+        ${JSON.stringify(lesson.dailyQuest || null)}
+
+        🎯 الأمر الجراحي المطلوب تنفيذه بدقة 100%:
+        "${userCommand}"
+
+        ${tierSpec.pedagogyRules}
+
+        🚨 قوانين التنفيذ الجراحي الصارمة:
+        1. ${isStubLesson
+            ? `بما أن هذا الدرس الجديد لا يزال فارغاً أو مقتضباً، قم ببناء درس متكامل وغني ومفصل في حقل "content" (يضم أقساماً واضحة بعناوين ###، وجدول مفردات باللغة ${langProfile.nameAr} مع الرمز الصوتي IPA والمعنى العربي، وسُلّم بناء تراكمي ### 🪜، وورشة أخطاء شائعة ❌ و ✅ و 💡) مع تطبيق الأمر الجراحي أعلاه بالكامل!`
+            : `حافظ على هيكل وأقسام الدرس الحالية في "content"، وقم بدمج أو تعديل أو حذف ما طلبه الأمر الجراحي بدقة متناهية وفي الموضع الصحيح دون إفساد باقي أقسام الدرس.`}
+        2. إذا طلب الأمر إضافة تمرين **"املأ الفراغ التفاعلي"** (أو كان نوع العملية inject_mid_fill_blank أو apply_all_personas)، يجب إضافته داخل حقل "content" بصيغة القوسين المزدوجين التفاعلية حصراً هكذا:
+           \`- الجملة باللغة ${langProfile.nameAr} [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] (الترجمة العربية).\`
+           (مع وضع الإجابة الصحيحة أولاً دائماً داخل القوسين المزدوجين).
+        3. قم بتحديث أو إثراء الحقول التفاعلية المرافقة ("codeSnippet" بـ 5 جمل مرقمة مع سطر 🔊 IPA: /.../ | المعنى: ... لكل جملة، و "codeExplanation"، و "codingPractice"، و "dailyQuest") إذا كان الأمر يخصها أو إذا كانت فارغة في الدرس الحالي.
+        4. التزم بنسبة 100% باللغة المستهدفة (${langProfile.nameAr}) ومستوى الطالب (${tierSpec.tierId}).
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "surgeonReport": "ملخص دقيق ومختصر في سطر واحد لما قمت بتعديله أو إضافته في الدرس...",
+          "updatedLesson": {
+            "title": "${lesson.title}",
+            "description": "${safeDescription}",
+            "content": "نص الـ Markdown الكامل والمحدث للدرس بعد تنفيذ الجراحة...",
+            "codeSnippet": "🎧 استوديو الاستماع والترديد (Audio Shadowing):\\n1. ...\\n🔊 IPA: /.../ | المعنى: ...",
+            "codeExplanation": "🔬 دليل تدريب الأذن والنطق (Shadowing Anatomy):\\n- ...",
+            "codingPractice": {
+              "hasPractice": true,
+              "taskQuestion": "✍️ التمرين التطبيقي (خطوة بخطوة باللغة ${langProfile.nameAr}):\\n1. ...\\n2. ...\\n3. ...",
+              "starterCode": "// اكتب إجابتك هنا:\\n1. \\n2. \\n3. ",
+              "hints": ["💡 تلميح 1: ...", "🛠️ تلميح 2: ...", "🔓 تلميح 3: ..."],
+              "solutionCode": "✅ الحل النموذجي:\\n1. ...\\n2. ...\\n3. ..."
+            },
+            "dailyQuest": {
+              "question": "سؤال التحدي السريع...",
+              "options": ["الخيار 1", "الخيار 2", "الخيار 3", "الخيار 4"],
+              "correctAnswerIndex": 0,
+              "explanation": "شرح الإجابة الصحيحة...",
+              "bonusExp": 50
+            }
+          }
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `نفّذ هذا الأمر الجراحي على الدرس الآن وأعد النتيجة بصيغة JSON: "${userCommand}"`,
+            0.7,
+            14000
+        );
+
+        const parsed = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
+        const rawUpdated = parsed.updatedLesson || parsed;
+
+        const finalUpdatedLesson = {
+            ...lesson,
+            title: rawUpdated.title || lesson.title,
+            description: rawUpdated.description || safeDescription,
+            content: rawUpdated.content || lesson.content,
+            codeSnippet: rawUpdated.codeSnippet !== undefined ? rawUpdated.codeSnippet : lesson.codeSnippet,
+            codeExplanation: rawUpdated.codeExplanation !== undefined ? rawUpdated.codeExplanation : lesson.codeExplanation,
+            codingPractice: rawUpdated.codingPractice !== undefined ? rawUpdated.codingPractice : lesson.codingPractice,
+            dailyQuest: rawUpdated.dailyQuest !== undefined ? rawUpdated.dailyQuest : lesson.dailyQuest
+        };
+
+        res.json({
+            success: true,
+            surgeonReport: parsed.surgeonReport || 'تم تنفيذ التعديل الجراحي على الدرس بنجاح!',
+            updatedLesson: finalUpdatedLesson
+        });
+    } catch (error) {
+        console.error('❌ خطأ في المسار الجراحي للدرس (operate-lesson):', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تنفيذ التعديل الجراحي على الدرس حالياً.' });
+    }
+});
+
+
+
+
 // ============================================================================
 // 🔬 18. مسار تعديل قسم واحد فقط من الدرس بالذكاء الاصطناعي (Block-Level AI Section Editor)
 // يعدل الفقرة أو القسم المحدد فقط (كما في الصورة 3) بسرعة فائقة دون المساس بباقي الدرس!
@@ -6788,6 +6709,309 @@ app.post('/api/academy2/surgeon/save-lesson-db', async (req, res) => {
     }
 });
 
+// ============================================================================
+// 🏗️ 20. مسار جراح المناهج الشامل (مستوى الوحدة - Unit Level Surgeon)
+// يتيح إضافة، حذف، أو إعادة ترتيب الدروس داخل الوحدة بضغطة زر!
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-unit', async (req, res) => {
+    const { courseTitle, sectionName, currentLessons, userCommand } = req.body;
+
+    if (!sectionName || !userCommand) {
+        return res.status(400).json({ success: false, error: 'اسم الوحدة وأمر التعديل مطلوبان.' });
+    }
+
+    try {
+        console.log(`\n🏗️ [Unit Surgeon] جاري تعديل هيكل الوحدة (${sectionName}) بناءً على: "${userCommand}"...`);
+
+        const systemPrompt = `أنت عميد أكاديمية ومخطط مناهج خبير (Curriculum Architect).
+        أنت الآن تقوم بعملية جراحية على هيكل "وحدة دراسية" (Section) ضمن كورس: "${courseTitle}".
+        
+        - اسم الوحدة: "${sectionName}"
+        - قائمة الدروس الحالية في هذه الوحدة:
+        ${JSON.stringify(currentLessons.map(l => ({ title: l.title, type: l.type, description: l.description })))}
+
+        أمر المخرج (المستخدم):
+        "${userCommand}"
+
+        المطلوب:
+        قم بتعديل هيكل هذه الوحدة (إضافة درس جديد، حذف درس، أو إعادة ترتيب الدروس) بناءً على أمر المخرج.
+        إذا طلب إضافة درس جديد، ضع له وصفاً مبدئياً واجعل نوعه "video" أو "code".
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "surgeonReport": "ماذا فعلت باختصار؟ (مثال: تم دمج درسين وإضافة درس تطبيقي جديد)",
+          "updatedLessonsBlueprint": [
+            { "title": "عنوان الدرس", "description": "وصف مبسط", "type": "video" }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "نفذ أمر تعديل الوحدة الآن بصيغة JSON.", 0.7, 5000);
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في جراحة الوحدة:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تعديل هيكل الوحدة.' });
+    }
+});
+
+// ============================================================================
+// 🌍 21. مسار جراح المناهج الشامل (مستوى الكورس بالكامل - Course Level Surgeon)
+// يتيح إضافة وحدات جديدة، دمج وحدات، أو تغيير مسار الكورس كلياً!
+// ============================================================================
+app.post('/api/academy2/surgeon/operate-course-blueprint', async (req, res) => {
+    const { courseTitle, currentBlueprint, userCommand } = req.body;
+
+    try {
+        console.log(`\n🌍 [Course Surgeon] جاري تعديل الهيكل الكامل للكورس (${courseTitle}) بناءً على: "${userCommand}"...`);
+
+ const systemPrompt = `أنت كبير الاستراتيجيين التعليميين (Chief Education Strategist).
+        أنت الآن تعالج "الهيكل العام" (Blueprint) لكورس كامل: "${courseTitle}".
+
+        - الهيكل الحالي (الوحدات والدروس الفعلية بداخلها):
+        ${JSON.stringify(currentBlueprint)}
+
+        أمر المخرج (المستخدم):
+        "${userCommand}"
+
+        🚨 تعليمات صارمة جداً (CRITICAL):
+        1. نفّذ أمر المخرج على مستوى الوحدات (إضافة وحدة جديدة، دمج وحدتين، إعادة ترتيب الوحدات، أو حذف وحدة طُلب حذفها).
+        2. **حافظ حرفياً على عناوين الدروس الحالية ("title")** داخل الوحدات التي لم يُطلب حذفها لكي لا نفقد محتواها المشروح!
+        3. إذا أضفت وحدة جديدة، ضع بداخلها من 4 إلى 6 دروس واضحة ومفصلة تناسب موضوع الوحدة الجديدة.
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
+        {
+          "surgeonReport": "ملخص دقيق لما قمت به في هيكل الكورس...",
+          "updatedBlueprint": [
+            {
+              "sectionName": "اسم الوحدة",
+              "lessons": [
+                { "title": "عنوان الدرس تماماً كما كان أو عنوان الدرس الجديد", "description": "وصف الدرس", "type": "video" }
+              ]
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(systemPrompt, "نفذ أمر تعديل الكورس بالكامل الآن بصيغة JSON.", 0.7, 10000);
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({ success: true, data: parsed });
+    } catch (error) {
+        console.error('❌ خطأ في جراحة الكورس:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر تعديل هيكل الكورس.' });
+    }
+});
+
+
+// ============================================================================
+// 💾 20. مسار المزامنة السحابية الشاملة للكورس (Master Cloud Sync)
+// يحفظ (التعديلات، الحذف، الترتيب الجديد، الدروس الجديدة، وهيكل الشهادة) في MongoDB
+// ============================================================================
+app.post('/api/academy2/surgeon/sync-full-course', async (req, res) => {
+    // 🌟 إضافة استقبال fullCourseSnapshot من الواجهة
+    const { courseId, lessonsList, fullCourseSnapshot } = req.body;
+
+    if (!courseId || !lessonsList || !Array.isArray(lessonsList)) {
+        return res.status(400).json({ success: false, error: 'بيانات المزامنة غير صالحة.' });
+    }
+
+    try {
+        console.log(`\n☁️ [Master Sync] جاري مزامنة وحفظ الكورس (${courseId}) بالكامل في قاعدة البيانات...`);
+
+        // 1. استخراج الـ IDs الحقيقية للدروس الموجودة حالياً في الواجهة
+        const incomingValidIds = lessonsList
+            .filter(l => mongoose.Types.ObjectId.isValid(l._id))
+            .map(l => l._id);
+
+        // 2. 🧹 التنظيف: حذف الدروس المحذوفة من قاعدة البيانات
+        if (mongoose.Types.ObjectId.isValid(courseId)) {
+            const deleteResult = await mongoose.connection.collection('lessons').deleteMany({
+                courseId: new mongoose.Types.ObjectId(courseId),
+                _id: { $nin: incomingValidIds.map(id => new mongoose.Types.ObjectId(id)) }
+            });
+            console.log(`   🗑️ تم تنظيف ${deleteResult.deletedCount} دروس محذوفة من قاعدة البيانات.`);
+        }
+
+        // 3. 🔄 التحديث والإدراج للدروس المنفصلة
+        let updatedCount = 0;
+        let insertedCount = 0;
+
+        for (let i = 0; i < lessonsList.length; i++) {
+            const les = lessonsList[i];
+            
+            const lessonDataToSave = {
+                title: les.title,
+                description: les.description || '',
+                section: les.section,
+                order: les.order || (i + 1),
+                sectionOrder: les.sectionOrder || 1,
+                content: les.content || '',
+                codeSnippet: les.codeSnippet || '',
+                codeExplanation: les.codeExplanation || '',
+                codingPractice: les.codingPractice || null,
+                dailyQuest: les.dailyQuest || null,
+                bossQuiz: les.bossQuiz || [],
+                type: les.type || 'video',
+                lessonCategory: les.lessonCategory || 'standard',
+                hideMistakesWidget: les.hideMistakesWidget || false,
+                hideLegoWidget: les.hideLegoWidget || false,
+                hideLadderWidget: les.hideLadderWidget || false,
+                hideSpeakClassWidget: les.hideSpeakClassWidget || false,
+                hideCodingWidget: les.hideCodingWidget || false,
+                hideQuestWidget: les.hideQuestWidget || false,
+                customMistakeRows: les.customMistakeRows || null,
+                customLegoEquations: les.customLegoEquations || null,
+                customLadderSteps: les.customLadderSteps || null,
+                customVoiceTitle: les.customVoiceTitle || null,
+                updatedAt: new Date()
+            };
+
+            if (mongoose.Types.ObjectId.isValid(les._id)) {
+                await mongoose.connection.collection('lessons').updateOne(
+                    { _id: new mongoose.Types.ObjectId(les._id) },
+                    { $set: lessonDataToSave }
+                );
+                updatedCount++;
+            } 
+            else if (mongoose.Types.ObjectId.isValid(courseId)) {
+                lessonDataToSave.courseId = new mongoose.Types.ObjectId(courseId);
+                lessonDataToSave.created_at = new Date();
+                await mongoose.connection.collection('lessons').insertOne(lessonDataToSave);
+                insertedCount++;
+            }
+        }
+
+        // 🌟 4. التحديث الجذري: تحديث وثيقة الكورس الرئيسية (هيكل الشهادة / Blueprint)
+        if (fullCourseSnapshot && mongoose.Types.ObjectId.isValid(courseId)) {
+            const updateFields = {};
+            if (fullCourseSnapshot.courses) updateFields.courses = fullCourseSnapshot.courses;
+            if (fullCourseSnapshot.sections) updateFields.sections = fullCourseSnapshot.sections;
+            if (fullCourseSnapshot.blueprint) updateFields.blueprint = fullCourseSnapshot.blueprint;
+            if (fullCourseSnapshot.unitSummariesMap) updateFields.unitSummariesMap = fullCourseSnapshot.unitSummariesMap;
+
+            if (Object.keys(updateFields).length > 0) {
+                await mongoose.connection.collection('courses').updateOne(
+                    { _id: new mongoose.Types.ObjectId(courseId) },
+                    { $set: updateFields }
+                );
+                console.log(`   🏗️ تم تحديث الهيكل المعماري (Blueprint/Certificate) في مجموعة courses.`);
+            }
+        }
+
+        console.log(`✅ [Master Sync] اكتملت المزامنة: (تم تحديث ${updatedCount}) | (تم إنشاء ${insertedCount}).`);
+        res.json({ success: true, message: 'تمت المزامنة السحابية بنجاح!' });
+
+    } catch (error) {
+        console.error('❌ خطأ في المزامنة الشاملة للكورس:', error.message);
+        res.status(500).json({ success: false, error: 'تعذر مزامنة الكورس مع قاعدة البيانات.' });
+    }
+});
+
+
+
+// ============================================================================
+// ✨ 18-B. مسار محرك الإلهام المجهري لتطوير شريحة أو عنصر واحد من الدرس
+// يحلل الفقرة/الشريحة المحددة ويقترح 4 ترقيات عبقرية مخصصة لها + أمر ترقية شامل!
+// ============================================================================
+app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
+    const {
+        courseTitle = '',
+        courseOrder = 1,
+        sectionName = '',
+        lessonTitle = '',
+        sectionMarkdown = '',
+        targetLanguage = ''
+    } = req.body;
+
+    if (!sectionMarkdown || !sectionMarkdown.trim()) {
+        return res.status(400).json({ success: false, error: 'محتوى الشريحة مطلوب لتوليد الإلهام.' });
+    }
+
+    try {
+        const tierSpec = getCEFRProgressionSpec(
+            courseTitle,
+            sectionName,
+            lessonTitle,
+            '',
+            courseOrder,
+            targetLanguage
+        );
+        const { langProfile } = tierSpec;
+
+        console.log(`\n✨ [Block Inspiration - ${langProfile.nameAr} ${tierSpec.tierId}] توليد إلهام لتطوير شريحة في درس: "${lessonTitle}"...`);
+
+        const systemPrompt = `${langProfile.instituteRole}
+        أنت الآن **"خبير هندسة المحتوى التعليمي الفائق (Micro-Section Inspiration Architect)"** للغة **${langProfile.nameAr} (${langProfile.nameEn})** في المستوى **(${tierSpec.cefrLabel})**.
+
+        أمامك شريحة واحدة (قسم فرعي) من درس "${lessonTitle}" ضمن وحدة "${sectionName}":
+        """
+        ${sectionMarkdown}
+        """
+
+        المطلوب منك فحص هذه الشريحة بدقة وتوليد **4 أفكار إلهامية عبقرية ومحددة جداً** تجعل هذه الشريحة أفضل 10 مرات، بحيث ترتبط الأفكار مباشرة بالمفهوم المشروح داخل هذه الشريحة تحديداً:
+        1. **🧠 شفرة ذاكرة وتبسيط بصري (visual_hook):** كيف نبسط قاعدة هذه الشريحة بتشبيه بصري أو مخطط أو جدول مقارن يثبت في الذاكرة؟
+        2. **🔊 إثراء صوتي وأمثلة حية (audio_examples):** ما الأمثلة الناطقة الإضافية (بخط كود \`inline\` ليظهر زر الصوت) أو ملاحظة النطق الأصيل التي ترفع قيمة هذه الشريحة؟
+        3. **🧩 تحدٍ تفاعلي مدمج (interactive_drill):** كيف نختبر الطالب في نهاية هذه الشريحة بتمرين "املأ الفراغ" بصيغة \`[[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]\` حول نفس القاعدة؟
+        4. **💎 صقل وتنسيق احترافي (deep_polish):** كيف نرتب الشرح أو نوضح استثناءً مهماً أو خطأً شائعاً يقع فيه الطلاب في هذه النقطة بالذات؟
+
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        {
+          "blockDiagnosis": "تقييم سريع في سطر واحد لنقطة القوة وما يمكن تطويره في هذه الشريحة...",
+          "superchargeCommand": "أمر جراحي شامل يدمج تبسيط القاعدة بصرياً + إضافة أمثلة ناطقة باللغة ${langProfile.nameAr} + إضافة تمرين املأ الفراغ التفاعلي [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهاية هذا القسم مع الحفاظ على عنوان القسم الرئيسي.",
+          "inspirations": [
+            {
+              "id": "insp_visual",
+              "badge": "🧠 تبسيط وشفرة ذاكرة",
+              "title": "عنوان الفكرة البصرية المخصصة لهذه الشريحة...",
+              "why": "كيف ستجعل الطالب يفهم هذه النقطة في 5 ثوانٍ؟",
+              "command": "الأمر الجراحي الدقيق لتنفيذ هذه الإضافة داخل هذا القسم..."
+            },
+            {
+              "id": "insp_audio",
+              "badge": "🔊 أمثلة ناطقة ونطق أصيل",
+              "title": "عنوان الإثراء الصوتي والأمثلة...",
+              "why": "لماذا يقوي هذا أذن ونطق الطالب في هذه القاعدة؟",
+              "command": "الأمر الجراحي الدقيق لإضافة أمثلة ناطقة وتوضيح صوتي في هذا القسم..."
+            },
+            {
+              "id": "insp_interactive",
+              "badge": "🧩 تحدٍ تفاعلي فوري",
+              "title": "عنوان التمرين التفاعلي المدمج...",
+              "why": "يختبر فهم الطالب لهذه الشريحة فوراً قبل الانتقال لما بعدها.",
+              "command": "أضف في نهاية هذا القسم تمرين املأ الفراغ التفاعلي من 3 جمل يختبر هذه القاعدة تحديداً بصيغة [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]]."
+            },
+            {
+              "id": "insp_polish",
+              "badge": "💎 تنبيه ذكي ومنع الأخطاء",
+              "title": "عنوان التنبيه أو المقارنة الاحترافية...",
+              "why": "يمنع الوقوع في الفخ اللغوي الشائع المرتبط بهذه الشريحة.",
+              "command": "الأمر الجراحي الدقيق لإضافة مقارنة (❌ خطأ شائع vs ✅ صواب) أو جدول منظم داخل هذا القسم..."
+            }
+          ]
+        }`;
+
+        const rawContent = await generateContentSmart(
+            systemPrompt,
+            `حلل هذه الشريحة وولّد 4 إلهامات لتطويرها بصيغة JSON.`,
+            0.7,
+            4000
+        );
+
+        const parsed = safeParseAIJson(rawContent);
+
+        res.json({
+            success: true,
+            data: {
+                blockDiagnosis: parsed.blockDiagnosis || 'يمكن إثراء هذه الشريحة بأمثلة ناطقة وتمرين تفاعلي سريع.',
+                superchargeCommand: parsed.superchargeCommand || 'طوّر هذا القسم بإضافة تشبيه مبسط وأمثلة واضحة وتمرين املأ الفراغ التفاعلي [[الإجابة_الصحيحة | خيار_خاطئ_1 | خيار_خاطئ_2]] في نهايته.',
+                inspirations: Array.isArray(parsed.inspirations) ? parsed.inspirations : []
+            }
+        });
+    } catch (error) {
+        console.error('❌ خطأ في مسار إلهام الشريحة (inspire-section):', error.message);
+        res.status(500).json({ success: false, error: 'تعذر توليد الإلهام لهذه الشريحة حالياً.' });
+    }
+});
 
 
 
