@@ -243,7 +243,9 @@ const AcademyLab2 = () => {
       utterance.lang = 'es-ES';
     } else if (combinedContext.includes('صين') || combinedContext.includes('hsk') || combinedContext.includes('mandarin')) {
       utterance.lang = 'zh-CN';
-    } else {
+    }  else if (/[\uac00-\ud7af\u1100-\u11ff]/.test(textToSpeak) || combinedContext.includes('كوري') || combinedContext.includes('topik') || combinedContext.includes('korean')) {
+  utterance.lang = 'ko-KR';
+  } else {
       utterance.lang = 'en-US';
     }
 
@@ -1489,39 +1491,59 @@ const res = await axios.post(targetEndpoint, {
   };
 
 
-  // 🧠 دالة استخراج المفردات المكتسبة من الكورسات والدروس السابقة لتفعيل التكرار المتباعد (Spaced Repetition)
-  const extractPreviouslyLearnedVocab = (certState, currentCourseIdx, currentSecIdx = 0) => {
-    if (!certState || !Array.isArray(certState.courses)) return [];
-    const collected = new Set();
+// 🧠 دالة استخراج المفردات المكتسبة (من الكورسات/الوحدات السابقة + من الدروس السابقة في نفس الوحدة الحالية!)
+  const extractPreviouslyLearnedVocab = (certState, currentCourseIdx, currentSecIdx = 0, currentUnitForgedLessons = []) => {
+    if (!certState || !Array.isArray(certState.courses)) {
+      return { unitVocabSoFar: [], olderVocab: [] };
+    }
+    const olderCollected = new Set();
+    const currentUnitCollected = new Set();
 
-    const harvestFromSnippet = (snippet = '') => {
-      snippet.split('\n').forEach(line => {
+    const harvestFromLesson = (les, targetSet) => {
+      if (!les) return;
+      // 1. استخراج من استوديو الصوتيات (codeSnippet)
+      (les.codeSnippet || '').split('\n').forEach(line => {
         const match = line.match(/^\d+[.) -]+\s*([^🔊|]+)/);
         if (match && match[1]) {
           const cleanPhrase = match[1].trim();
           if (cleanPhrase.length >= 2 && cleanPhrase.length <= 35) {
-            collected.add(cleanPhrase);
+            targetSet.add(cleanPhrase);
+          }
+        }
+      });
+      // 2. استخراج الكلمات الأساسية من العمود الأول في جدول المفردات داخل content
+      (les.content || '').split('\n').forEach(line => {
+        if (line.trim().startsWith('|') && !line.includes('---') && !line.includes('المفردة')) {
+          const firstCol = (line.split('|')[1] || '').replace(/[*`]/g, '').trim();
+          if (firstCol && firstCol.length >= 2 && firstCol.length <= 30 && !/[\u0600-\u06FF]/.test(firstCol)) {
+            targetSet.add(firstCol);
           }
         }
       });
     };
 
-    // 1. جمع المفردات من الكورس السابق
+    // أ) جمع المفردات من الكورس السابق
     if (currentCourseIdx > 0 && certState.courses[currentCourseIdx - 1]?.sections) {
       certState.courses[currentCourseIdx - 1].sections.forEach(sec => {
-        (sec.lessons || []).forEach(les => harvestFromSnippet(les.codeSnippet));
+        (sec.lessons || []).forEach(les => harvestFromLesson(les, olderCollected));
       });
     }
 
-    // 2. جمع المفردات من الوحدات السابقة في نفس الكورس الحالي
+    // ب) جمع المفردات من الوحدات السابقة في نفس الكورس الحالي
     const currCourse = certState.courses[currentCourseIdx];
     if (currCourse?.sections) {
       currCourse.sections.slice(0, currentSecIdx).forEach(sec => {
-        (sec.lessons || []).forEach(les => harvestFromSnippet(les.codeSnippet));
+        (sec.lessons || []).forEach(les => harvestFromLesson(les, olderCollected));
       });
     }
 
-    return Array.from(collected).slice(-25);
+    // ج) الأهم: جمع المفردات التي تم تدريسها للتو في الدروس السابقة من نفس الوحدة الحالية!
+    (currentUnitForgedLessons || []).forEach(les => harvestFromLesson(les, currentUnitCollected));
+
+    return {
+      unitVocabSoFar: Array.from(currentUnitCollected).slice(-35),
+      olderVocab: Array.from(olderCollected).slice(-25)
+    };
   };
 
 
@@ -1591,17 +1613,22 @@ const res = await axios.post(targetEndpoint, {
               : 'http://localhost:5000/api/academy2/forge-lesson';
 
               
-const previouslyLearnedVocab = isLangCert
-            ? extractPreviouslyLearnedVocab(updatedCert, cIdx, sIdx)
-            : [];
+const vocabMemory = isLangCert
+            ? extractPreviouslyLearnedVocab(updatedCert, cIdx, sIdx, newLessonsArray)
+            : { unitVocabSoFar: [], olderVocab: [] };
 
           const res = await axios.post(lessonEndpoint, {
             courseTopic: contextualCourseTopic,
             targetLanguage: updatedCert.targetLanguage || targetLanguage,
             courseOrder: cIdx + 1,
-            previouslyLearnedVocab, // 👈 يفعّل التكرار المتباعد التراكمي بين الكورسات!
+            lessonOrderInUnit: lIdx + 1,
+            totalLessonsInUnit: baseLessonsToForge.length,
+            allUnitLessonTitles: baseLessonsToForge.map(item => item.title),
+            unitLearnedVocab: vocabMemory.unitVocabSoFar, // 👈 الكلمات التي شُرحت في الدروس السابقة من نفس الوحدة (يُمنع تكرارها في الجدول!)
+            previouslyLearnedVocab: vocabMemory.olderVocab, // 👈 الكلمات من الوحدات السابقة (للتكرار المتباعد)
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
+            lessonDescription: lesson.description || '',
             lessonCategory: lesson.lessonCategory || (isLangCert ? 'language_mastery' : 'code'),
             isProjectUnit: section.isProjectUnit || isScratchProject,
             difficulty: isLangCert ? difficulty : (isScratchProject ? 'pro_project_scratch_cert' : 'crash_eli5')
@@ -2282,6 +2309,7 @@ const previouslyLearnedVocab = isLangCert
                   <option value="الألمانية (German - Goethe/TestDaF)">🇩🇪 الألمانية (German)</option>
                   <option value="الإسبانية (Spanish - DELE)">🇪🇸 الإسبانية (Spanish)</option>
                   <option value="الصينية (Mandarin - HSK)">🇨🇳 الصينية (Mandarin)</option>
+                  <option value="الكورية (Korean - Hangul & TOPIK)">🇰🇷 الكورية (Korean)</option>
                 </select>
               </div>
 
