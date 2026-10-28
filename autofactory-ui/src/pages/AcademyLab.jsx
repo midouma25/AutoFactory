@@ -41,25 +41,63 @@ try {
     }
   };
 
-  // ==========================================
-  // 📐 2. هندسة الهيكل (Blueprint)
+// ==========================================
+  // 📐 2. هندسة الهيكل V2 (يربط جميع الخيارات الـ 11 في القائمة المنسدلة بمساراتها بدقة 100%)
   // ==========================================
   const handleGenerateBlueprint = async () => {
-    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة!');
+    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة أو المشروع أو اللغة!');
     setLoadingBlueprint(true);
+    setSelectedLesson(null);
+    setForgingStatus('idle');
+    setAiArchitectReport(null);
+
     try {
-      const res = await axios.post('http://localhost:5000/api/academy/blueprint1', { topic, difficulty });
+      let endpoint = 'http://localhost:5000/api/academy2/blueprint1';
+
+      if (
+        difficulty === 'lang_a0_to_c2_cert' ||
+        difficulty === 'lang_exam_prep_cert' ||
+        difficulty === 'lang_mega_a0_c2_exam' ||
+        (difficulty === 'pro_certificate_eli5' && isTopicLanguageRelated)
+      ) {
+        endpoint = 'http://localhost:5000/api/academy2/lang-cert/blueprint-series';
+      } else if (difficulty === 'pro_project_scratch_cert') {
+        endpoint = 'http://localhost:5000/api/academy2/project-cert/blueprint-series';
+      } else if (difficulty === 'pro_certificate_eli5') {
+        endpoint = 'http://localhost:5000/api/academy2/blueprint-certificate';
+      }
+
+      const res = await axios.post(endpoint, { topic, difficulty, targetLanguage });
       if (res.data.success) {
-        setBlueprint(res.data.data);
-        setForgingStatus('idle'); // إعادة تعيين الحالة
-        setSelectedLesson(null);
+        const receivedData = res.data.data;
+        if (difficulty === 'pro_project_scratch_cert' || difficulty === 'single_project_scratch') {
+          receivedData.isProjectScratchSeries = true;
+        }
+        if (
+          difficulty === 'lang_a0_to_c2_cert' ||
+          difficulty === 'lang_exam_prep_cert' ||
+          difficulty === 'lang_mega_a0_c2_exam' ||
+          receivedData.isLanguageSeries ||
+          isTopicLanguageRelated
+        ) {
+          receivedData.isLanguageSeries = true;
+          receivedData.targetLanguage = receivedData.targetLanguage || targetLanguage;
+        }
+        if (Array.isArray(receivedData.courses)) {
+          receivedData.courses = reindexCoursesSequence(receivedData.courses);
+        }
+        setBlueprint(receivedData);
+        setActiveProjectId(null);
+        setActiveProjectName(receivedData.courseTitle || receivedData.certificateTitle || topic);
       }
     } catch (err) {
-      alert('حدث خطأ أثناء هندسة الهيكل.');
+      alert('حدث خطأ أثناء هندسة الهيكل. تأكد من تشغيل السيرفر (5000).');
     } finally {
       setLoadingBlueprint(false);
     }
   };
+
+  
 
 // ==========================================
   // ✍️ 3. تأليف الكورس (The Forge - مع نظام الزعماء)

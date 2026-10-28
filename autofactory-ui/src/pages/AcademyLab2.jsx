@@ -196,17 +196,24 @@ const AcademyLab2 = () => {
   const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
   const [speakingRate, setSpeakingRate] = useState(1.0);
 
-  // التحقق من نوع المسار الحالي (بناء مشروع بدون اختبارات vs شهادة لغات واختبارات دولية)
+// التحقق الذكي من نوع المسار الحالي (مشروع بدون اختبارات vs لغة أجنبية شهادة أو كورس منفرد)
   const isNoExamProjectMode = 
     difficulty === 'pro_project_scratch_cert' || 
     difficulty === 'single_project_scratch' || 
     Boolean(blueprint?.isProjectScratchSeries);
 
+  const isTopicLanguageRelated = /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|اسباني|صيني|كوري|نطق|صوتيات|حروف|محادثة|قواعد|ielts|toefl|jlpt|delf|dalf|goethe|testdaf|dele|hsk|topik|hangul|kanji|a0|a1|a2|b1|b2|c1|c2/i.test(
+    `${topic} ${blueprint?.courseTitle || ''} ${blueprint?.certificateTitle || ''}`
+  );
+
   const isLanguageMasteryMode =
     difficulty === 'lang_a0_to_c2_cert' ||
     difficulty === 'lang_exam_prep_cert' ||
     difficulty === 'lang_mega_a0_c2_exam' ||
-    Boolean(blueprint?.isLanguageSeries);
+    Boolean(blueprint?.isLanguageSeries) ||
+    (!isNoExamProjectMode && isTopicLanguageRelated);
+
+
 
   // ============================================================================
   // 🔊 دالة تشغيل النطق الصوتي التفاعلي لنصوص الاستماع والمحادثات (Web Speech Synthesis)
@@ -1439,17 +1446,19 @@ const res = await axios.post(endpoint, { topic, difficulty, targetLanguage });
 
     try {
 const res = await axios.post(targetEndpoint, {
-  certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
-  targetLanguage: targetCert.targetLanguage || targetLanguage, // 👈 أضف هذا السطر
-  mainAnalogy: targetCert.mainAnalogy,
-  courseOrder: cIdx + 1,
-  totalCourses: targetCert.courses.length,
-  currentCourseTitle: targetCourse.courseTitle,
-  currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
-  githubProject: targetCourse.githubProject,
-  previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
-  nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
-});
+        certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
+        targetLanguage: targetCert.targetLanguage || targetLanguage,
+        difficulty, // 👈 مهم جداً لكي يعرف السيرفر نوع الشهادة المختارة!
+        mainAnalogy: targetCert.mainAnalogy,
+        courseOrder: cIdx + 1,
+        totalCourses: targetCert.courses.length,
+        currentCourseTitle: targetCourse.courseTitle,
+        currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
+        githubProject: targetCourse.githubProject,
+        previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
+        nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
+      });
+
 
       if (res.data.success) {
         const updated = JSON.parse(JSON.stringify(targetCert));
@@ -1815,14 +1824,23 @@ const vocabMemory = isLangCert
         setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: lesson.title });
 
         try {
+          const isSingleLang = Boolean(updatedBlueprint.isLanguageSeries || isLanguageMasteryMode);
           const targetEndpoint = isScratchSingle
             ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
-            : 'http://localhost:5000/api/academy2/forge-lesson';
+            : isSingleLang
+              ? 'http://localhost:5000/api/academy2/lang-cert/forge-language-lesson'
+              : 'http://localhost:5000/api/academy2/forge-lesson';
 
           const res = await axios.post(targetEndpoint, {
             courseTopic: updatedBlueprint.courseTitle,
+            targetLanguage: updatedBlueprint.targetLanguage || targetLanguage,
+            courseOrder: 1,
+            lessonOrderInUnit: lIdx + 1,
+            totalLessonsInUnit: section.lessons.length,
+            allUnitLessonTitles: section.lessons.map(item => item.title),
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
+            lessonDescription: lesson.description || '',
             isProjectUnit: section.isProjectUnit || isScratchSingle,
             difficulty: difficulty
           });

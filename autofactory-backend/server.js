@@ -4152,21 +4152,84 @@ app.post('/api/academy2/forge-lesson-v2', async (req, res) => {
     }
 });
 
-// جعل المسار القديم blueprint1 يدعم الشهادة المهنية أيضاً للتوافق التام مع الواجهة
+// 🌍 كاشف موحد لجميع اللغات الـ 7 والاختبارات العالمية
+const isLanguageTopicText = (txt = '') =>
+    /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|اسباني|صيني|كوري|نطق|صوتيات|حروف|أبجدية|محادثة|مفردات|IELTS|TOEFL|JLPT|DELF|DALF|Goethe|TestDaF|DELE|HSK|TOPIK|Hangul|Kanji|Pre-A1|A0|A1|A2|B1|B2|C1|C2|Phonics|IPA/i.test(txt);
+
+// 🗺️ مسار blueprint1 الذكي (يدعم الكورس المنفرد البرمجي، أو الكورس المنفرد اللغوي، أو مشروع من الصفر بدون اختبارات)
 app.post('/api/academy2/blueprint1', async (req, res) => {
-    const { topic, difficulty } = req.body;
+    const { topic, difficulty = 'crash_eli5', targetLanguage = '' } = req.body;
     if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الدورة.' });
 
-    // إذا اختار المستخدم الشهادة المهنية، نوجهه لنفس منطق الشهادة المهنية الخارقة
-    if (difficulty === 'pro_certificate_eli5' || difficulty?.includes('Bootcamp') || difficulty?.includes('معسكر')) {
-        req.url = '/api/academy2/blueprint-certificate';
-        return app._router.handle(req, res, () => {});
-    }
-
     try {
-        const singlePrompt = `أنت عميد أكاديمية تقنية. صمم هيكل كراش كورس شامل من 6 إلى 10 وحدات (Sections)، وفي كل وحدة من 5 إلى 10 دروس متدرجة حول: "${topic}".
-        🚨 إلزامي: الوحدة الأخيرة يجب أن تكون مخصصة بالكامل لبناء مشروع تطبيقي بسيط خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.
-        رد بصيغة JSON فقط:
+        const isLangSingle = isLanguageTopicText(`${topic} ${targetLanguage}`);
+        const isSingleScratchProject = difficulty === 'single_project_scratch';
+
+        // 1. إذا كان المستخدم يبني كراش كورس منفرد لبناء مشروع من الصفر (بدون اختبارات)
+        if (isSingleScratchProject) {
+            const scratchPrompt = `أنت كبير مهندسي البرمجيات. صمم هيكل "كراش كورس عملي لبناء مشروع كامل من الصفر للنهاية (بدون أي اختبارات)" حول: "${topic}".
+            قسّم بناء المشروع إلى (6 إلى 8 وحدات عملية متسلسلة)، وداخل كل وحدة (5 إلى 7 خطوات بناء كودية عملية مع الـ AI Agent).
+            رد بصيغة JSON صالحة 100% فقط:
+            {
+              "isCertificateSeries": false,
+              "isProjectScratchSeries": true,
+              "courseTitle": "${topic}",
+              "courseDescription": "ورشة بناء عملية خطوة بخطوة وملفاً بملف من الصفر حتى الإطلاق بمساعدة AI Agent وبدون اختبارات.",
+              "blueprint": [
+                {
+                  "coursePrefix": "المرحلة 1",
+                  "sectionName": "الوحدة 1: ...",
+                  "isProjectUnit": true,
+                  "lessons": [ { "title": "الخطوة 1: ...", "description": "وصف الخطوة", "lessonCategory": "project_step" } ]
+                }
+              ]
+            }`;
+            const raw = await generateContentSmart(scratchPrompt, "صمم هيكل بناء المشروع الآن بصيغة JSON.", 0.75, 18000);
+            return res.json({ success: true, data: safeParseAIJson(raw) });
+        }
+
+        // 2. إذا كان الكورس المنفرد لتعليم لغة أجنبية (بمستوى E-Rank / B-Rank / S-Rank / crash_eli5)
+        if (isLangSingle) {
+            let mappedCourseOrder = 1;
+            if (difficulty.includes('B-Rank') || difficulty.includes('متوسط')) mappedCourseOrder = 8; // B1/B2
+            else if (difficulty.includes('S-Rank') || difficulty.includes('خبير')) mappedCourseOrder = 14; // C1/C2
+            else if (difficulty.includes('Bootcamp') || difficulty.includes('معسكر')) mappedCourseOrder = 4; // A1-B1
+
+            const tierSpec = getCEFRProgressionSpec(topic, '', '', difficulty, mappedCourseOrder, targetLanguage || topic);
+            const { langProfile } = tierSpec;
+
+            const singleLangPrompt = `${langProfile.instituteRole}
+            صمم هيكل كراش كورس لغوي متكامل حول: "${topic}" في **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** بمستوى (${tierSpec.cefrLabel} - ${difficulty}).
+            ${langProfile.specialMorphologyRule}
+            قسّم الكورس إلى (6 إلى 7 وحدات متدرجة)، وداخل كل وحدة ضع **المحطات الـ 6 التخصصية الثابتة**:
+            (الدرس 1: المفردات والقوالب، الدرس 2: المحادثة الواقعية، الدرس 3: هندسة الجملة بالمكعبات، الدرس 4: معمل الصوتيات والنطق، الدرس 5: مختبر الاستماع والترديد، الدرس 6: ورشة القراءة والكتابة).
+            رد بصيغة JSON صالحة 100% فقط:
+            {
+              "isCertificateSeries": false,
+              "isLanguageSeries": true,
+              "targetLanguage": "${langProfile.nameAr} (${langProfile.nameEn})",
+              "speechLang": "${langProfile.speechLang}",
+              "courseTitle": "${topic}",
+              "courseDescription": "كورس تفاعلي متكامل في اللغة ${langProfile.nameAr} بنظام الشرائح البصرية والصوتيات (${tierSpec.cefrLabel}).",
+              "blueprint": [
+                {
+                  "coursePrefix": "الوحدة 1",
+                  "sectionName": "الوحدة 1: ...",
+                  "isProjectUnit": false,
+                  "lessons": [
+                    { "title": "الدرس 1: المفردات والقوالب — ...", "description": "...", "lessonCategory": "language_mastery" }
+                  ]
+                }
+              ]
+            }`;
+            const raw = await generateContentSmart(singleLangPrompt, "صمم هيكل كورس اللغة الآن بصيغة JSON.", 0.72, 20000);
+            return res.json({ success: true, data: sanitizeLanguageLessonJSON(safeParseAIJson(raw)) });
+        }
+
+        // 3. الكورس التقني/البرمجي المنفرد (يتكيف مع crash_eli5, E-Rank, B-Rank, S-Rank, Bootcamp)
+        const singlePrompt = `أنت عميد أكاديمية تقنية. صمم هيكل كورس شامل من 6 إلى 10 وحدات (Sections)، وفي كل وحدة من 5 إلى 8 دروس متدرجة حول: "${topic}" بمستوى وأسلوب: "${difficulty}".
+        🚨 إلزامي: الوحدة الأخيرة يجب أن تكون مخصصة بالكامل لبناء مشروع تطبيقي خطوة بخطوة بمساعدة AI Agent ورفعه على GitHub.
+        رد بصيغة JSON صالحة 100% فقط:
         {
           "isCertificateSeries": false,
           "courseTitle": "عنوان الكورس",
@@ -4181,9 +4244,8 @@ app.post('/api/academy2/blueprint1', async (req, res) => {
           ]
         }`;
 
-        const rawContent = await generateContentSmart(singlePrompt, "صمم الهيكل الآن بصيغة JSON.", 0.8, 20000);
-        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-        res.json({ success: true, data: parsedContent });
+        const rawContent = await generateContentSmart(singlePrompt, "صمم الهيكل الآن بصيغة JSON.", 0.78, 20000);
+        res.json({ success: true, data: safeParseAIJson(rawContent) });
     } catch (error) {
         res.status(500).json({ success: false, error: 'حدث خطأ في تصميم المنهج.' });
     }
@@ -4200,9 +4262,7 @@ app.post('/api/academy2/forge-boss', async (req, res) => {
     const { courseTopic, lesson1Content, lesson2Content } = req.body;
 
     try {
-        const isLangBoss = /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|صيني|نطق|صوتيات|حروف|IELTS|TOEFL|JLPT|DELF|Pre-A1|A0|A1|A2|B1|B2|C1|C2|Phonics|CVC|IPA/i.test(
-            `${courseTopic} ${(lesson1Content || '').slice(0, 400)}`
-        );
+    const isLangBoss = isLanguageTopicText(`${courseTopic} ${(lesson1Content || '').slice(0, 400)}`);
 
         const systemPrompt = isLangBoss
             ? `أنت أستاذ لغات خبير تختبر طالباً فيما تعلمه للتو في الدرسين السابقين فقط!
@@ -4558,9 +4618,7 @@ app.post('/api/academy2/forge-unit-exam', async (req, res) => {
     const { courseTopic, sectionName, unitLessonsSummary } = req.body;
 
     try {
-        const isLanguageExam = /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|صيني|نطق|صوتيات|حروف|أبجدية|Pre-A1|A0|A1|A2|B1|B2|C1|C2|IELTS|TOEFL|JLPT|DELF|Phonics|CVC/i.test(
-            `${courseTopic} ${sectionName} ${unitLessonsSummary}`
-        );
+    const isLanguageExam = isLanguageTopicText(`${courseTopic} ${sectionName} ${unitLessonsSummary}`);
 
         const systemPrompt = isLanguageExam
             ? `أنت كبير ممتحني جامعة كامبريدج والاختبارات الدولية (Cambridge & IELTS Chief Examiner).
@@ -4792,7 +4850,6 @@ app.post('/api/academy2/lang-cert/neural-tts', async (req, res) => {
 
 // ============================================================================
 // 🤖 (د) المصحح المزدوج الذكي: يفحص الإملاء والنبرات والتذكير والتأنيث في اللغات + يفحص الأكواد في البرمجة!
-// استبدل مسار /api/academy2/verify-student-code القديم بهذا المسار المتطور:
 // ============================================================================
 app.post('/api/academy2/verify-student-code', async (req, res) => {
     try {
@@ -4802,10 +4859,7 @@ app.post('/api/academy2/verify-student-code', async (req, res) => {
             return res.status(400).json({ success: false, error: 'يرجى كتابة إجابتك أولاً قبل التحقق.' });
         }
 
-        const isLang = Boolean(
-            isLanguageTask ||
-            /فرنس|إنجليز|يابان|ألمان|إسبان|صين|جملة|كلمة|أداة|نطق|تهجئة|C'est|Bonjour|chat|table/i.test(`${taskQuestion} ${solutionCode} ${targetLanguage}`)
-        );
+        const isLang = Boolean(isLanguageTask || isLanguageTopicText(`${taskQuestion} ${solutionCode} ${targetLanguage}`));
 
         const systemPrompt = isLang
             ? `أنت كبير مصححي اختبارات اللغات الدولية (DELF/DALF للفرنسية، IELTS للإنجليزية، JLPT لليابانية، Goethe للألمانية).
@@ -4928,10 +4982,7 @@ app.post('/api/academy2/enhance-certificate-courses', async (req, res) => {
 
         console.log(`\n🚀 [AI Optimizer] جاري فحص وترقية الشهادة المهنية: "${certificateTitle}"...`);
 
-        const isLang = Boolean(
-            isLanguageSeries ||
-            /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|اسباني|ielts|toefl|jlpt|delf|dalf|a0|a1|a2|b1|b2|c1|c2/i.test(certificateTitle)
-        );
+        const isLang = Boolean(isLanguageSeries || isLanguageTopicText(certificateTitle));
 
         const systemPrompt = isLang
             ? `أنت عميد معهد كامبريدج للغات (Cambridge & CEFR Chief Architect) وأعظم خبير في تدريس اللغات من الحروف (Pre-A1/A0) إلى طلاقة المتحدث الأصلي (C2 Native) واجتياز الاختبارات العالمية (IELTS/JLPT/DELF).
@@ -5298,20 +5349,26 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
 
     const cleanLocalCtx = `${isolatedCourseTitle} ${sectionName} ${lessonTitle}`;
 
-    // 3. التحديد الحتمي للمستوى (Deterministic Tier Detection)
+// 3. التحديد الحتمي للمستوى حسب الخيار المختار في القائمة المنسدلة ورقم الكورس
     let detectedTier = 'A1';
 
-    if (courseNum && difficulty !== 'lang_exam_prep_cert') {
+    if (difficulty === 'lang_exam_prep_cert') {
+        detectedTier = 'EXAM_MASTERY';
+    } else if (courseNum) {
         if (courseNum === 1) detectedTier = 'A0_PHONICS';
         else if (courseNum === 2) detectedTier = 'A0_SENTENCE';
         else if (courseNum === 3 || courseNum === 4) detectedTier = 'A1';
         else if (courseNum >= 5 && courseNum <= 7) detectedTier = 'A2';
         else if (courseNum >= 8 && courseNum <= 10) detectedTier = 'B1';
         else if (courseNum >= 11 && courseNum <= 13) detectedTier = 'B2';
-        else if (courseNum >= 14 && courseNum <= 16) detectedTier = 'C1_C2';
-        else if (courseNum >= 17) detectedTier = 'EXAM_MASTERY';
-    } else if (difficulty === 'lang_exam_prep_cert') {
-        detectedTier = 'EXAM_MASTERY';
+        else if (difficulty === 'lang_a0_to_c2_cert') {
+            // في شهادة A0->C2 الشاملة: الكورسات من 14 فما فوق كلها قمة الطلاقة C1/C2 Native
+            detectedTier = 'C1_C2';
+        } else {
+            // في الشهادة الإمبراطورية المدمجة (18-22 كورس): 14-16 لـ C1/C2، و 17+ لمعسكر الاختبار العالمي
+            if (courseNum >= 14 && courseNum <= 16) detectedTier = 'C1_C2';
+            else if (courseNum >= 17) detectedTier = 'EXAM_MASTERY';
+        }
     } else {
         if (/Pre-A1|A0\.1|Phonics|مخارج الأصوات|الحروف|الأبجدية|CVC/i.test(cleanLocalCtx)) {
             detectedTier = 'A0_PHONICS';
@@ -5327,10 +5384,11 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
             detectedTier = 'B2';
         } else if (/C1\b|C1\.1|C1\.2|C2\b/i.test(cleanLocalCtx)) {
             detectedTier = 'C1_C2';
-        } else if (/IELTS|TOEFL|JLPT|DELF|DALF|TestDaF|DELE|HSK|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) {
+        } else if (/IELTS|TOEFL|JLPT|DELF|DALF|TestDaF|DELE|HSK|TOPIK|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) {
             detectedTier = 'EXAM_MASTERY';
         }
     }
+
 
     const strictLangLockRule = langProfile.id !== 'en'
         ? `\n🚨🚨 قانون الهوية اللغوية القاطع (STRICT LANGUAGE LOCK):
@@ -5954,35 +6012,37 @@ app.post('/api/academy2/lang-cert/blueprint-series', async (req, res) => {
     if (!topic) return res.status(400).json({ error: 'الرجاء توفير موضوع الشهادة اللغوية.' });
 
     try {
-        const langProfile = detectTargetLanguageProfile(topic, targetLanguage);
+ const langProfile = detectTargetLanguageProfile(topic, targetLanguage);
         const isMega = difficulty === 'lang_mega_a0_c2_exam';
         const isExamOnly = difficulty === 'lang_exam_prep_cert';
-        const targetCoursesCount = isMega ? '16 إلى 20' : (isExamOnly ? '10 إلى 12' : '14 إلى 16');
+        const targetCoursesCount = isMega ? '18 إلى 22' : (isExamOnly ? '10 إلى 12' : '14 إلى 16');
 
-        console.log(`\n🌍 [Language Series Architect V7 - ${langProfile.nameAr}] جاري هندسة شهادة محبوكة التدرج (${targetCoursesCount} كراش كورس)...`);
+        console.log(`\n🌍 [Language Series Architect V7 - ${langProfile.nameAr} - Mode: ${difficulty}] جاري هندسة شهادة محبوكة التدرج (${targetCoursesCount} كراش كورس)...`);
 
         const progressionArchitecture = isExamOnly
-            ? `قسّم الشهادة إلى (${targetCoursesCount} كراش كورس) تغطي بالتتابع الهندسي الدقيق جميع أقسام ومهارات اختبار (${langProfile.examName}) في اللغة ${langProfile.nameAr} (من تشريح معايير التقييم، الصوتيات المتقدمة، القراءة السريعة وكشف الفخاخ، الاستماع التحليلي، القواعد البلاغية، الكتابة الأكاديمية، والمحاكاة الشفهية الكاملة).`
-            : `🚨 **المعمارية التصاعدية الإلزامية للأطوار الأربعة (${targetCoursesCount} كراش كورس متسلسل بدون أي فجوة):**
-            يجب أن تبني الكراش كورسات بالترتيب المنطقي الدقيق التالي بحيث يمتلك كل كورس عنواناً يجمع بين (المستوى القياسي + الركن الصوتي/النحوي + الموقف الحياتي):
-            
-            - **🟢 الطور الأول: فك الشفرة الصوتية والكتابية وبناء الجملة النواة (الكورسات 1 ⬅️ 2 | Pre-A1 / A0):**
-              * **كراش كورس 1 (Pre-A1 / A0.1):** تأسيس نظام الكتابة والحروف ومخارج الأصوات في اللغة ${langProfile.nameAr} (${langProfile.a0PhonicsUnits.replace(/\s+/g, ' ').slice(0, 180)}...) وأول 150 مفردة ملموسة.
-              * **كراش كورس 2 (CEFR A0.2):** هندسة الجملة التأسيسية الأولى بالمكعبات في اللغة ${langProfile.nameAr} (${langProfile.a0SentenceRules}) وتقديم النفس والأشياء.
-            
-            - **🔵 الطور الثاني: الاستقلالية الحياتية والأزمنة والتراكيب الأساسية (الكورسات 3 ⬅️ 6 | CEFR A1 ➔ A2):**
-              * **كراش كورس 3 (CEFR A1.1):** الروتين اليومي، الأوقات، التسوق، والمطاعم مع تأسيس (${langProfile.a1Grammar.slice(0, 90)}...).
-              * **كراش كورس 4 (CEFR A1.2):** وصف الأماكن، السكن، العائلة، والخطط القريبة مع إتمام قواعد المستوى A1 ومختبر النطق التطبيقي.
-              * **كراش كورس 5 (CEFR A2.1):** سرد التجارب الماضية، القصص، السفر، والمطار مع إتقان (${langProfile.a2Grammar.slice(0, 90)}...).
-              * **كراش كورس 6 (CEFR A2.2):** المقارنات، المستقبل، التفاعلات الاجتماعية والصحية، والربط بين الجمل بمستوى A2+.
+            ? `🎯 **المعمارية التكتيكية لمعسكر الاختبار العالمي (${targetCoursesCount} كراش كورس مخصص لاجتياز ${langProfile.examName}):**
+            قسّم الشهادة إلى (${targetCoursesCount} كراش كورس) تغطي بالتتابع الهندسي الدقيق جميع أقسام ومهارات اختبار (${langProfile.examName}) في اللغة ${langProfile.nameAr}:
+            - الكورسات 1 ⬅️ 2: تشريح خوارزمية اختبار (${langProfile.examName})، معايير المصححين الرسمية، والثروة اللفظية الأكاديمية عالية التردد.
+            - الكورسات 3 ⬅️ 4: الهندسة النحوية والتراكيب المعقدة التي ترفع التقييم فوراً في (${langProfile.examName}).
+            - الكورسات 5 ⬅️ 6: تكتيكات الفهم السمعي السريع (Listening Mastery) وكشف الفخاخ السمعية وتغير النغمات/اللهجات.
+            - الكورسات 7 ⬅️ 8: استراتيجيات القراءة التحليلية السريعة (Skimming, Scanning & Trap Elimination).
+            - الكورسات 9 ⬅️ 10: هندسة الكتابة الأكاديمية والحجاجية الممنهجة (Academic & Essay Writing).
+            - الكورسات 11 ⬅️ 12: محاكاة المقابلة الشفهية الرسمية (Speaking Mock Exams) والاختبارات التجريبية الكاملة تحت ضغط الوقت.`
+            : isMega
+                ? `👑 **المعمارية الإمبراطورية المدمجة (18 إلى 22 كراش كورس متسلسل: من الحروف A0 إلى C2 + المعسكر الكامل لاختبار ${langProfile.examName}):**
+                يجب أن تبني سلسلة ضخمة ومترابطة من (18 إلى 22 كراش كورس) مقسمة إلى 5 أطوار متتابعة بدون أي فجوة:
+                - **🟢 الطور 1 (الكورسات 1 ⬅️ 2 | Pre-A1 / A0):** كورس 1 للحروف والأصوات ونظام الكتابة (${langProfile.a0PhonicsUnits.replace(/\s+/g, ' ').slice(0, 150)}...) + كورس 2 لبناء الجملة التأسيسية الأولى بالمكعبات (${langProfile.a0SentenceRules}).
+                - **🔵 الطور 2 (الكورسات 3 ⬅️ 6 | CEFR A1 ➔ A2):** كورس 3 و 4 للمستوى A1 (${langProfile.a1Grammar}) ومواقف الحياة اليومية + كورس 5 و 6 للمستوى A2 (${langProfile.a2Grammar}) والسرد والماضي والمستقبل والسفر.
+                - **🟣 الطور 3 (الكورسات 7 ⬅️ 12 | CEFR B1 ➔ B2):** الكورسات 7-9 للمستوى B1 (${langProfile.b1Grammar}) والكلام المتصل السريع + الكورسات 10-12 للمستوى B2 (${langProfile.b2Grammar}) والطلاقة المهنية والمناقشة.
+                - **🟡 الطور 4 (الكورسات 13 ⬅️ 16 | CEFR C1 ➔ C2 Native):** البلاغة العليا، التعابير الاصطلاحية الدقيقة، والكتابة والارتجال بمستوى المتحدث الأصلي (${langProfile.c1c2Grammar}).
+                - **🏆 الطور 5 (الكورسات 17 ⬅️ 20+ | معسكر اجتياز الاختبار العالمي ${langProfile.examName}):** 4 إلى 6 كورسات ختامية مخصصة بالكامل لتكتيكات الاستماع، القراءة السريعة، الكتابة الأكاديمية، والمحادثة الرسمية لاكتساح اختبار (${langProfile.examName}) بأعلى درجة!`
+                : `🌍 **المعمارية الشاملة لإتقان اللغة من الصفر للطلاقة (14 إلى 16 كراش كورس من Pre-A1/A0 إلى C2 Native):**
+                قسّم الشهادة إلى (14 إلى 16 كراش كورس) عبر 4 أطوار متتابعة تركز 100% على الطلاقة الشاملة (صوتيات، استماع، تحدث، قواعد، قراءة وكتابة):
+                - **🟢 الطور 1 (الكورسات 1 ⬅️ 2 | Pre-A1 / A0):** كورس 1 للحروف والأصوات ونظام الكتابة + كورس 2 لبناء الجملة الأولى بالمكعبات (${langProfile.a0SentenceRules}).
+                - **🔵 الطور 2 (الكورسات 3 ⬅️ 6 | CEFR A1 ➔ A2):** كورس 3 و 4 للمستوى A1 (${langProfile.a1Grammar}) + كورس 5 و 6 للمستوى A2 (${langProfile.a2Grammar}).
+                - **🟣 الطور 3 (الكورسات 7 ⬅️ 12 | CEFR B1 ➔ B2):** الكورسات 7-9 للمستوى B1 (${langProfile.b1Grammar}) والكلام المتصل + الكورسات 10-12 للمستوى B2 (${langProfile.b2Grammar}) والتواصل المهني.
+                - **👑 الطور 4 (الكورسات 13 ⬅️ 16 | CEFR C1 ➔ C2 Native):** إتقان البلاغة العليا، الظلال الدلالية، والكتابة والتحدث بطلاقة المتحدث الأصلي (${langProfile.c1c2Grammar}).`;
 
-            - **🟣 الطور الثالث: الطلاقة، الكلام المتصل السريع، والعمق النحوي (الكورسات 7 ⬅️ 12 | CEFR B1 ➔ B2):**
-              * **كراش كورس 7 إلى 9 (CEFR B1 ➔ B1+):** الانتقال إلى الجمل المركبة، السرد المتقدم، الشروط، وإتقان (${langProfile.b1Grammar}) مع كورس مخصص لأسرار الكلام المتصل السريع وفهم المتحدث الأصلي.
-              * **كراش كورس 10 إلى 12 (CEFR B2 ➔ B2+):** الطلاقة المهنية والأكاديمية، المتلازمات اللفظية، المحاججة والإقناع، وإتقان (${langProfile.b2Grammar}).
-
-            - **👑 الطور الرابع: الذروة البلاغية واكتساح اختبار (${langProfile.examName}) (الكورسات 13+ | CEFR C1 ➔ C2 & Exam Mastery):**
-              * **كراش كورس 13 إلى 14 (CEFR C1 ➔ C2 Native):** البلاغة العليا، التعابير الاصطلاحية الدقيقة، والكتابة والارتجال بمستوى المتحدث الأصلي (${langProfile.c1c2Grammar}).
-              * **الكورسات الختامية (Exam Mastery):** المعسكر التكتيكي الشامل لاكتساح اختبار (${langProfile.examName}) في الأقسام الأربعة (Listening, Reading, Writing, Speaking).`;
 
         const systemPrompt = `${langProfile.instituteRole}
         أنت تصمم الآن أقوى **"شهادة مهنية عالمية لإتقان اللغة ${langProfile.nameAr} (${langProfile.nameEn})"** بنظام القراءة التفاعلية، المخططات البصرية، والصوتيات الناطقة (تتفوق على كورسات Udemy و Cambridge).
@@ -7544,49 +7604,33 @@ app.post('/api/academy2/surgeon/inspire-section', async (req, res) => {
 
 
 // ============================================================================
-// 🌍 1. مسار توليد اختبار لغوي معياري جديد بالذكاء الاصطناعي (Adaptive CEFR أو 1:1 IELTS/DELF/JLPT)
+// 🌍 1. مسار توليد اختبار لغوي عميق وفق نظرية الاستجابة للمفردة (IRT) والطبقات الـ 4
 // ============================================================================
 app.post('/api/academy2/lang-exam/generate', async (req, res) => {
-  const { targetLanguage = 'الإنجليزية', langCode = 'en', examMode = 'cherif_adaptive', officialExamName = 'IELTS Academic' } = req.body;
+  const {
+    targetLanguage = 'الإنجليزية',
+    officialExamName = 'IELTS Academic / TOEFL iBT',
+    finalBossTitle = ''
+  } = req.body;
 
   try {
-    const systemPrompt = `أنت كبير مصممي الاختبارات الدولية المعتمدة (${officialExamName} & CEFR Psychometrician).
-قم بتوليد اختبار كفاءة لغوية احترافي في اللغة (${targetLanguage}) بنمط (${examMode === 'official_replica' ? `محاكاة رسمية طبق الأصل لاختبار ${officialExamName}` : 'اختبار تكيّفي شامل متدرج من A1 إلى C2'}).
+    const systemPrompt = `أنت كبير علماء القياس النفسي واللغوي (Chief Psychometrician) ومصمم اختبارات (${officialExamName}) و(EF SET / Duolingo DET).
+قم بتوليد بنك اختبار تشخيصي ومحاكاة رسمية للغة (${targetLanguage}) يراعي:
+1. تصميم المشتتات وفق نظرية (IRT Distractor Analysis):
+   - خيار يصطاد طالب A2 (يحتوي على كلمات ذُكرت حرفياً في النص لكن بمعنى مضلل).
+   - خيار يصطاد طالب B1/B2 (مرادف جزئي يتجاهل أداة نفي أو شرطاً زمنياً).
+   - الجواب الصحيح لطالب C1/C2 يعتمد على إعادة الصياغة (Paraphrasing) والاستنتاج المبطن (Inference).
+2. تضمين الطبقات الأربع التشخيصية (Register Shifting، Fossilized Errors & L1 Interference، وSpontaneous Stress/Boundary Roleplay).
+3. تضمين مهمة "الزعيم الأخير" الخاصة بهذه اللغة: (${finalBossTitle}).
 
-رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
-{
-  "examTitle": "عنوان الاختبار الرسمي",
-  "listeningSection": {
-    "audioScript": "نص استماع أكاديمي/حياتي أصيل باللغة المستهدفة فقط (من 4 إلى 5 جمل غنية بالتفاصيل)",
-    "questions": [
-      { "id": "l1", "cefrLevel": "A2", "question": "سؤال باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 0 },
-      { "id": "l2", "cefrLevel": "B1", "question": "سؤال باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 1 },
-      { "id": "l3", "cefrLevel": "C1", "question": "سؤال باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 2 }
-    ]
-  },
-  "readingAndGrammarSection": {
-    "passage": "قطعة قراءة احترافية باللغة المستهدفة (5-6 جمل)",
-    "questions": [
-      { "id": "r1", "cefrLevel": "A1", "question": "سؤال قواعد تأسيسي باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 0 },
-      { "id": "r2", "cefrLevel": "A2", "question": "سؤال قواعد/مفردات باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 1 },
-      { "id": "r3", "cefrLevel": "B1", "question": "سؤال تراكيب باللغة المستهدفة", "options": ["...", "...", "...", "..."], "correctIndex": 2 },
-      { "id": "r4", "cefrLevel": "B2", "question": "سؤال استيعاب قرائي عميق حول القطعة", "options": ["...", "...", "...", "..."], "correctIndex": 1 },
-      { "id": "r5", "cefrLevel": "C1", "question": "سؤال بلاغة/قواعد متقدمة جداً C1/C2", "options": ["...", "...", "...", "..."], "correctIndex": 0 }
-    ]
-  },
-  "writingSection": {
-    "taskType": "${officialExamName} Writing Task",
-    "prompt": "موضوع مقال أو مهمة كتابية رسمية باللغة المستهدفة",
-    "minWords": 80
-  },
-  "speakingSection": {
-    "part1Question": "سؤال تعارف مباشر باللغة المستهدفة",
-    "cueCardTopic": "موضوع بطاقة تحدث تفصيلية (Cue Card) باللغة المستهدفة",
-    "part3Question": "سؤال نقاش تحليلي عميق باللغة المستهدفة"
-  }
-}`;
+رد بصيغة JSON صالحة 100% فقط بنفس هيكل buildDeepPsychometricBank المعتمد.`;
 
-    const raw = await generateContentSmart(systemPrompt, `ولّد اختباراً معيارياً للغة ${targetLanguage} بصيغة JSON.`, 0.7, 8000);
+    const raw = await generateContentSmart(
+      systemPrompt,
+      `ولّد اختباراً سيكومترياً متكاملاً للغة ${targetLanguage} بصيغة JSON.`,
+      0.7,
+      10000
+    );
     const parsed = safeParseAIJson(raw);
     res.json({ success: true, data: parsed });
   } catch (err) {
@@ -7595,41 +7639,67 @@ app.post('/api/academy2/lang-exam/generate', async (req, res) => {
 });
 
 // ============================================================================
-// 🏆 2. مسار تصحيح الكتابة والمحادثة وإصدار التقرير التشخيصي بمعايير IELTS / CEFR
+// 🔬 2. مسار التشريح العميق للأداء عبر الأركان الـ 4 ونظرية اللغة البينية (Interlanguage Theory)
 // ============================================================================
 app.post('/api/academy2/lang-exam/evaluate', async (req, res) => {
   const {
     targetLanguage,
     officialExamName,
-    listeningPercent,
-    readingPercent,
-    writingPrompt,
-    writingResponse,
-    speakingPrompt,
-    speakingTranscript
+    listeningScore,
+    readingScore,
+    registerShifting,
+    fossilizedResponses,
+    stressTestResponse,
+    boundaryRoleplayResponse,
+    integratedSynthesisResponse,
+    officialEssayResponse,
+    officialSpeakingTranscript
   } = req.body;
 
   try {
-    const systemPrompt = `أنت المصحح الرسمي الأول لاختبار (${officialExamName}) والإطار الأوروبي (CEFR) في اللغة (${targetLanguage}).
-قام الطالب بأداء الاختبار وحقق:
-- الاستماع: ${listeningPercent}%
-- القراءة والقواعد: ${readingPercent}%
-- نص إجابة الطالب في الكتابة (Writing): "${writingResponse || 'لم يكتب إجابة'}" على السؤال: "${writingPrompt}"
-- نص إجابة الطالب الشفوية في التحدث (Speaking): "${speakingTranscript || 'لم يسجل إجابة'}" على السؤال: "${speakingPrompt}"
+    const systemPrompt = `أنت كبير المصححين الدوليين لاختبار (${officialExamName}) وخبير نظرية اللغة البينية (Interlanguage Theory) في اللغة (${targetLanguage}).
+بيانات أداء الممتحن:
+- الاستماع (Listening): ${listeningScore}% | القراءة (Reading): ${readingScore}%
+- إجابات المرونة السياقية (Register Shifting): ${JSON.stringify(registerShifting)}
+- إجابات الفخاخ المتحجرة (Fossilized Check): ${JSON.stringify(fossilizedResponses)}
+- اختبار الضغط الارتجالي والحدود: "${stressTestResponse}" | "${boundaryRoleplayResponse}"
+- مهام المحاكي الرسمي (Synthesis & Essay): "${integratedSynthesisResponse}" | "${officialEssayResponse}"
+- نص المحادثة الشفوية: "${officialSpeakingTranscript}"
 
-قم بتقييم الكتابة والمحادثة بدقة صارمة، وحدد المستوى النهائي (A0, A1, A2, B1, B2, C1, أو C2) والدرجة المعادلة في (${officialExamName}).
+قم بتشريح الأداء بدقة عبر:
+1. الأركان الأربعة (25% لكل ركن): إنجاز المهمة والترابط، الكثافة المعجمية والمتلازمات (Collocations & Nuance)، عمق التفرع النحوي (Branching & Passive)، والطلاقة والوصل الصوتي (Connected Speech & Chunking).
+2. الفلاتر الثلاثة لتصنيف الأخطاء: زلات عابرة (Slips)، فجوات معرفية (Mistakes)، وأخطاء متحجرة وتداخل اللغة الأم (Fossilization & L1 Interference).
+3. الترقية الفورية (Upgrading): خذ جملة فعلية كتبها الممتحن وأعد صياغتها بمستوى C2 Native مع شرح التغييرات الثلاثة.
+
 رد بصيغة JSON صالحة 100% فقط بهذا الهيكل:
 {
-  "writingScorePercent": 75,
-  "speakingScorePercent": 72,
+  "writingScore": 78,
+  "speakingScore": 75,
   "overallCEFR": "B2",
-  "officialEquivalentScore": "IELTS Band 6.5 (أو المعادل في اللغة المختارة)",
-  "strengths": ["نقطة قوة 1 بالعربية", "نقطة قوة 2 بالعربية"],
-  "weaknessesAndFixes": ["خطة علاجية 1 بالعربية", "خطة علاجية 2 بالعربية"],
-  "writingCorrectionSample": "تحليل دقيق لنص الطالب مع إعطاء جملة محسنة بمستوى C1/C2"
+  "fourPillarsRubric": [
+    { "title": "1. إنجاز المهمة والترابط المنطقي (Task Achievement & Coherence - 25%)", "score": 80, "diagnosis": "..." },
+    { "title": "2. الثروة والكثافة المعجمية (Lexical Resource & Collocations - 25%)", "score": 76, "diagnosis": "..." },
+    { "title": "3. المدى والدقة النحوية وعمق التفرع (Syntactic Complexity & Branching - 25%)", "score": 78, "diagnosis": "..." },
+    { "title": "4. الطلاقة والتحكم الصوتي الإيقاعي (Fluency, Connected Speech & Chunking - 25%)", "score": 75, "diagnosis": "..." }
+  ],
+  "errorTaxonomy": {
+    "slips": ["..."],
+    "mistakes": ["..."],
+    "fossilizedAndL1": ["..."]
+  },
+  "upgradingComparison": {
+    "studentOriginal": "...",
+    "upgradedC2Native": "...",
+    "whatChanged": "..."
+  }
 }`;
 
-    const raw = await generateContentSmart(systemPrompt, `قيّم أداء الطالب وأخرج التقرير بصيغة JSON.`, 0.4, 5000);
+    const raw = await generateContentSmart(
+      systemPrompt,
+      `شرّح أداء الممتحن في اللغة ${targetLanguage} وأخرج التقرير بصيغة JSON.`,
+      0.35,
+      7000
+    );
     const parsed = safeParseAIJson(raw);
     res.json({ success: true, data: parsed });
   } catch (err) {
