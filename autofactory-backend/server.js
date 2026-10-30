@@ -3516,10 +3516,15 @@ app.post('/api/academy/forge-lesson', async (req, res) => {
         const systemPrompt = `أنت كبير مهندسي البرمجيات (Principal Engineer) وأعظم معلم تقني في العالم (Top-Rated Instructor) في منصة تضاهي LeetCode و Coursera. تستخدم دائماً "مبدأ فاينمان" (Feynman Technique) لتبسيط أعقد الأمور.
         مهمتك الآن هي تأليف درس واحد فقط، وعليك أولاً تحليل عنوان الدرس لتحديد نوعه: "نظري/مفاهيمي" أم "برمجي/عملي". بناءً على هذا التحليل، ستصوغ درساً شاملاً، عميقاً، وتفصيلياً جداً (Masterclass).
 
-        - موضوع الكورس العام: "${courseTopic}"
+- موضوع الكورس العام: "${courseTopic}"
         - الوحدة الحالية: "${sectionName}"
         - 📌 الدرس المطلوب كتابته الآن: "${lessonTitle}"
         - مستوى الطالب المستهدف: "${difficulty || 'متوسط'}"
+
+        // ✨ FIX: Exam Mastery Isolation - شرط صارم لعزل مستويات (A0-B2) عن مسار الامتحانات الدولية
+        🚨 قاعدة الفصل الصارم لمسار الامتحانات الدولية:
+        إذا كان مستوى الطالب (A0 إلى B2)، ركز حصراً على المواقف اليومية، البنية النحوية، والمفردات، ويُمنع منعاً باتاً ذكر امتحانات C2 أو TestDaF. أما إذا كان تصنيف الكورس هو 'EXAM_MASTERY'، فقم بتوليد محتوى يركز حصراً على استراتيجيات الاختبار، كشف الفخاخ، وتصحيح المقالات (Essays).
+
 
         🚨 استراتيجية المعلم المخضرم (The Master Teacher Method):
         حلل عنوان الدرس "${lessonTitle}". 
@@ -4706,17 +4711,28 @@ app.post('/api/academy2/forge-unit-exam', async (req, res) => {
 
 
 
-// ============================================================================
-// 🧹 (ب) مصفاة التطهير الآلي لمخرجات اللغات (AI Output Sanitizer & Token-Bleed Fixer)
-// تنظف أي تداخل بين الحروف العربية واللاتينية أو الرموز الغريبة قبل إرسال الدرس!
-// ============================================================================
 const sanitizeLanguageText = (rawStr = '') => {
     if (!rawStr || typeof rawStr !== 'string') return rawStr;
-    let cleaned = rawStr
+
+    // ✨ FIX: Data Contamination Firewall - حماية الروابط ورموز الهروب البرمجية (Escapes) قبل الفصل اللغوي
+    const protectedTokens = [];
+    let tokenMarker = '__PROTECTED_TOKEN_';
+    while (rawStr.includes(tokenMarker)) tokenMarker += '_';
+    let cleaned = rawStr.replace(
+        /(https?:\/\/[^\s"'`)<\]]+|\\[nrtbf"\\]|\\u[0-9a-fA-F]{4})/g,
+        (match) => {
+            protectedTokens.push(match);
+            return `${tokenMarker}${protectedTokens.length - 1}__`;
+        }
+    );
+
+    cleaned = cleaned
         // 1. إزالة أي رموز ديفاناغاري/هندية أو رموز تالفة
         .replace(/[\u0900-\u097F]+/g, '')
         .replace(/פּ/g, 'پ')
-        // 2. إصلاح التداخل بين الحروف العربية والفرنسية داخل الكلمة الواحدة
+        // 2. إصلاح التداخل بين الحروف العربية واللاتينية داخل الكلمة الواحدة (فرنسي / ألماني)
+        .replace(/\bHiو\s*hören\s+Sie!?/gi, 'Hören Sie!')
+        .replace(/\bHiو\b/gi, 'Hören')
         .replace(/c'هست/gi, "c'est")
         .replace(/C'هست/g, "C'est")
         .replace(/c'ست/gi, "c'est")
@@ -4724,12 +4740,19 @@ const sanitizeLanguageText = (rawStr = '') => {
         .replace(/مaman/gi, "maman")
         .replace(/Il\s+هو\s+bon/gi, "Il est bon")
         .replace(/ت\s*άλλο\s*كـ/gi, "تُنطق كـ")
-        // 3. تصحيح أخطاء التذكير والتأنيث الشائعة
+        // 3. تصحيح أخطاء التذكير والتأنيث الشائعة بحدود كلمة صارمة (\b)
         .replace(/\bun clé\b/gi, "une clé")
         .replace(/\bUn clé\b/g, "Une clé")
         .replace(/---+\+/g, '---')
-        .replace(/---;/g, '---');
+        .replace(/---;/g, '---')
+        // ✨ FIX: Data Contamination Firewall - فصل الحروف العربية الملتصقة بالحروف اللاتينية أو الآسيوية والعكس
+        .replace(/([\u0600-\u06FF])([a-zA-Z\u00C0-\u024F\u3040-\u30ff\u4e00-\u9faf\uac00-\ud7af])/g, '$1 $2')
+        .replace(/([a-zA-Z\u00C0-\u024F\u3040-\u30ff\u4e00-\u9faf\uac00-\ud7af])([\u0600-\u06FF])/g, '$1 $2');
 
+    // استعادة الروابط ورموز الأكواد المحمية كما كانت تماماً
+    const tokenPattern = new RegExp(`${tokenMarker}(\\d+)__`, 'g');
+    cleaned = cleaned.replace(tokenPattern, (_, idx) => protectedTokens[Number(idx)]);
+    
     // 🔗 4. دمج الكلمات الأجنبية المتجاورة المقطعة بـ backticks في كبسولة واحدة من المنبع!
     for (let pass = 0; pass < 4; pass++) {
         cleaned = cleaned.replace(
@@ -4744,16 +4767,156 @@ const sanitizeLanguageText = (rawStr = '') => {
     return cleaned;
 };
 
-const sanitizeLanguageLessonJSON = (lessonObj) => {
+// ✨ FIX: Automated 3-Layer Curriculum QA Linter & Auto-Healer (فاحص ومُصلح جودة المناهج لـ 7 لغات)
+const lintAndHealLessonContent = (rawMarkdown = '', targetLangCode = 'en-US') => {
+    if (!rawMarkdown || typeof rawMarkdown !== 'string') return { cleanedMarkdown: '', issues: [] };
+    const issues = [];
+    let text = sanitizeLanguageText(rawMarkdown);
+
+    // 1. إصلاح الأخطاء اللغوية والتحريرية المرصودة في التقييم (مثل الألمانية والفرنسية)
+    if (/Hiو\s*hören\s+Sie/i.test(text)) {
+        issues.push('fixed_mixed_arabic_latin_token: Hiو hören Sie -> Hören Sie!');
+        text = text.replace(/Hiو\s*hören\s+Sie!?/gi, 'Hören Sie!');
+    }
+    if (/أنا\s+أسمي\s+آنا|أنا\s+اسمي\s+آنا/g.test(text)) {
+        issues.push('fixed_literal_arabic_translation: أنا أسمي آنا -> اسمي آنا');
+        text = text.replace(/أنا\s+[أا]سمي\s+آنا/g, 'اسمي آنا');
+    }
+    if (/\bdas\s+Berlin\b/gi.test(text)) {
+        issues.push('fixed_improper_city_article: das Berlin -> Berlin');
+        text = text.replace(/\bdas\s+Berlin\b/gi, 'Berlin');
+    }
+
+    // 2. فحص تسرب المفردات الإنجليزية الافتراضية داخل كورسات اللغات غير الإنجليزية
+    if (!targetLangCode.startsWith('en')) {
+        const englishBleedMatch = text.match(/`\s*(a cat|a mat|a red cup|in the sun)\s*`/i);
+        if (englishBleedMatch) {
+            issues.push(`english_bleed_detected_in_${targetLangCode}: ${englishBleedMatch[1]}`);
+        }
+    }
+
+    // 3. إصلاح تمارين املأ الفراغ [[...]] لمنع تكرار الكلمة المكتوبة قبل القوس داخل الخيار الصحيح
+    text = text.replace(
+        /(\b[A-Za-z\u00C0-\u024F]+\s+)\[\[\s*\1([^\]]+)\]\]/g,
+        (fullMatch, repeatedPrefix, restInside) => {
+            issues.push(`fixed_duplicate_prefix_in_fill_blank: ${repeatedPrefix.trim()}`);
+            return `${repeatedPrefix}[[${restInside.trim()}]]`;
+        }
+    );
+
+    return { cleanedMarkdown: text, issues };
+};
+
+const validateAndHealQuizObject = (quizObj, quizLabel = 'dailyQuest') => {
+    const issues = [];
+    if (!quizObj || typeof quizObj !== 'object') return { healedQuiz: quizObj, issues };
+
+    const healed = { ...quizObj };
+    if (Array.isArray(healed.options)) {
+        // إزالة الخيارات المكررة أو المتداخلة
+        const flatOptions = healed.options.map(opt => (Array.isArray(opt) ? opt.join(' ') : String(opt || '').trim())).filter(Boolean);
+        const uniqueOptions = [...new Set(flatOptions)];
+        if (uniqueOptions.length !== flatOptions.length) {
+            issues.push(`${quizLabel}_duplicate_options_removed`);
+        }
+        healed.options = uniqueOptions;
+
+        // التحقق من أن مؤشر الإجابة الصحيحة ضمن النطاق الصحيح
+        const idx = Number(healed.correctAnswerIndex);
+        if (!Number.isInteger(idx) || idx < 0 || idx >= healed.options.length) {
+            issues.push(`${quizLabel}_invalid_correctAnswerIndex_reset_to_0`);
+            healed.correctAnswerIndex = 0;
+        }
+    }
+    return { healedQuiz: healed, issues };
+};
+
+const sanitizeLanguageLessonJSON = (lessonObj, targetLangCode = 'en-US') => {
     if (!lessonObj || typeof lessonObj !== 'object') return lessonObj;
     try {
         const serialized = JSON.stringify(lessonObj);
         const cleaned = sanitizeLanguageText(serialized);
-        return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+
+        if (typeof parsed.content === 'string') {
+            const { cleanedMarkdown } = lintAndHealLessonContent(parsed.content, targetLangCode);
+            parsed.content = cleanedMarkdown;
+        }
+        if (parsed.dailyQuest) {
+            parsed.dailyQuest = validateAndHealQuizObject(parsed.dailyQuest, 'dailyQuest').healedQuiz;
+        }
+        if (Array.isArray(parsed.bossQuiz)) {
+            parsed.bossQuiz = parsed.bossQuiz.map((q, i) => validateAndHealQuizObject(q, `bossQuiz_${i}`).healedQuiz);
+        }
+        return parsed;
     } catch (e) {
         return lessonObj;
     }
 };
+
+// 🛡️ مسار الفحص والتدقيق الشامل للكورس أو الشهادة (Automated Course QA Linter API)
+app.post('/api/academy2/surgeon/lint-course', (req, res) => {
+    try {
+        const { lessonsList = [], langCode = 'en-US' } = req.body;
+        if (!Array.isArray(lessonsList)) {
+            return res.status(400).json({ success: false, error: 'قائمة الدروس غير صالحة.' });
+        }
+
+        const report = {
+            totalLessonsScanned: lessonsList.length,
+            duplicateLessonsRemoved: 0,
+            totalIssuesFixed: 0,
+            detailedFixes: []
+        };
+
+        const seenSignatures = new Set();
+        const healedLessons = [];
+
+        lessonsList.forEach((lesson, idx) => {
+            if (!lesson || typeof lesson !== 'object') return;
+
+            // كشف حلقات التكرار المفرغة (Loop Detection) للدروس أو بوابات الزعيم المنسوخة
+            const normTitle = String(lesson.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            const normContentHead = String(lesson.content || '').slice(0, 160).replace(/\s+/g, ' ').trim().toLowerCase();
+            const signature = `${lesson.section || ''}__${lesson.type || 'video'}__${normTitle}__${normContentHead}`;
+
+            if (normTitle && seenSignatures.has(signature)) {
+                report.duplicateLessonsRemoved++;
+                report.detailedFixes.push(`حذف درس/بوابة مكررة في الحلقة: (${lesson.title})`);
+                return;
+            }
+            seenSignatures.add(signature);
+
+            const healedLesson = sanitizeLanguageLessonJSON(lesson, langCode);
+            const { cleanedMarkdown, issues: contentIssues } = lintAndHealLessonContent(healedLesson.content || '', langCode);
+            healedLesson.content = cleanedMarkdown;
+
+            const { healedQuiz, issues: questIssues } = validateAndHealQuizObject(healedLesson.dailyQuest, `Lesson_${idx + 1}_dailyQuest`);
+            healedLesson.dailyQuest = healedQuiz;
+
+            const allLessonIssues = [...contentIssues, ...questIssues];
+            if (allLessonIssues.length > 0) {
+                report.totalIssuesFixed += allLessonIssues.length;
+                report.detailedFixes.push(`[${lesson.title}]: ${allLessonIssues.join(' | ')}`);
+            }
+
+            healedLessons.push({
+                ...healedLesson,
+                order: healedLessons.length + 1
+            });
+        });
+
+        return res.json({
+            success: true,
+            report,
+            healedLessons
+        });
+    } catch (err) {
+        console.error('❌ [Course QA Linter Error]:', err.message);
+        return res.status(500).json({ success: false, error: 'تعذر إتمام الفحص الآلي للكورس.' });
+    }
+});
+
 
 // ============================================================================
 // 🎙️ (أ) محرك الصوت العصبي الفائق لـ 7 لغات عالمية (Multi-Language Neural TTS)
@@ -5390,12 +5553,19 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
     }
 
 
-    const strictLangLockRule = langProfile.id !== 'en'
+// ✨ FIX: Exam Mastery Isolation - عزل كورسات التأسيس والمواقف اليومية (A0-B2) عن مسار الامتحانات الدولية (EXAM_MASTERY)
+    const examIsolationInstruction = detectedTier === 'EXAM_MASTERY'
+        ? `\n🚨 تعليمة مسار الامتحانات الدولية (EXAM_MASTERY):
+        - بما أن تصنيف الكورس هو 'EXAM_MASTERY'، قم بتوليد محتوى يركز حصراً على استراتيجيات الاختبار (${langProfile.examName})، كشف الفخاخ، وتصحيح المقالات (Essays) والقراءة التحليلية.`
+        : `\n🚨 تعليمة عزل المستويات القياسية (Exam Mastery Isolation):
+        - إذا كان مستوى الطالب (A0 إلى B2)، ركز حصراً على المواقف اليومية، البنية النحوية، والمفردات، ويُمنع منعاً باتاً ذكر امتحانات C2 أو TestDaF أو Goethe أو DELF أو IELTS في العناوين أو الشروحات. أما إذا كان تصنيف الكورس هو 'EXAM_MASTERY'، فقم بتوليد محتوى يركز حصراً على استراتيجيات الاختبار، كشف الفخاخ، وتصحيح المقالات (Essays).`;
+
+    const strictLangLockRule = (langProfile.id !== 'en'
         ? `\n🚨🚨 قانون الهوية اللغوية القاطع (STRICT LANGUAGE LOCK):
         - اللغة المستهدفة في هذا الكورس هي **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** حصراً!
         - 🚫 يُمنع منعاً باتاً وقاطعاً استخدام أي مفردة أو جملة أو قاعدة صوتية باللغة الإنجليزية (إياك أن تكتب كلمات مثل cat, mat, short A, this is a... إلخ)!
         - جميع المفردات، الجمل، الحوارات، نصوص الاستماع، والتمارين يجب أن تكون باللغة **${langProfile.nameAr} (${langProfile.nameEn})** مع شرحها وترجمتها بالعربية!`
-        : '';
+        : '') + examIsolationInstruction;
 
     const specsMap = {
         A0_PHONICS: {
@@ -6449,12 +6619,12 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
         let levelGuardrail = '';
         if (tierSpec.tierId === 'A0') {
             levelGuardrail = `
-            🚨 قيود المستوى الصارمة جداً (${tierSpec.cefrLabel} - الوحدة ${sectionOrder}):
+            🚨 قيود المستوى الصارمة جداً (${tierSpec.cefrLabel}الوحدة ${sectionOrder}):
             - الطالب في بداية تعلم **اللغة ${langProfile.nameAr} (${langProfile.nameEn})**! يجب أن تكون جملك باللغة ${langProfile.nameAr} قصيرة جداً وبسيطة للغاية (من 3 إلى 7 كلمات كحد أقصى!).
             - استخدم فقط الكلمات البسيطة الملموسة باللغة ${langProfile.nameAr} الموجودة في هذا الدرس: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
         } else if (tierSpec.tierId === 'A1' || tierSpec.tierId === 'A2') {
             levelGuardrail = `
-            🚨 قيود المستوى (${tierSpec.cefrLabel} - الوحدة ${sectionOrder}):
+            🚨 قيود المستوى (${tierSpec.cefrLabel}الوحدة ${sectionOrder}):
             - تحدث باللغة **${langProfile.nameAr} (${langProfile.nameEn})** بجمل حياتية واضحة ومتوسطة الطول (من 7 إلى 13 كلمة).
             - ادفع الطالب لتكوين جمل تامة باللغة ${langProfile.nameAr} في مواقف الدرس ("${lessonTitle}") باستخدام مفرداته: ${JSON.stringify(targetVocab.slice(0, 8))}.`;
         } else {
@@ -6466,8 +6636,8 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
         let modeSpecificBlueprint = '';
         if (classMode === 'roleplay') {
             modeSpecificBlueprint = `
-            🎭 [النمط المختار: تمثيل موقف حقيقي باللغة ${langProfile.nameAr} - Real-Life Roleplay]
-            - أنت الآن شخصية حقيقية داخل مشهد تمثيلي حي باللغة ${langProfile.nameAr} يناسب موضوع ("${sectionName} - ${lessonTitle}") ومستوى (${tierSpec.cefrLabel}).`;
+            🎭 [النمط المختار: تمثيل موقف حقيقي باللغة ${langProfile.nameAr}Real-Life Roleplay]
+            - أنت الآن شخصية حقيقية داخل مشهد تمثيلي حي باللغة ${langProfile.nameAr} يناسب موضوع ("${sectionName} ${lessonTitle}") ومستوى (${tierSpec.cefrLabel}).`;
         } else if (classMode === 'mission') {
             const targetNow = activeMissionWord || targetVocab[0] || '';
             modeSpecificBlueprint = `
@@ -6476,7 +6646,7 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
             - اطرح على الطالب موقفاً أو سؤالاً باللغة ${langProfile.nameAr} يجبره على استخدام ("${targetNow}") في إجابته القادمة، واجعل جميع الخيارات الثلاثة في "suggestedReplies" باللغة ${langProfile.nameAr} توظف ("${targetNow}")!`;
         } else {
             modeSpecificBlueprint = `
-            👩‍🏫 [النمط المختار: حصة محادثة ومناقشة باللغة ${langProfile.nameAr} - الخطوة ${stepNumber} من 5]`;
+            👩‍🏫 [النمط المختار: حصة محادثة ومناقشة باللغة ${langProfile.nameAr}الخطوة ${stepNumber} من 5]`;
         }
 
         const systemPrompt = `${langProfile.instituteRole}
@@ -6525,16 +6695,61 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
 
         const userPrompt = `سجل الحوار السابق:\n${historyText || '(بداية الحصة الآن)'}\n\nما نطقه الطالب للتو: "${studentSpokenText || '__START_SESSION__'}"\n\nولّد الرد باللغة ${langProfile.nameAr} (${langProfile.nameEn}) مع الترجمة العربية بصيغة JSON الآن.`;
 
+        // 1. طلب المحتوى من الذكاء الاصطناعي
         const rawContent = await generateContentSmart(systemPrompt, userPrompt, 0.72, 2500);
+        
+        // 2. فك التشفير
         const parsed = safeParseAIJson(rawContent);
         parsed.speechLang = langProfile.speechLang;
 
-        res.json({ success: true, data: parsed });
+        // ==========================================
+        // ✨ FIX: Voice Coach Validation (المكان الصحيح داخل الـ try)
+        // ==========================================
+        const cleanedCoachData = sanitizeLanguageLessonJSON(parsed);
+        const isValidCoachPayload =
+            cleanedCoachData &&
+            typeof cleanedCoachData === 'object' &&
+            !Array.isArray(cleanedCoachData) &&
+            typeof cleanedCoachData.studentSpeechUpgrade === 'string' &&
+            typeof cleanedCoachData.coachReactionEnglish === 'string' &&
+            cleanedCoachData.coachReactionEnglish.trim().length > 0 &&
+            typeof (cleanedCoachData.nextQuestionEnglish || cleanedCoachData.replyEnglish) === 'string';
+
+        // رمي خطأ إذا كانت الاستجابة غير صالحة ليتم التقاطها في الواجهة وتفعيل مسار الطوارئ
+        if (!isValidCoachPayload) {
+            console.error('❌ [Voice Coach Validation Failed]: استجابة غير مكتملة من الـ AI، تفعيل مسار الطوارئ في الواجهة.');
+            return res.status(500).json({
+                success: false,
+                error: 'INVALID_COACH_PAYLOAD_STRUCTURE'
+            });
+        }
+
+        // التحقق من أن pronunciationScore رقم صالح بين 0 و 100 أو تعيينه كـ null
+        if (
+            cleanedCoachData.pronunciationScore !== null &&
+            cleanedCoachData.pronunciationScore !== undefined
+        ) {
+            const numericScore = Number(cleanedCoachData.pronunciationScore);
+            cleanedCoachData.pronunciationScore =
+                Number.isFinite(numericScore) && numericScore >= 0 && numericScore <= 100
+                    ? Math.round(numericScore)
+                    : null;
+        } else {
+            cleanedCoachData.pronunciationScore = null;
+        }
+
+        // إرسال البيانات بعد التأكد التام من سلامتها
+        return res.json({ success: true, data: cleanedCoachData });
+
     } catch (error) {
+        // ==========================================
+        // منطقة الأخطاء فقط (Catch Block)
+        // ==========================================
         console.error('❌ خطأ في Speak Class Coach:', error.message);
-        res.status(500).json({ success: false, error: 'تعذر الاتصال بالمدرب الصوتي.' });
+        return res.status(500).json({ success: false, error: 'تعذر الاتصال بالمدرب الصوتي.' });
     }
 });
+
 
 
 
