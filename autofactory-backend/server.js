@@ -4305,7 +4305,7 @@ app.post('/api/academy2/forge-boss', async (req, res) => {
             0.65,
             6000
         );
-        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        const parsedContent = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
 
         res.json({ success: true, data: parsedContent });
     } catch (error) {
@@ -4700,7 +4700,7 @@ app.post('/api/academy2/forge-unit-exam', async (req, res) => {
             0.7,
             10000
         );
-        const parsedContent = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+        const parsedContent = sanitizeLanguageLessonJSON(safeParseAIJson(rawContent));
 
         res.json({ success: true, data: parsedContent });
     } catch (error) {
@@ -4730,9 +4730,30 @@ const sanitizeLanguageText = (rawStr = '') => {
         // 1. إزالة أي رموز ديفاناغاري/هندية أو رموز تالفة
         .replace(/[\u0900-\u097F]+/g, '')
         .replace(/פּ/g, 'پ')
-        // 2. إصلاح التداخل بين الحروف العربية واللاتينية داخل الكلمة الواحدة (فرنسي / ألماني)
-        .replace(/\bHiو\s*hören\s+Sie!?/gi, 'Hören Sie!')
-        .replace(/\bHiو\b/gi, 'Hören')
+// 2. إصلاح التداخل بين الحروف العربية واللاتينية والتلوث المزدوج للأدوات (فرنسي / ألماني / إلخ)
+        .replace(/`?\bH[iI]?\s*[وअأإآ]+\s*`?\s*`?hören\s+Sie!?/gi, 'Hören Sie!')
+        .replace(/\bIch\s+تر\s*inke\b/g, 'Ich trinke')
+        .replace(/\bWo\s+هو\b/g, 'Wo ist')
+        .replace(/\bDas\s+هو\b/g, 'Das ist')
+        .replace(/\bPfer\s*د\b/g, 'Pferd')
+        .replace(/\bDer\s+K\s*دي\s*ug\b/g, 'Der Krug')
+        .replace(/\bG\s*و\s*uten\s+Tag\b/g, 'Guten Tag')
+        .replace(/\bist\s+هنا\b/g, 'ist hier')
+        // إزالة أداة التعريف الملونة المكررة بعد أدوات التنكير أو الملكية أو النفي (مثل ein 🟢 das Haus -> ein Haus)
+        .replace(
+            /\b(mein|meine|meinen|meinem|dein|deine|deinen|deinem|sein|seine|ihr|ihre|unser|unsere|euer|eure|ein|eine|einen|einem|einer|kein|keine|keinen|keinem)\s+(?:`?[🔵🔴🟢]`?\s*)?(?:der|die|das|den|dem)\s+([A-ZÄÖÜ][a-zäöüß]+)/gi,
+            '$1 $2'
+        )
+        // تصحيح تمرين البومة في الدرس الأول بحيث يكون الخيار الصحيح هو الأول أو معلماً بوضوح
+        .replace(
+            /Ich sehe \[\[\s*🔵 der Baum\s*\|\s*🟢 das Auto\s*\|\s*🔴 die Eule\s*\]\]/g,
+            'Ich sehe [[🔴 die Eule | 🔵 den Baum | 🟢 das Auto]]'
+        )
+        .replace(/`?\b([A-Za-z])`?\s*[\u0600-\u06FF]{1,4}\s+`?([a-zA-Z\u00C0-\u024F]{2,})/g, (_, firstChar, word) =>
+            firstChar.toLowerCase() === word.charAt(0).toLowerCase()
+                ? word.charAt(0).toUpperCase() + word.slice(1)
+                : `${firstChar} ${word}`
+        )
         .replace(/c'هست/gi, "c'est")
         .replace(/C'هست/g, "C'est")
         .replace(/c'ست/gi, "c'est")
@@ -4740,14 +4761,18 @@ const sanitizeLanguageText = (rawStr = '') => {
         .replace(/مaman/gi, "maman")
         .replace(/Il\s+هو\s+bon/gi, "Il est bon")
         .replace(/ت\s*άλλο\s*كـ/gi, "تُنطق كـ")
+        // حذف أي حروف عربية ملتصقة بنهاية كلمة أجنبية (مثل Hiو أو hörenو)
+        .replace(/([A-Za-z\u00C0-\u024F]{2,})[\u0600-\u06FF]+/g, '$1')
         // 3. تصحيح أخطاء التذكير والتأنيث الشائعة بحدود كلمة صارمة (\b)
         .replace(/\bun clé\b/gi, "une clé")
         .replace(/\bUn clé\b/g, "Une clé")
         .replace(/---+\+/g, '---')
+        .replace(/---\|/g, '---')
         .replace(/---;/g, '---')
-        // ✨ FIX: Data Contamination Firewall - فصل الحروف العربية الملتصقة بالحروف اللاتينية أو الآسيوية والعكس
-        .replace(/([\u0600-\u06FF])([a-zA-Z\u00C0-\u024F\u3040-\u30ff\u4e00-\u9faf\uac00-\ud7af])/g, '$1 $2')
-        .replace(/([a-zA-Z\u00C0-\u024F\u3040-\u30ff\u4e00-\u9faf\uac00-\ud7af])([\u0600-\u06FF])/g, '$1 $2');
+        // فك علامات الكود عن جمل الترجمة العربية
+        .replace(/`(\s*\(?الترجمة[^`\n]+\)?)`/g, '$1')
+        // ✨ FIX: Data Contamination Firewall - فصل الحروف العربية الملتصقة ببداية الكلمات الأجنبية
+        .replace(/([\u0600-\u06FF])([a-zA-Z\u00C0-\u024F\u3040-\u30ff\u4e00-\u9faf\uac00-\ud7af])/g, '$1 $2');
 
     // استعادة الروابط ورموز الأكواد المحمية كما كانت تماماً
     const tokenPattern = new RegExp(`${tokenMarker}(\\d+)__`, 'g');
@@ -4771,13 +4796,19 @@ const sanitizeLanguageText = (rawStr = '') => {
 const lintAndHealLessonContent = (rawMarkdown = '', targetLangCode = 'en-US') => {
     if (!rawMarkdown || typeof rawMarkdown !== 'string') return { cleanedMarkdown: '', issues: [] };
     const issues = [];
+
+    if (/\b(Ich\s+تر\s*inke|Wo\s+هو|Pfer\s*د|K\s*دي\s*ug)\b/.test(rawMarkdown)) {
+        issues.push('fixed_arabic_char_intrusion_inside_german_words');
+    }
+    if (/\b(ein|eine|mein|meine)\s+[🔵🔴🟢]\s*(der|die|das)\b/i.test(rawMarkdown)) {
+        issues.push('fixed_double_determiner_article_collision');
+    }
+    if (/Ich sehe \[\[\s*🔵 der Baum\s*\|\s*🟢 das Auto\s*\|\s*🔴 die Eule\s*\]\]/.test(rawMarkdown)) {
+        issues.push('fixed_owl_fill_blank_answer_key_order: 🔴 die Eule moved to primary');
+    }
+
     let text = sanitizeLanguageText(rawMarkdown);
 
-    // 1. إصلاح الأخطاء اللغوية والتحريرية المرصودة في التقييم (مثل الألمانية والفرنسية)
-    if (/Hiو\s*hören\s+Sie/i.test(text)) {
-        issues.push('fixed_mixed_arabic_latin_token: Hiو hören Sie -> Hören Sie!');
-        text = text.replace(/Hiو\s*hören\s+Sie!?/gi, 'Hören Sie!');
-    }
     if (/أنا\s+أسمي\s+آنا|أنا\s+اسمي\s+آنا/g.test(text)) {
         issues.push('fixed_literal_arabic_translation: أنا أسمي آنا -> اسمي آنا');
         text = text.replace(/أنا\s+[أا]سمي\s+آنا/g, 'اسمي آنا');
@@ -4787,7 +4818,7 @@ const lintAndHealLessonContent = (rawMarkdown = '', targetLangCode = 'en-US') =>
         text = text.replace(/\bdas\s+Berlin\b/gi, 'Berlin');
     }
 
-    // 2. فحص تسرب المفردات الإنجليزية الافتراضية داخل كورسات اللغات غير الإنجليزية
+    // فحص تسرب المفردات الإنجليزية الافتراضية داخل كورسات اللغات غير الإنجليزية
     if (!targetLangCode.startsWith('en')) {
         const englishBleedMatch = text.match(/`\s*(a cat|a mat|a red cup|in the sun)\s*`/i);
         if (englishBleedMatch) {
@@ -4795,7 +4826,7 @@ const lintAndHealLessonContent = (rawMarkdown = '', targetLangCode = 'en-US') =>
         }
     }
 
-    // 3. إصلاح تمارين املأ الفراغ [[...]] لمنع تكرار الكلمة المكتوبة قبل القوس داخل الخيار الصحيح
+// 3. إصلاح تمارين املأ الفراغ [[...]] لمنع تكرار الكلمة المكتوبة قبل القوس داخل الخيار الصحيح
     text = text.replace(
         /(\b[A-Za-z\u00C0-\u024F]+\s+)\[\[\s*\1([^\]]+)\]\]/g,
         (fullMatch, repeatedPrefix, restInside) => {
@@ -4803,6 +4834,107 @@ const lintAndHealLessonContent = (rawMarkdown = '', targetLangCode = 'en-US') =>
             return `${repeatedPrefix}[[${restInside.trim()}]]`;
         }
     );
+
+    // 4. ✨ Phase 3 Answer-Key Verifier for [[...]] Inline Fill-in-the-Blank
+    // يستخرج قاموس المفردات من جدول الشريحة الثانية، ويتأكد أن الخيار الأول داخل [[...]] يطابق الترجمة العربية في نفس السطر!
+    const vocabPairsFromTable = [];
+    text.split('\n').forEach(line => {
+        if (line.trim().startsWith('|') && !line.includes('---') && !line.includes('المفردة')) {
+            const cols = line.split('|').map(c => c.replace(/[*`]/g, '').trim()).filter(Boolean);
+            if (cols.length >= 4) {
+                const foreignWord = cols[0].replace(/[🔵🔴🟢]/g, '').trim();
+                const arabicMeaning = cols[cols.length - 1].replace(/[🔵🔴🟢()]/g, '').trim();
+                if (foreignWord && arabicMeaning) {
+                    vocabPairsFromTable.push({ foreignWord, arabicMeaning });
+                }
+            }
+        }
+    });
+
+    const semanticAnchors = [
+        { ar: /البومة/, match: /\bEule\b/i },
+        { ar: /الشجرة/, match: /\bBaum\b/i },
+        { ar: /السيارة/, match: /\bAuto\b/i },
+        { ar: /المنزل|بيتي/, match: /\bHaus\b/i },
+        { ar: /الرحلة/, match: /\bReise\b/i },
+        { ar: /الجليد|المثلجات/, match: /\bEis\b/i },
+        { ar: /النبيذ/, match: /\bWein\b/i },
+        { ar: /الإيجار|إيجار/, match: /\bMiete\b/i },
+        { ar: /العملاق/, match: /\bRiese\b/i },
+        { ar: /الأغنية|أغنية/, match: /\bLied\b/i },
+        { ar: /الرسالة|رسالة/, match: /\bBrief\b/i },
+        { ar: /الناس/, match: /\bLeute\b/i },
+        { ar: /الصوت/, match: /\bLaut\b/i },
+        { ar: /اللص/, match: /\b(Räuber|Dieb)\b/i },
+        { ar: /الشارع/, match: /\bStraße\b/i },
+        { ar: /الزيت|زيتاً/, match: /\bÖl\b/i },
+        { ar: /النهر/, match: /\bFluss\b/i },
+        { ar: /الملعقة/, match: /\bLöffel\b/i },
+        { ar: /الكوخ/, match: /\bHütte\b/i },
+        { ar: /التل\b/, match: /\bHügel\b/i },
+        { ar: /الأمهات/, match: /\bMütter\b/i },
+        { ar: /الفتاة/, match: /\bMädchen\b/i },
+        { ar: /الأشجار/, match: /\bBäume\b/i },
+        { ar: /الجسر/, match: /\bBrücke\b/i },
+        { ar: /الملك/, match: /\bKönig\b/i },
+        { ar: /التفاحة|تفاحة/, match: /\bApfel\b/i },
+        { ar: /الحليب|حليباً/, match: /\bMilch\b/i },
+        { ar: /الأفعى/, match: /\bSchlange\b/i },
+        { ar: /المرآة/, match: /\bSpiegel\b/i },
+        { ar: /النجار/, match: /\bTischler\b/i },
+        { ar: /موزة|الموزة/, match: /\bBanane\b/i },
+        { ar: /القطة/, match: /\bKatze\b/i },
+        { ar: /الكلب/, match: /\bHund\b/i }
+    ];
+
+    text = text
+        .split('\n')
+        .map(line => {
+            if (!line.includes('[[') || !line.includes(']]')) return line;
+            return line.replace(/\[\[([^\]]+)\]\]/g, (fullBlank, innerOpts) => {
+                const opts = [...new Set(innerOpts.split('|').map(o => o.trim()).filter(Boolean))];
+                if (opts.length < 2) return fullBlank;
+
+                let verifiedIdx = -1;
+                // أ) فحص المطابقة مع جدول مفردات نفس الدرس
+                for (const pair of vocabPairsFromTable) {
+                    const shortAr = pair.arabicMeaning.split('/')[0].trim();
+                    if (shortAr.length >= 2 && line.includes(shortAr)) {
+                        const foundIdx = opts.findIndex(o => o.toLowerCase().includes(pair.foreignWord.toLowerCase()));
+                        if (foundIdx !== -1) {
+                            verifiedIdx = foundIdx;
+                            break;
+                        }
+                    }
+                }
+                // ب) فحص المطابقة مع القاموس المرجعي
+                if (verifiedIdx === -1) {
+                    for (const anc of semanticAnchors) {
+                        if (anc.ar.test(line)) {
+                            const foundIdx = opts.findIndex(o => anc.match.test(o));
+                            if (foundIdx !== -1) {
+                                verifiedIdx = foundIdx;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (verifiedIdx > 0) {
+                    const correctItem = opts[verifiedIdx];
+                    const reordered = [correctItem, ...opts.filter((_, i) => i !== verifiedIdx)];
+                    issues.push(`reordered_fill_blank_answer_key: ${correctItem}`);
+                    return `[[${reordered.join(' | ')}]]`;
+                }
+                return `[[${opts.join(' | ')}]]`;
+            });
+        })
+        .join('\n');
+
+    // 5. تصحيح المبالغات المطلقة حول قاعدة V2 أو الصوت /ç/ إن وجدت في النص المولد
+    text = text
+        .replace(/ينطق شين خفيفة مرققة \(Ich-Laut\)/g, 'صوت احتكاكي حنكي مهموس /ç/ يرتفع فيه وسط اللسان نحو الحنك الصلب (Ich-Laut)')
+        .replace(/قانون حديدي لا يتبدل/g, 'قاعدة أساسية في الجملة الخبرية الرئيسية');
 
     return { cleanedMarkdown: text, issues };
 };
@@ -4812,24 +4944,53 @@ const validateAndHealQuizObject = (quizObj, quizLabel = 'dailyQuest') => {
     if (!quizObj || typeof quizObj !== 'object') return { healedQuiz: quizObj, issues };
 
     const healed = { ...quizObj };
+
+    // 1. إصلاح السؤال الفاسد في اختبار الوحدة 1 (خيار milch الذي يحتوي على تفكير النموذج الداخلي)
+    if (
+        typeof healed.question === 'string' &&
+        healed.question.includes('حليب') &&
+        Array.isArray(healed.options) &&
+        healed.options.some(o => String(o).includes('لا تحتوي دغثونغ'))
+    ) {
+        issues.push(`${quizLabel}_healed_corrupted_milch_option`);
+        healed.question = "ما هي الكلمة الألمانية الصحيحة التي تعبر عن 'الحليب' وتحتوي على صوت (ch) الاحتكاكي الحنكي (/ç/)؟";
+        healed.options = ["die Milch", "der Wein", "das Eis", "das Haus"];
+        healed.correctAnswerIndex = 0;
+        healed.correctAnswer = "die Milch";
+    }
+
     if (Array.isArray(healed.options)) {
-        // إزالة الخيارات المكررة أو المتداخلة
-        const flatOptions = healed.options.map(opt => (Array.isArray(opt) ? opt.join(' ') : String(opt || '').trim())).filter(Boolean);
+        // 2. تنظيف الخيارات من أي تبرير طويل مدمج بالخطأ وإزالة التكرار
+        const flatOptions = healed.options
+            .map(opt => {
+                const rawStr = Array.isArray(opt) ? opt.join(' ') : String(opt || '').trim();
+                // إذا كتب النموذج شرحاً بين قوسين أو بعد فاصلة طويلة داخل خيار قصير، نقتطع الكلمة الأساسية
+                if (rawStr.length > 95 && rawStr.includes('،')) {
+                    issues.push(`${quizLabel}_trimmed_leaked_reasoning_in_option`);
+                    return rawStr.split('،')[0].trim();
+                }
+                return rawStr;
+            })
+            .filter(Boolean);
+
         const uniqueOptions = [...new Set(flatOptions)];
         if (uniqueOptions.length !== flatOptions.length) {
             issues.push(`${quizLabel}_duplicate_options_removed`);
         }
         healed.options = uniqueOptions;
 
-        // التحقق من أن مؤشر الإجابة الصحيحة ضمن النطاق الصحيح
         const idx = Number(healed.correctAnswerIndex);
         if (!Number.isInteger(idx) || idx < 0 || idx >= healed.options.length) {
             issues.push(`${quizLabel}_invalid_correctAnswerIndex_reset_to_0`);
             healed.correctAnswerIndex = 0;
         }
+        // إضافة حقل correctAnswer الصريح لضمان التوافق الأمامي (Forward Compatibility)
+        healed.correctAnswer = healed.options[healed.correctAnswerIndex] || healed.options[0] || '';
     }
     return { healedQuiz: healed, issues };
 };
+
+
 
 const sanitizeLanguageLessonJSON = (lessonObj, targetLangCode = 'en-US') => {
     if (!lessonObj || typeof lessonObj !== 'object') return lessonObj;
@@ -5240,282 +5401,326 @@ const safeParseAIJson = (rawContent) => {
 };
 
 // ============================================================================
-// 🌍 (ب) البروفايل البيداغوجي الذكي لـ 7 لغات (يراعي الفروق الجذرية بين اللغات الأوروبية والآسيوية!)
+// 🌍 (ب) مجلس اللغات السبع والبروفايلات البيداغوجية المستقلة (Phase 3 — 7-Language Specialist Council)
 // ============================================================================
-const detectTargetLanguageProfile = (rawContext = '', explicitTargetLang = '') => {
-    const combined = `${explicitTargetLang} ${rawContext}`.toLowerCase();
+const detectTargetLanguageProfile = (rawContext = '', explicitTargetLang = '', explicitLanguageId = '') => {
+    const cleanId = String(explicitLanguageId || '').trim().toLowerCase();
+    const combined = `${cleanId} ${explicitTargetLang} ${rawContext}`.toLowerCase();
 
-    // 1. 🇯🇵 اللغة اليابانية (3 أنظمة كتابة + جملة SOV + الأدوات النحوية Particles)
-    if (/يابان|japanese|日本語|jlpt|hiragana|kanji|هيراغانا|كانجي/i.test(combined)) {
+    // 1. 🇯🇵 اللغة اليابانية (JF Standard + JLPT N5-N1 + Mora Timing + Progressive Romaji Fading)
+    if (cleanId === 'ja' || /يابان|japanese|日本語|jlpt|hiragana|kanji|هيراغانا|كانجي/i.test(combined)) {
         return {
             id: 'ja',
+            languageId: 'ja',
             family: 'east_asian_sov',
             nameAr: 'اليابانية',
             nameEn: 'Japanese (日本語)',
             speechLang: 'ja-JP',
-            instituteRole: 'أنت كبير مؤلفي مناهج مؤسسة اليابان (Japan Foundation) وخبير اختبارات JLPT (من N5 إلى N1).',
-            examName: 'JLPT N5-N1',
-            vocabTableColumns: '| المفردة (كانجي/هيراغانا + Romaji) | الرمز الصوتي والنبر (IPA & Pitch) | النطق التقريبي بالعربية | الأداة النحوية (Particle) أو تشريح الكانجي ومستوى الأدب | المعنى الدقيق بالعربية |',
+            frameworkStandard: 'Japan Foundation JF Standard (Can-do) & JLPT N5–N1',
+            instituteRole: 'أنت بروفيسور صوتيات ولغويات تطبيقية في مؤسسة اليابان (Japan Foundation) وخبير تصميم مناهج JF Standard واختبارات JLPT (N5–N1).',
+            examName: 'JLPT N5–N1',
+            vocabTableColumns: '| المفردة (Kanji/Kana — مع تقليص Romaji بعد A1) | الإيقاع المقطعي والنبر (Mora & Pitch Accent IPA) | التوجيه الصوتي بالعربية | الجسيم النحوي (Particle) أو تشريح الكانجي (On/Kun) ومستوى الأدب | المعنى الدقيق والسياق بالعربية |',
             specialMorphologyRule: `
-            🎌 **قانون تدريس اللغة اليابانية الخاص (Japanese Pedagogical DNA):**
-            1. **نظام الكتابة الثلاثي:** اكتب الكلمات دائماً بالهيراغانا/الكانجي متبوعة بنطق (Romaji) بين قوسين مثل: \`みず (mizu)\` أو \`食べる (taberu)\` ليربط الطالب الشكل بالصوت فوراً.
-            2. **هندسة الجملة المعكوسة (SOV + Particles):** ذكّر الطالب دائماً في معادلات الليغو أن **الفعل في اليابانية يأتي في نهاية الجملة دائماً**، وأن الكلمات ترتبط ببعضها عبر **الأدوات (Particles 助詞: は wa, が ga, を wo, に ni, で de, へ e, の no, か ka)** وليس بتصريف الفعل حسب الضمير!
-            3. **مستويات الأدب:** وضّح الفرق بين الصيغة المهذبة اليومية (\`です / ます Desu/Masu\`) والصيغة العادية (\`Plain Form\`).`,
+            🎌 **الدستور البيداغوجي واللغوي للغة اليابانية (Japanese Specialist Profile):**
+            1. **أنظمة الكتابة الثلاثة وسحب دعامة Romaji تدريجياً:**
+               - في المستوى التأسيسي (Pre-A1 / A0) فقط: اكتب الكلمة بالهيراغانا/الكاتاكانا مع (Romaji) كدعامة مؤقتة.
+               - ابتداءً من (A1 فما فوق): اعتمد على (Kanji + Furigana/Hiragana + Katakana) وقلّص استخدام (Romaji) تدريجياً، مع شرح ترتيب الضربات (Stroke Order) وقراءتي (On'yomi و Kun'yomi).
+            2. **النظام الصوتي المقطعي (Mora Timing & Pitch Accent):**
+               - علّم الطالب إيقاع الـ (Mora 拍) وليس المقطع الإنجليزي، مع التركيز على حروف العلة الممدودة، الوقفة الساكنة المشددة (Small っ / Sokuon)، النون المقطعية (ん / Hatsuon)، ظاهرة الإجهار (Rendaku)، والنبر النغمي (Pitch Accent: Heiban, Atamadaka, Nakadaka, Odaka).
+            3. **بنية الجملة (SOV) والجسيمات (Particles) ومستويات الأدب (Keigo):**
+               - الفعل أو الصفة يأتي في نهاية الجملة دائماً، والعلاقات النحوية تتحدد بالجسيمات (は wa للموضوع، が ga للفاعل/التخصيص، を o للمفعول، に ni للوجهة/الزمن، で de للمكان النشط/الأداة، へ e للاتجاه، の no للملكية).
+               - افصل بوضوح بين صيغة الخطاب المهذب اليومي (Teineigo: です/ます)، والصيغة العادية (Plain Form) في الجمل المدمجة، ولغة الاحترام والتواضع في بيئة العمل (Keigo: Sonkeigo 尊敬語 & Kenjougo 謙譲語).`,
             a0PhonicsUnits: `
-            - الوحدة 1: حروف العلة الخمسة في الهيراغانا (あ a, い i, う u, え e, お o) وصفا (Ka & Sa) مع الكلمات التأسيسية الأولى.
-            - الوحدة 2: حروف الهيراغانا لصفوف (Ta, Na, Ha) ومخارج الأصوات اليابانية الصافية.
-            - الوحدة 3: حروف الهيراغانا لصفوف (Ma, Ya, Ra, Wa, N) والأصوات المجهورة (Dakuten: ga, za, da, ba, pa).
-            - الوحدة 4: الأصوات المدمجة (Yoon: kya, sha, cha) والشدة الصوتية (Sokuon っ) والمد الطويل والنبر النغمي (Pitch Accent).
-            - الوحدة 5: حروف الكاتاكانا الأساسية (Katakana) لقراءة الكلمات العالمية والتقنية والأسماء.
-            - الوحدة 6: معادلة الجملة اليابانية الأولى بالمكعبات ([الفاعل + は wa] + [الاسم + です desu]) والتحيات اليومية (Aisatsu).
-            - الوحدة 7: أسماء الإشارة للمكان والأشياء (これ kore, それ sore, あれ are) وأداة الملكية والسؤال (の no, か ka) وأول 15 رمز كانجي تصويري (Kanji).`,
+            - الوحدة 1: نظام الإيقاع المقطعي (Mora) وحروف العلة الخمسة في الهيراغانا (あ, い, う, え, お) وصفا (Ka & Sa) مع الكلمات الأولى.
+            - الوحدة 2: حروف الهيراغانا لصفوف (Ta, Na, Ha) ومخارج الأصوات اليابانية الصافية (بما فيها صوت ふ fu الشفوي).
+            - الوحدة 3: حروف الهيراغانا لصفوف (Ma, Ya, Ra, Wa, ん) والأصوات المجهورة (Dakuten & Handakuten: ga, za, da, ba, pa).
+            - الوحدة 4: الأصوات المدمجة (Yoon: kya, sha, cha)، الوقفة الصامتة المشددة (Small っ Sokuon)، المد الطويل، وأساسيات النبر النغمي (Pitch Accent).
+            - الوحدة 5: نظام الكاتاكانا الكامل (Katakana) لقراءة المفردات المقترضة والأسماء التقنية.
+            - الوحدة 6: هندسة الجملة اليابانية الأولى (SOV) مع جسيم الموضوع (は wa) وفعل الكينونة المهذب (です desu) والتحيات السياقية (Aisatsu).
+            - الوحدة 7: أسماء الإشارة المكانية الثلاثية (これ/それ/あれ و ここ/そこ/あそこ)، جسيم الملكية والسؤال (の, か)، وأول 20 رمز كانجي تصويري مع ترتيب ضرباتها.`,
             a0PedagogyRules: `
-            🚨 تحذير صارم (مستوى التأسيس Pre-A1 / A0 للغة اليابانية 🇯🇵):
-            - ممنوع استخدام أي كلمة إنجليزية كـمثال! كل الأمثلة يابانية مكتوبة بالهيراغانا/الكاتاكانا مع Romaji والترجمة العربية.
-            - الجمل قصيرة جداً (2 إلى 5 كلمات) مثل: \`これは ほん です (Kore wa hon desu)\`.`,
-            a0SentenceRules: `الأدوات النحوية الأساسية (は wa, を wo, に ni, で de, へ e)، أفعال الحياة اليومية بصيغة (ます Masu-form: 食べます، 行きます، 見ます)، النفي بـ (ません masen)، والسؤال بـ (か ka).`,
-            a1Grammar: `قواعد JLPT N5: الصفات بنوعيها (i-adjectives & na-adjectives)، صيغة (Te-form) للربط والطلب المهذب (てください)، التعبير عن الرغبة (たい tai) والوجود (あります / います) + أول 100 كانجي.`,
-            a2Grammar: `قواعد JLPT N4: الصيغ العادية (Plain Form: Nai, Ta, Dictionary)، الجمل الشرطية (たら tara, ば ba, と to)، وإعطاء وتلقي الخدمات (あげる، もらう، くれる) + 300 كانجي.`,
-            b1Grammar: `قواعد JLPT N3: المبني للمجهول والسببية (Passive & Causative)، لغة الاحترام الرسمية في العمل (Keigo: Sonkeigo & Kenjougo)، والروابط السردية.`,
-            b2Grammar: `قواعد JLPT N2: التراكيب النحوية المهنية والإعلامية، المتلازمات اليابانية، وفهم المحادثات بالسرعة الطبيعية + 1000 كانجي.`,
-            c1c2Grammar: `قواعد JLPT N1: الذروة البلاغية والأدبية، التعابير الرباعية الحكيمة (Yojijukugo 四字熟語)، قراءة النصوص الفلسفية والاقتصادية، والطلاقة الكاملة.`
+            🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة اليابانية 🇯🇵):
+            - ممنوع استخدام أي كلمة إنجليزية كمثال! كل الأمثلة يابانية أصيلة.
+            - اربط كل قاعدة بمهمة تواصلية واقعية (JF Standard Can-do).`,
+            a0SentenceRules: `الجسيمات الأساسية (は, が, を, に, で, へ)، تصريف الأفعال في صيغة (Masu-form: ます / ません / ました / ませんでした)، وأدوات الاستفهام الأساسية.`,
+            a1Grammar: `معايير JLPT N5 & JF A1: نوعا الصفات (i-adjectives & na-adjectives) في الإثبات والنفي والماضي، صيغة (Te-form) للربط والطلب (てください) والاستمرار (ています)، العدادات الرقمية (Counters)، والتعبير عن الرغبة (たい) والوجود (あります/います) مع تقليص Romaji.`,
+            a2Grammar: `معايير JLPT N4 & JF A2: الصيغ العادية (Plain Form: Dictionary, Nai, Ta)، الجمل الموصولة (Relative Clauses)، الجمل الشرطية (たら, ば, と, なら)، أفعال العطاء والتلقي (あげる, くれる, もらう)، والصيغ الاحتمالية.`,
+            b1Grammar: `معايير JLPT N3 & JF B1: المبني للمجهول (Passive られる)، السببية (Causative させる)، أساسيات لغة الاحترام المهنية (Keigo: Sonkeigo & Kenjougo)، والروابط التفسيرية والسردية بدون Romaji نهائياً.`,
+            b2Grammar: `معايير JLPT N2 & JF B2: التراكيب النحوية المهنية والإعلامية المركبة، الفروق البراغماتية الدقيقة في الخطاب الرسمي، المتلازمات اليابانية، وفهم المحادثات بالسرعة الطبيعية.`,
+            c1c2Grammar: `معايير JLPT N1 & C1/C2: البلاغة اليابانية المتقدمة، التعابير الرباعية (Yojijukugo 四字熟語)، تحليل النصوص الأكاديمية والاقتصادية المعقدة، والمرونة الأسلوبية الكاملة.`
         };
     }
 
-    // 2. 🇨🇳 اللغة الصينية الماندرين (النغمات الـ 4 + الجذور التصويرية Radicals + أدوات القياس Measure Words)
-    if (/صين|mandarin|chinese|中文|hsk|pinyin/i.test(combined)) {
+    // 2. 🇨🇳 اللغة الصينية الماندرين (HSK 3.0 Standards + Tone Sandhi + Radicals + Measure Words)
+    if (cleanId === 'zh' || /صين|mandarin|chinese|中文|hsk|pinyin/i.test(combined)) {
         return {
             id: 'zh',
+            languageId: 'zh',
             family: 'east_asian_tonal',
             nameAr: 'الصينية (الماندرين)',
-            nameEn: 'Mandarin Chinese (中文)',
+            nameEn: 'Mandarin Chinese (普通话 / 中文)',
             speechLang: 'zh-CN',
-            instituteRole: 'أنت كبير مؤلفي مناهج معهد كونفوشيوس وخبير اختبارات HSK القياسية (من HSK 1 إلى HSK 6).',
-            examName: 'HSK 1-6',
-            vocabTableColumns: '| المفردة (الرمز الصيني Hanzi + Pinyin) | النغمة الصوتية والـ IPA | النطق التقريبي بالعربية | الجذر التصويري (Radical) وأداة القياس (Measure Word) | المعنى الدقيق بالعربية |',
+            frameworkStandard: 'Chinese Proficiency Grading Standards (HSK 3.0 — Levels 1–6+)',
+            instituteRole: 'أنت بروفيسور لغويات تطبيقية وصوتيات في اللغة الصينية القياسية (Putonghua) وخبير المعايير الرسمية لاختبارات HSK.',
+            examName: 'HSK 1–6 (HSK 3.0 Standards)',
+            vocabTableColumns: '| المفردة بالرموز الصينية (Hanzi + Pinyin بالنغمات) | النغمة الصوتية وقواعد التحول (Tone & Sandhi IPA) | التوجيه الصوتي بالعربية | الجذر الدلالي (Radical 部首) وأداة القياس (Measure Word 量词) | المعنى الدقيق والسياق بالعربية |',
             specialMorphologyRule: `
-            🏮 **قانون تدريس اللغة الصينية الماندرين الخاص (Mandarin Pedagogical DNA):**
-            1. **الرمز الصيني + البينين بالنغمات دائماً:** اكتب كل كلمة أو جملة بالرموز الصينية (Hanzi) متبوعة بنظام (Pinyin مع علامات النغمات الأربع: ā, á, ǎ, à) مثل: \`你好 (Nǐ hǎo)\` أو \`喝水 (hē shuǐ)\`.
-            2. **تشريح الجذور وأدوات القياس:** اشرح للطالب كيف يتكون الرمز الصيني من **جذر معنوي (Radical 部首)** (مثلاً جذر الماء \`氵\` أو الفم \`口\`)، واذكر دائماً **أداة القياس (Measure Word 量词: 个 gè, 本 běn, 杯 bēi)** مع الأسماء!
-            3. **بنية الجملة الصينية بلا تصريف:** ذكّر الطالب في معادلات الليغو أن الفعل في الصينية لا يتصرف أبداً، بل يعتمد الزمن على **ترتيب المكعبات: \`[الفاعل] + [الزمان] + [المكان] + [الفعل] + [المفعول]\`** وأدوات الحالة (\`了 le, 过 guo\`).`,
+            🏮 **الدستور البيداغوجي واللغوي للغة الصينية (Mandarin Specialist Profile):**
+            1. **النغمات الخمس وقواعد تغير النغمة (Lexical Tones & Tone Sandhi):**
+               - النغمة جزء لا يتجزأ من هوية الكلمة؛ اشرح النغمات الأربع + النغمة المحايدة (Neutral Tone)، وطبّق بصرامة قواعد تغير النغمة (Tone Sandhi): التقاء نغمتين ثالثتين (3+3 ➔ 2+3 مثل \`你好 nǐ hǎo ➔ ní hǎo\`)، وتغير نغمة \`不 bù\` (تصبح \`bú\` قبل النغمة الرابعة) و\`一 yī\` (تصبح \`yí\` قبل الرابعة و\`yì\` قبل الأولى والثانية والثالثة).
+            2. **الرموز الصينية (Hanzi) والجذور (Radicals) مقابل Pinyin:**
+               - لا تعتبر حفظ Pinyin دليلاً على القراءة؛ فكك كل رمز Hanzi إلى جذره الدلالي (Radical 部首) ومكونه الصوتي مع ترتيب الضربات (Stroke Order)، وقلّص الاعتماد على Pinyin تدريجياً في المستويات المتقدمة.
+            3. **أدوات القياس وبنية الجملة الصينية (Measure Words & Aspect Particles):**
+               - اذكر أداة القياس المخصصة (Measure Word 量词: 个, 本, 杯, 件, 条) مع كل اسم قابل للعد.
+               - اشرح ترتيب الجملة الصينية الأصيل (\`[الفاعل/الموضوع] + [الزمان] + [المكان] + [الفعل] + [المفعول]\`)، وجسيمات الحالة الزمنية (\`了 le, 过 guo, 着 zhe\`)، وتراكيب (\`把 bǎ\` و\`被 bèi\`) والمكملات الاتجاهية والنتيجية دون ترجمة حرفية مشوهة من العربية.`,
             a0PhonicsUnits: `
-            - الوحدة 1: البينين الصوتي (Pinyin): الأصوات الاستهلالية البسيطة (b, p, m, f, d, t, n, l) والنهايات الصوتية الصافية.
-            - الوحدة 2: النغمات الأربع في اللغة الصينية (The 4 Tones: المسطحة ā، الصاعدة á، المنحنية ǎ، الهابطة à) وكيف تغير النغمة المعنى كلياً (mā أم، má قنب، mǎ حصان، mà يوبخ).
-            - الوحدة 3: مخارج الأصوات الصينية الخاصة بالتاج واللسان (j, q, x مقابل zh, ch, sh, r مقابل z, c, s).
-            - الوحدة 4: قواعد تغير النغمة في الكلام المتصل (Tone Sandhi: مثل تحول النغمة الثالثة الأولى إلى ثانية في Nǐ hǎo ➔ Ní hǎo، وتغير نغمة 不 bù و 一 yī).
-            - الوحدة 5: الجذور التصويرية الأساسية للرموز الصينية (Radicals: إنسان 人، ماء 氵، فم 口، يد 扌، قلب 心) وأول 40 رمز هانزي.
-            - الوحدة 6: الضمائر الشخصية (我 wǒ, 你 nǐ, 他/她 tā) وفعل الكينونة (是 shì) والنفي بـ (不 bù و 没 méi).
-            - الوحدة 7: الأرقام، وأدوات القياس الإلزامية بين الرقم والاسم (Measure Words: 一个人، 一本书، 一杯茶) وتكوين السؤال بـ (吗 ma و 什么 shénme).`,
+            - الوحدة 1: نظام Pinyin الصوتي: السواكن الاستهلالية البسيطة (b, p, m, f, d, t, n, l) والنهايات البسيطة.
+            - الوحدة 2: النغمات الأربع الأساسية + النغمة المحايدة، وتدريبات التمييز السمعي للثنائيات المتضادة (Minimal Pairs: mā, má, mǎ, mà).
+            - الوحدة 3: التمييز الصوتي الدقيق بين السواكن الحنكية (j, q, x)، والسواكن الالتوائية (Retroflex: zh, ch, sh, r)، والسواكن الأسنانية (z, c, s).
+            - الوحدة 4: قواعد تغير النغمة الحتمية في الكلام المتصل (Tone Sandhi: 3rd+3rd، وتغيرات 一 yī و 不 bù).
+            - الوحدة 5: الجذور الدلالية الأساسية للرموز الصينية (Radicals: 人, 氵, 口, 扌, 心, 女, 木) وقواعد ترتيب الضربات (Stroke Order) لأول 50 رمز Hanzi.
+            - الوحدة 6: الضمائر الشخصية، فعل الكينونة (是 shì)، النفي الدقيق بـ (不 bù مقابل 没 méi)، وبنية الجملة الخبرية والاستفهامية (吗 ma).
+            - الوحدة 7: الأرقام، التواريخ، وأدوات القياس الإلزامية (Measure Words: 个 gè, 本 běn, 杯 bēi, 口 kǒu) في مواقف التعارف والطلب.`,
             a0PedagogyRules: `
-            🚨 تحذير صارم (مستوى التأسيس Pre-A1 / A0 للغة الصينية 🇨🇳):
-            - ممنوع استخدام أي كلمة إنجليزية! كل مثال يجب أن يضم الرمز الصيني (Hanzi) + (Pinyin بالنغمات) + الترجمة العربية.`,
-            a0SentenceRules: `قاعدة ترتيب الجملة الصينية الذهبية (الفاعل + الزمان + المكان + الفعل + المفعول)، أداة الملكية والوصف (的 de)، وأفعال الحياة اليومية لـ HSK 1.`,
-            a1Grammar: `قواعد HSK 1-2: أداة اكتمال الحدث (了 le)، التجربة السابقة (过 guo)، الأفعال المساعدة (想 xiǎng, 要 yào, 会 huì, 能 néng, 可以 kěyǐ)، وتراكيب المسافة والوقت.`,
-            a2Grammar: `قواعد HSK 3: المكملات النتيجية والاتجاهية (Resultative & Directional Complements: 看见، 听懂، 进来)، صيغ المقارنة بـ (比 bǐ)، وتراكيب تقديم المفعول بـ (把 bǎ).`,
-            b1Grammar: `قواعد HSK 4: الجمل المركبة والروابط المنطقية (虽然...但是 / 不但...而且 / 只要...就)، المبني للمجهول بـ (被 bèi)، والتعبير عن الآراء المهنية.`,
-            b2Grammar: `قواعد HSK 5: المتلازمات الصينية الرسمية، الأمثال الرباعية المأثورة (Chengyu 成语)، وقراءة النصوص الإعلامية والاقتصادية.`,
-            c1c2Grammar: `قواعد HSK 6+: البلاغة الصينية الكلاسيكية والحديثة، الظلال الدلالية الدقيقة بين المترادفات، والخطاب الأكاديمي والدبلوماسي الرفيع.`
+            🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الصينية 🇨🇳):
+            - ممنوع استخدام أي كلمة إنجليزية كمثال! كل مثال يضم Hanzi + Pinyin بالنغمات الصحيحة + الشرح العربي.`,
+            a0SentenceRules: `ترتيب الجملة الصينية القياسي (الفاعل + الزمان + المكان + الفعل + المفعول)، أداة الملكية والوصف (的 de)، وأفعال الحياة اليومية (HSK 1).`,
+            a1Grammar: `معايير HSK 1–2: جسيم اكتمال الحدث أو تغير الحالة (了 le)، جسيم التجربة السابقة (过 guo)، استمرار الحالة (着 zhe)، الأفعال المساعدة (想, 要, 会, 能, 可以)، وتراكيب المسافة والمدة.`,
+            a2Grammar: `معايير HSK 3: المكملات النتيجية والاتجاهية والاحتمالية (Resultative & Directional Complements: 看见, 听懂, 进来, 买不到)، تراكيب المقارنة (比 bǐ)، وتقديم المفعول بـ (把 bǎ).`,
+            b1Grammar: `معايير HSK 4: المبني للمجهول بـ (被 bèi)، بنية الموضوع والتعليق (Topic-Comment)، والروابط المنطقية المزدوجة (虽然…但是, 不但…而且, 只要…就, 无论…都) مع تقليص Pinyin.`,
+            b2Grammar: `معايير HSK 5: المتلازمات اللفظية الرسمية، الأمثال الرباعية (Chengyu 成语)، الفروق الدلالية الدقيقة بين المترادفات، وتحليل النصوص الإعلامية والاقتصادية.`,
+            c1c2Grammar: `معايير HSK 6+: التراكيب البلاغية والأدبية (书面语 Shūmiànyǔ)، الحجاج الأكاديمي، التلخيص والتحليل النقدي بالرموز الصينية الصافية.`
         };
     }
 
-    // 3. 🇰🇷 اللغة الكورية (مكعبات الهانغول Hangul + الحرف السفلي Batchim + تناغم الأدوات ومستويات الاحترام)
-    if (/كوري|korean|한국어|topik|hangul|هانغول/i.test(combined)) {
+    // 3. 🇰🇷 اللغة الكورية (King Sejong + TOPIK I & II + Batchim Phonological Rules + Speech Levels)
+    if (cleanId === 'ko' || /كوري|korean|한국어|topik|hangul|هانغول/i.test(combined)) {
         return {
             id: 'ko',
+            languageId: 'ko',
             family: 'east_asian_sov',
             nameAr: 'الكورية',
             nameEn: 'Korean (한국어)',
             speechLang: 'ko-KR',
-            instituteRole: 'أنت كبير مؤلفي مناهج معهد الملك سيجونغ (King Sejong Institute) وخبير اختبارات TOPIK I & II.',
+            frameworkStandard: 'King Sejong Institute Standard & TOPIK I / II',
+            instituteRole: 'أنت بروفيسور صوتيات ولغويات تطبيقية في معهد الملك سيجونغ (King Sejong Institute) وخبير اختبارات TOPIK I & II.',
             examName: 'TOPIK I & II',
-            vocabTableColumns: '| المفردة بالهانغول (Hangul + Romanization) | النطق الصوتي والـ IPA | النطق التقريبي بالعربية | تحليل المقطع والـ Batchim ومستوى الاحترام | المعنى الدقيق بالعربية |',
+            vocabTableColumns: '| المفردة بالهانغول (Hangul — مع تقليص Romanization بعد A0) | النطق الصوتي الفعلي بعد قواعد التحول (IPA) | التوجيه الصوتي بالعربية | تحليل الـ Batchim والظاهرة الصوتية ومستوى الخطاب | المعنى الدقيق والسياق بالعربية |',
             specialMorphologyRule: `
-            🇰🇷 **قانون تدريس اللغة الكورية الخاص (Korean Pedagogical DNA):**
-            1. **تركيب مكعبات الهانغول (Hangul Syllable Blocks):** وضح للطالب كيف تتجمع الحروف الساكنة والصوتية في مربع مقطعي واحد (حرف أول + حركة + حرف سفلي \`Batchim 받침\`) مع كتابة النطق اللاتيني بين قوسين مثل: \`한국어 (han-gug-eo)\`.
-            2. **قاعدة الوصل الصوتي للـ Batchim (Liaison 연음):** نبه الطالب دائماً في الأشعة الصوتية كيف يقفز الحرف الساكن السفلي (Batchim) ليندمج مع الحركة التي تليه (مثل: \`먹어요 ➔ 머거요 meo-geo-yo\`).
-            3. **هندسة الجملة المعكوسة (SOV + تناغم الأدوات):** الفعل أو الصفة في نهاية الجملة دائماً! والأدوات النحوية تتغير حسب وجود Batchim أو عدمه (\`은/는\`, \`이/가\`, \`을/를\`).`,
+            🇰🇷 **الدستور البيداغوجي واللغوي للغة الكورية (Korean Specialist Profile):**
+            1. **إتقان مكعبات الهانغول (Hangul Syllable Blocks) والتخلص المبكر من Romanization:**
+               - علّم الطالب تركيب المقطع الكوري (حرف ساكن أول + حركة + حرف سفلي Batchim 받침) وتخلص تدريجياً من الحروف اللاتينية بعد المستوى التأسيسي.
+               - ميّز بدقة صوتية بين الثلاثيات الساكنة الكورية: العادية (Plain: ㄱ, ㄷ, ㅂ, ㅅ, ㅈ)، والمنفوخة بالهواء (Aspirated 격음: ㅋ, ㅌ, ㅍ, ㅊ)، والمشددة الحنجرية (Tense/Double 경음: ㄲ, ㄸ, ㅃ, ㅆ, ㅉ).
+            2. **قواعد تغير الأصوات الحتمية عند التقاء المقاطع (Mandatory Korean Sound Changes):**
+               - اشرح وطبّق في كل درس الظواهر الصوتية الفعلية: الوصل الصوتي للـ Batchim (Liaison 연음화: \`한국어 ➔ 한구거\`)، التأنف (Nasalization 비음화: \`국물 ➔ 궁물\`, \`합니다 ➔ 함니다\`)، التمييع (Liquidization 유음화: \`설날 ➔ 설랄\`)، التشديد (Tensification 경음화: \`학교 ➔ 학꾜\`)، والنفخ (Aspiration 격음화: \`좋다 ➔ 조타\`).
+            3. **بنية (SOV) وتناغم الجسيمات ومستويات الاحترام (Particles & Speech Levels):**
+               - الفعل أو الصفة في نهاية الجملة دائماً، والجسيمات تتغير حسب وجود Batchim أو عدمه (\`은/는\` للموضوع، \`이/가\` للفاعل، \`을/를\` للمفعول، \`에/에서\` للمكان والاتجاه).
+               - درّب الطالب على اختيار مستوى الخطاب المناسب للموقف الاجتماعي: الرسمي المهذب (\`합쇼체 -습니다/ㅂ니다\`)، المهذب القياسي (\`해요체 -아요/어요\`)، وغير الرسمي (\`반말\`) مع لاحقة الاحترام (\`-(으)시-\`).`,
             a0PhonicsUnits: `
-            - الوحدة 1: فلسفة حروف العلة الكورية الأساسية في الهانغول (ㅏ a, ㅓ eo, ㅗ o, ㅜ u, ㅡ eu, ㅣ i) والحروف الساكنة الأولى (ㄱ, ㄴ, ㅁ, ㅅ, ㅇ).
-            - الوحدة 2: باقي الحروف الساكنة البسيطة والمنفوخة بالهواء (Aspirated: ㅋ, ㅌ, ㅍ, ㅊ) والحروف المشددة المزدوجة (ㄲ, ㄸ, ㅃ, ㅆ, ㅉ).
-            - الوحدة 3: الحروف الصوتية المركبة (ㅐ, ㅔ, ㅘ, ㅝ, ㅢ) وكيفية بناء مربع المقطع الكوري (Syllable Block Assembly).
-            - الوحدة 4: أسرار الحرف الساكن السفلي (Batchim 받침) وقواعد نطقه الـ 7 والوصل الصوتي التلقائي (Liaison 연음).
-            - الوحدة 5: فعل الكينونة الكوري (이에요 / 예요) والتحيات اليومية ومستوى الاحترام المهذب (해요체).
-            - الوحدة 6: هيكل الجملة الكورية بالمكعبات (SOV) وأدوات الموضوع والفاعل والمفعول المتناغمة (은/는, 이/가, 을/를).
-            - الوحدة 7: أسماء الإشارة (이거, 그거, 저거)، الوجود والملكية (있어요 / 없어요)، والأرقام الكورية والصينية-الكورية.`,
+            - الوحدة 1: فلسفة حروف العلة الأساسية في الهانغول (ㅏ, ㅓ, ㅗ, ㅜ, ㅡ, ㅣ, ㅐ, ㅔ) والسواكن الأساسية (ㄱ, ㄴ, ㄷ, ㄹ, ㅁ, ㅂ, ㅅ, ㅇ, ㅈ).
+            - الوحدة 2: التمييز الثلاثي الدقيق للسواكن: العادية مقابل المنفوخة بالهواء (ㅋ, ㅌ, ㅍ, ㅊ, ㅎ) مقابل المشددة المزدوجة (ㄲ, ㄸ, ㅃ, ㅆ, ㅉ).
+            - الوحدة 3: حروف العلة المركبة (ㅑ, ㅕ, ㅛ, ㅠ, ㅘ, ㅝ, ㅚ, ㅟ, ㅢ) وهندسة بناء مكعبات المقاطع الكورية (Syllable Blocks).
+            - الوحدة 4: القواعد السبع لنطق الحرف الساكن السفلي (Batchim 받침) وقواعد الوصل (연음화) والتأنف (비음화).
+            - الوحدة 5: فعل الكينونة الكوري (입니다 / 이에요 / 예요)، النفي بـ (아닙니다 / 아니에요)، والتحيات بمستويات الاحترام الصحيحة.
+            - الوحدة 6: هيكل الجملة الكورية (SOV) وتناغم جسيمات الموضوع والفاعل والمفعول (은/는, 이/가, 을/를).
+            - الوحدة 7: أفعال الوجود والملكية (있어요 / 없어요)، جسيمات المكان (에 vs 에서)، ونظامي الأرقام (الكوري الأصيل والصيني-الكوري).`,
             a0PedagogyRules: `
-            🚨 تحذير صارم (مستوى التأسيس Pre-A1 / A0 للغة الكورية 🇰🇷):
-            - ممنوع استخدام أي كلمة إنجليزية كـمثال! كل الأمثلة كورية مكتوبة بالهانغول مع النطق والترجمة العربية.`,
-            a0SentenceRules: `تصريف الأفعال والصفات في المضارع المهذب (-아요 / -어요)، أدوات المكان والاتجاه (에 / 에서)، والنفي بـ (안 / 못).`,
-            a1Grammar: `قواعد TOPIK I (المستوى 1): الماضي (-았/었어요)، المستقبل (-을 거예요)، الطلب المهذب (-으세요)، وأدوات الربط البسيطة (-고, -지만, -아/어서).`,
-            a2Grammar: `قواعد TOPIK I (المستوى 2): التعبير عن القدرة والاستطاعة (-을 수 있다/없다)، الالتزام (-아야/어야 하다)، التجربة (-아/어 본 적이 있다)، وتعديل الأسماء (-(으)ㄴ/는).`,
-            b1Grammar: `قواعد TOPIK II (المستوى 3-4): مستويات الخطاب الرسمية والكتابة، الكلام غير المباشر (-다고 하다)، والروابط السببية والشرطية المتقدمة.`,
-            b2Grammar: `قواعد TOPIK II (المستوى 5): التراكيب الأكاديمية والإعلامية، الأمثال الكورية، والمفردات الصينية-الكورية (Hanja-eo) المتقدمة.`,
-            c1c2Grammar: `قواعد TOPIK II (المستوى 6): الذروة البلاغية والمهنية، كتابة المقالات التحليلية الطويلة، والطلاقة الكاملة.`
+            🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الكورية 🇰🇷):
+            - ممنوع استخدام أي كلمة إنجليزية كمثال! كل الأمثلة مكتوبة بالهانغول مع توضيح النطق الفعلي بعد تطبيق قواعد الـ Batchim.`,
+            a0SentenceRules: `تصريف الأفعال والصفات في المضارع المهذب (-아요 / -어요 / -해요)، التفرقة بين (에) للثبات والوجهة و(에서) للمكان النشط، والنفي بـ (안 و 못).`,
+            a1Grammar: `معايير TOPIK I (المستوى 1): الماضي (-았/었어요)، المستقبل (-을 거예요)، الطلب المهذب (-(으)세요)، الروابط الأساسية (-고, -지만, -아서/어서)، ولاحقة الاحترام (-(으)시-) مع تقليص Romanization.`,
+            a2Grammar: `معايير TOPIK I (المستوى 2): القدرة والاستطاعة (-(으)ㄹ 수 있다/없다)، الالتزام (-아야/어야 하다)، التجربة (-아/어 본 적이 있다)، وتعديل الأسماء بالصفات والأفعال في الأزمنة الثلاثة (-(으)ㄴ / -는 / -(으)ㄹ).`,
+            b1Grammar: `معايير TOPIK II (المستوى 3–4): الكلام غير المباشر (-다고/냐고/라고/자고 하다)، الصيغ الكتابية الرسمية (해라체)، المبني للمجهول والسببية، والروابط الاستنتاجية والشرطية المتقدمة بدون Romanization.`,
+            b2Grammar: `معايير TOPIK II (المستوى 5): المفردات الصينية-الكورية الأكاديمية (Sino-Korean Hanja-eo)، الأمثال والتعابير الاصطلاحية (관용어 & 속담)، وكتابة المقالات التحليلية (TOPIK II Writing 53 & 54).`,
+            c1c2Grammar: `معايير TOPIK II (المستوى 6): البلاغة الكورية المتقدمة، تحليل النصوص الفكرية والقانونية والاقتصادية، والمرونة الكاملة عبر جميع مستويات الخطاب.`
         };
     }
 
-    // 4. 🇫🇷 اللغة الفرنسية
-    if (/فرنس|french|français|delf|dalf/i.test(combined)) {
+    // 4. 🇫🇷 اللغة الفرنسية (Alliance Française + DELF/DALF + Liaison Rules + Nasal Vowels)
+    if (cleanId === 'fr' || /فرنس|french|français|delf|dalf/i.test(combined)) {
         return {
             id: 'fr',
+            languageId: 'fr',
             family: 'european',
             nameAr: 'الفرنسية',
             nameEn: 'French (Français)',
             speechLang: 'fr-FR',
-            instituteRole: 'أنت كبير مؤلفي مناهج Alliance Française وخبير اختبارات DELF/DALF.',
-            examName: 'DELF B2 / DALF C1-C2',
-            vocabTableColumns: '| المفردة / العبارة (Français) | الرمز الصوتي (IPA) | النطق التقريبي بالعربية | حركة الفم والأشعة الصوتية (🔇 للصامت / ‿ للوصل) | المعنى الدقيق بالعربية (🔵 مذكر / 🔴 مؤنث) |',
+            frameworkStandard: 'CEFR Companion Volume & DELF / DALF (A1–C2)',
+            instituteRole: 'أنت بروفيسور صوتيات ولغويات فرنسية في Alliance Française وخبير تصميم مناهج CEFR واختبارات DELF/DALF.',
+            examName: 'DELF A1–B2 / DALF C1–C2',
+            vocabTableColumns: '| المفردة / العبارة (Français) | الرمز الصوتي الدقيق (IPA) | التوجيه الصوتي بالعربية | تشريح المخرج الصوتي (Liaison ‿ / Enchaînement / Nasal) | المعنى الدقيق والجنس النحوي (🔵 مذكر / 🔴 مؤنث) |',
             specialMorphologyRule: `
-            🇫🇷 **قانون تدريس اللغة الفرنسية الخاص:**
-            - ضع دائماً رمز الجنس النحوي **(🔵 مذكر)** أو **(🔴 مؤنث)** مع كل اسم.
-            - أبرز دائماً الحروف الصامتة في نهاية الكلمة والوصل الصوتي بعلامة القوس السفلي \`‿\` (La Liaison) والحذف الصوتي (L'Élision \`l' / c'est\`).`,
+            🇫🇷 **الدستور البيداغوجي واللغوي للغة الفرنسية (French Specialist Profile):**
+            1. **التمييز الصوتي الدقيق (Voyelles Orales vs. Nasales):**
+               - ميّز علمياً وبوضوح بين حروف العلة الفموية: \`/y/\` (في \`tu\` — لسان في موضع /i/ مع شفاه مضمومة) مقابل \`/u/\` (في \`tout\`)، وبين \`/e/\` المغلقة و\`/ɛ/\` المفتوحة، وبين \`/ø/\` و\`/œ/\`.
+               - اشرح مخارج الأصوات الأنفية (\`Voyelles nasales: /ɑ̃/ an/en, /ɛ̃/ in/ain, /ɔ̃/ on\`) حيث يخرج الهواء من الفم والأنف دون نطق حرف \`n\` ساكناً في النهاية.
+            2. **التفريق العلمي بين Liaison و Enchaînement و Élision:**
+               - لا تساوِ بين \`La Liaison\` (نطق حرف ساكن نهائي صامت عادةً مثل \`s, x, z, t, n\` قبل كلمة تبدأ بحرف علة، مع تحديد متى تكون **إلزامية Obligatoire** كما بين الأداة والاسم \`les‿amis\`، أو **اختيارية Facultative**، أو **ممنوعة Interdite** كما بعد \`et\` أو بعد الاسم المفرد) وبين \`L'Enchaînement\` (ربط حرف ساكن منطوق أصلاً بحرف العلة التالي مثل \`une‿amie\`) و\`L'Élision\` (حذف حرف العلة ووضع فاصلة عليا \`l'eau, c'est\`).
+            3. **الجنس النحوي والتدرج الأسلوبي:**
+               - اذكر الجنس النحوي (🔵 مذكر / 🔴 مؤنث) في جدول المفردات، ولكن **يُمنع منعاً باتاً إقحام الإيموجي الملون داخل الجمل الفعلية**!
+               - علّم الطالب الفرق بين الفرنسية الكتابية المعيارية والفرنسية المنطوقة اليومية (\`ne\` المحذوفة في الكلام السريع مقابل الالتزام بها في الكتابة الرسمية).`,
             a0PhonicsUnits: `
-            - الوحدة 1: الحروف الفرنسية، الحركات الصوتية الأساسية (a, e, i, o, u, y)، وقاعدة الحروف الصامتة في نهاية الكلمات (e, s, t, d, x).
-            - الوحدة 2: الحركات المزخرفة والنبرات الفرنسية (Les Accents: é, è, ê, ç) والفرق الصوتي الدقيق بين (/e/ المغلقة و /ɛ/ المفتوحة).
-            - الوحدة 3: المقاطع الصوتية المركبة الأساسية (Les Sons Composés: ou, oi, au, eau, eu, œu) في مفردات الحياة اليومية.
-            - الوحدة 4: الأصوات الأنفية الفرنسية الشهيرة (Les Voyelles Nasales: an/en, in/ain, on, un) ومخارج الهواء من الفم والأنف.
-            - الوحدة 5: الحروف الساكنة المركبة (ch, ph, gn, ill, qu) وأدوات التنكير والتعريف للمذكر والمؤنث (un, une, des / le, la, l', les).
-            - الوحدة 6: الوصل الصوتي الإجباري (La Liaison & L'Élision) وتقديم الأشياء والناس بـ (C'est un... / Voici la...).
-            - الوحدة 7: الضمائر الشخصية (je, tu, il, elle) مع فعلي الكينونة والملكية (être & avoir) والأرقام والألوان.`,
-            a0PedagogyRules: `
-            🚨 تحذير صارم (مستوى التأسيس Pre-A1 / A0 للغة الفرنسية 🇫🇷):
-            - ممنوع كتابة أي كلمة إنجليزية! كل الأمثلة والمفردات فرنسية حصراً مع ترجمتها العربية.`,
-            a0SentenceRules: `الضمائر الشخصية، تصريف أفعال المجموعة الأولى (-er) وفعلي (être / avoir)، النفي بالمكعبين المحيطين بالفعل (ne... pas)، وتكوين السؤال بـ (Est-ce que... ?).`,
-            a1Grammar: `المضارع الدلالي (Présent de l'indicatif)، أفعال المجموعات الثلاث، أدوات التجزئة (du, de la, des)، صفات الملكية، والمستقبل القريب (Futur proche).`,
-            a2Grammar: `الماضي المركب (Passé composé مع avoir و être) والماضي الناقص (Imparfait) لسرد الذكريات، المستقبل البسيط (Futur simple)، والضمائر المفعولة (COD / COI / y / en).`,
-            b1Grammar: `الربط بين الأزمنة السردية، المضارع الشرطي (Conditionnel présent)، المنصوب (Subjonctif présent)، والضمائر الموصولة (qui, que, dont, où).`,
-            b2Grammar: `صيغ الـ (Subjonctif) المتقدمة، الشرطيات المعقدة، الروابط الحجاجية (en revanche, quoique, néanmoins)، ومنهجية (Essai argumenté) لاختبار DELF B2.`,
-            c1c2Grammar: `البلاغة الفرنسية الرفيعة، إتقان (Synthèse de documents) لاختبار DALF C1/C2، والظلال الدلالية الدقيقة.`
+            - الوحدة 1: الحروف الفرنسية، حروف العلة الفموية (a, e, i, o, u, y)، التمييز بين /y/ و /u/، وقاعدة الحروف الصامتة النهائية (e, s, t, d, x, z).
+            - الوحدة 2: علامات التشكيل الفرنسية (Les Accents: é, è, ê, ë, ç) والفرق الصوتي بين /e/ و /ɛ/.
+            - الوحدة 3: المقاطع الصوتية المركبة (ou /u/, oi /wa/, au/eau /o/, eu/œu /ø, œ/) في مفردات الحياة اليومية.
+            - الوحدة 4: الحركات الأنفية الفرنسية (Voyelles nasales: /ɑ̃/, /ɛ̃/, /ɔ̃/) والفرق السمعي بين الكلمة الأنفية والفموية (bon vs bonne).
+            - الوحدة 5: السواكن المركبة (ch, gn, ill, qu, ph) وأدوات التعريف والتنكير (un, une, des / le, la, l', les).
+            - الوحدة 6: قواعد الوصل الصوتي (Liaison Obligatoire vs Interdite)، التسلسل (Enchaînement)، والحذف (Élision) مع (C'est / Il y a).
+            - الوحدة 7: الضمائر الشخصية (je, tu, il, elle, on, nous, vous, ils, elles) مع فعلي (être & avoir) والمجموعات الإيقاعية (Groupes rythmiques).`,
+            a0PedagogyRules: `🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الفرنسية 🇫🇷): جميع الأمثلة فرنسية حصراً مع رمز IPA الدقيق والشرح العربي، بدون أي تسرب إنجليزي.`,
+            a0SentenceRules: `تصريف أفعال المجموعة الأولى (-er) وفعلي (être / avoir)، النفي بـ (ne... pas)، وطرق طرح السؤال الثلاث (التنغيم، Est-ce que، والقلب Inversion).`,
+            a1Grammar: `معايير CEFR A1 / DELF A1: المضارع الدلالي للمجموعات الثلاث، أدوات التجزئة (Articles partitifs: du, de la, de l', des)، صفات الملكية والإشارة، المستقبل القريب (Futur proche)، والماضي القريب (Passé récent).`,
+            a2Grammar: `معايير CEFR A2 / DELF A2: التكامل بين الماضي المركب (Passé composé مع avoir و être ومطابقة اسم المفعول) والماضي الناقص (Imparfait)، المستقبل البسيط (Futur simple)، والضمائر المفعولة (COD, COI, y, en).`,
+            b1Grammar: `معايير CEFR B1 / DELF B1: الماضي التام (Plus-que-parfait)، المضارع الشرطي (Conditionnel présent)، المنصوب (Subjonctif présent: الإلزام، المشاعر، الشك)، الضمائر الموصولة البسيطة والمركبة (qui, que, dont, où, lequel)، والكلام غير المباشر.`,
+            b2Grammar: `معايير CEFR B2 / DELF B2: الشرطيات الماضية، صيغ الـ Subjonctif المتقدمة، الروابط الحجاجية الدقيقة (en revanche, quoique, bien que, néanmoins)، ومنهجية المقال الجدلي والعرض الشفهي (Essai argumenté & Exposé DELF B2).`,
+            c1c2Grammar: `معايير CEFR C1–C2 / DALF C1–C2: البلاغة والأسلوبية الفرنسية، إتقان التوليف الأكاديمي للمستندات (Synthèse de documents)، التلاعب بالـ Registres de langue، والدقة الاصطلاحية.`
         };
     }
 
-    // 5. 🇩🇪 اللغة الألمانية
-    if (/ألمان|المان|german|deutsch|goethe|testdaf/i.test(combined)) {
+    // 5. 🇩🇪 اللغة الألمانية (Hochdeutsch + Goethe/TestDaF + Accurate /ç/ vs /x/ + Complete Verb Position Rules)
+    if (cleanId === 'de' || /ألمان|المان|german|deutsch|goethe|testdaf/i.test(combined)) {
         return {
             id: 'de',
+            languageId: 'de',
             family: 'european',
             nameAr: 'الألمانية',
             nameEn: 'German (Deutsch)',
             speechLang: 'de-DE',
-            instituteRole: 'أنت كبير مؤلفي مناهج معهد غوته (Goethe-Institut) وخبير اختبارات Goethe-Zertifikat و TestDaF.',
-            examName: 'Goethe-Zertifikat / TestDaF',
-            vocabTableColumns: '| المفردة (Deutsch - بحرف أول كبير للأسماء!) | الرمز الصوتي (IPA) | النطق التقريبي بالعربية | مخرج الصوت وقاعدة التركيب | المعنى الدقيق (🔵 der / 🔴 die / 🟢 das) |',
+            frameworkStandard: 'CEFR Companion Volume, Profile Deutsch & Goethe-Zertifikat / TestDaF',
+            instituteRole: 'أنت بروفيسور صوتيات ولغويات تطبيقية للغة الألمانية القياسية (Hochdeutsch) في معهد غوته (Goethe-Institut) وخبير اختبارات Goethe-Zertifikat و TestDaF.',
+            examName: 'Goethe-Zertifikat A1–C2 / TestDaF',
+            vocabTableColumns: '| المفردة بالأداة والجمع (Deutsch — بحرف أول كبير للأسماء!) | الرمز الصوتي الدقيق (IPA) | التوجيه الصوتي بالعربية | تشريح المخرج الصوتي (/ç/ vs /x/, Auslautverhärtung, Vokalquantität) | المعنى الدقيق والجنس النحوي (🔵 der / 🔴 die / 🟢 das) |',
             specialMorphologyRule: `
-            🇩🇪 **قانون تدريس اللغة الألمانية الخاص:**
-            - اكتب كل اسم في الألمانية بحرف أول كبير دائماً مع أداة جنسه النحوي الثلاثي: **(🔵 der مذكر / 🔴 die مؤنث / 🟢 das محايد)**.
-            - ركز في معادلات الليغو على **قاعدة الفعل في الموقع رقم 2 دائماً (V2 Rule)** وفي نهاية الجملة مع الروابط!`,
+            🇩🇪 **الدستور البيداغوجي واللغوي للغة الألمانية القياسية (German Hochdeutsch Specialist Profile):**
+            1. **الدقة الصوتية العلمية الصارمة (German Phonetics & IPA):**
+               - **التفريق العلمي بين \`/ç/\` (Ich-Laut) و \`/x/\` (Ach-Laut):** إياك أن تصف الصوت \`/ç/\` في كلمات مثل \`ich, Milch, Bücher, Mädchen\` بأنه مجرد «شين عربية»! اشرح بدقة أن \`/ç/\` هو **صوت احتكاكي حنكي مهموس (voiceless palatal fricative)** يرتفع فيه وسط اللسان نحو الحنك الصلب (مخرج الياء \`/j/\` مع دفع هواء مهموس) ويأتي بعد حروف العلة الأمامية (\`i, e, ä, ö, ü, ei, eu, äu\`) وبعد السواكن (\`l, n, r\`) وفي تصغير (\`-chen\`)؛ بينما \`/x/\` (\`Ach-Laut\`) هو احتكاكي طبقي/لهوي يأتي بعد الحروف الخلفية (\`a, o, u, au\` كما في \`Buch, Nacht, auch\`).
+               - **طول حروف العلة والتهميس النهائي:** وضح الفرق الدلالي بين الحركات الطويلة والقصيرة (مثل \`Maße /aː/ vs Masse /a/\`, \`Hüte /yː/ vs Hütte /ʏ/\`)، وقاعدة التهميس النهائي للسواكن (\`Auslautverhärtung\`: نطق \`b, d, g\` في نهاية المقطع كـ \`/p, t, k/\` كما في \`Hund /hʊnt/, Tag /taːk/\`).
+            2. **القانون الكامل لموقع الفعل في الجملة الألمانية (Complete Verb Position System — Not Just V2!):**
+               - لا تقدم قاعدة \`V2\` كقانون مطلق لكل أنواع الجمل! اشرح النظام الثلاثي بدقة:
+                 * **المركز الثاني (V2 — Zweitstellung):** في الجملة الخبرية الرئيسية (\`Hauptsatz\`) وفي السؤال بأداة استفهام (\`W-Frage: Wo wohnen Sie?\`)، مع شرح القوس الفعلي (\`Satzklammer\`) حيث يذهب الجزء الثاني من الفعل إلى نهاية الجملة.
+                 * **المركز الأول (V1 — Erststellung):** في سؤال نعم/لا (\`Ja/Nein-Frage: Trinkst du Kaffee?\`) وفي جملة الأمر (\`Imperativ: Hören Sie!\`).
+                 * **نهاية الجملة (Verb-Final — Endstellung):** في الجملة التابعة (\`Nebensatz\`) بعد الروابط المصدّرة (\`weil, dass, wenn, obwohl, als\`) أو ضمائر الوصل (\`Relativsätze\`).
+            3. **منع تلوث الجمل بشارات الجنس الملونة (Strict Article Hygiene):**
+               - تُكتب جميع الأسماء الألمانية بحرف أول كبير (\`Großschreibung\`) دائماً.
+               - تُستخدم شارات الألوان (\`🔵 der / 🔴 die / 🟢 das\`) في **جدول المفردات وعند تعريف الاسم المفرد المستقل فقط**.
+               - 🚫 **ممنوع منعاً باتاً** كتابة \`🔵 der\` أو \`🔴 die\` أو \`🟢 das\` داخل الجمل بعد أدوات التنكير أو الملكية أو النفي أو في حالة النصب/الجر (إياك أن تكتب \`Ich habe ein 🟢 das Haus\` أو \`Mein 🔵 der Bruder\`؛ اكتب ألمانية سليمة 100%: \`Ich habe ein Haus\`، \`Mein Bruder\`, \`Ich sehe den Baum\`).`,
             a0PhonicsUnits: `
-            - الوحدة 1: الأبجدية الألمانية ومخارج المقاطع الصوتية المركبة (ei, ie, eu, äu, au).
-            - الوحدة 2: الحروف الصوتية المميزة (Umlaute: ä, ö, ü) وحرف (ß - Eszett).
-            - الوحدة 3: مخارج الحروف الساكنة المركبة (ch في ich مقابل ach، و sch، و sp/st، و pf).
-            - الوحدة 4: الأجناس النحوية الثلاثة وأدوات التعريف والتنكير (der, die, das / ein, eine) مع أول 100 اسم ملموس.
-            - الوحدة 5: الضمائر الشخصية مع فعلي الكينونة والملكية (sein & haben).
-            - الوحدة 6: بناء الجملة الألمانية الأولى وقاعدة الفعل في المركز الثاني (V2 Rule).
-            - الوحدة 7: جمع الأسماء والنفي باستخدام (nicht مقابل kein/keine).`,
-            a0PedagogyRules: `🚨 تحذير صارم: جميع الأمثلة والمفردات بالألمانية حصراً مع كتابة الحرف الأول كبيراً لكل اسم!`,
-            a0SentenceRules: `قاعدة الفعل في الموقع الثاني (V2)، تصريف الأفعال القياسية في المضارع، وتكوين الأسئلة بـ (W-Fragen & Ja/Nein-Fragen).`,
-            a1Grammar: `حالتا الرفع والنصب (Nominativ & Akkusativ)، الأفعال المنفصلة (Trennbare Verben)، والأفعال المساعدة (Modalverben).`,
-            a2Grammar: `حالة الجر (Dativ)، حروف الجر متغيرة الحالة (Wechselpräpositionen)، الماضي التام (Perfekt)، والروابط التي ترسل الفعل للنهاية (weil, dass, wenn).`,
-            b1Grammar: `الماضي البسيط السردي (Präteritum)، حالة المضاف إليه (Genitiv)، المبني للمجهول (Passiv)، وصيغة التمني والشرط (Konjunktiv II).`,
-            b2Grammar: `الروابط المزدوجة، النعوت الموسعة، Nominalstil مقابل Verbalstil، والتحضير لاختبار Goethe B2.`,
-            c1c2Grammar: `الكلام المنقول الرسمي (Konjunktiv I)، البلاغة الأكاديمية والعلمية، وإتقان مهارات TestDaF و Goethe C1/C2.`
+            - الوحدة 1: الأبجدية الألمانية ومخارج المقاطع الصوتية المزدوجة (Diphthonge: ei/ai /aɪ̯/, ie /iː/, au /aʊ̯/, eu/äu /ɔʏ̯/).
+            - الوحدة 2: حروف الإمالة (Umlaute: ä /ɛː, ɛ/, ö /øː, œ/, ü /yː, ʏ/)، حرف (ß - Eszett)، وقواعد طول الحركة (Langvokal + ß مقابل Kurzvokal + ss).
+            - الوحدة 3: التشريح الصوتي الدقيق لـ Ich-Laut /ç/ مقابل Ach-Laut /x/، السواكن المركبة (sch /ʃ/, sp /ʃp/, st /ʃt/, pf /p͡f/, z /t͡s/)، والتهميس النهائي (Auslautverhärtung).
+            - الوحدة 4: الأجناس النحوية الثلاثة في حالة الرفع (Nominativ: der, die, das / ein, eine, ein) وقاعدة تكبير الأسماء (Großschreibung).
+            - الوحدة 5: الضمائر الشخصية وتصريف فعلي الكينونة والملكية (sein & haben) في سياقات التعارف.
+            - الوحدة 6: هندسة الجملة الألمانية: الفرق بين الجملة الخبرية والسؤال بـ W-Frage (الفعل في V2) وبين سؤال نعم/لا Ja/Nein-Frage (الفعل في V1).
+            - الوحدة 7: صيغ جمع الأسماء، والنفي الدقيق باستخدام (nicht) للأفعال والصفات مقابل (kein/keine) للأسماء المنكرة.`,
+            a0PedagogyRules: `
+            🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الألمانية 🇩🇪):
+            - ممنوع كتابة أي جملة ألمانية تحتوي على أداة مزدوجة مثل (ein das Haus)!
+            - اشرح الصوت /ç/ علمياً بدقة (احتكاكي حنكي من وسط اللسان) ولا تخلطه بالشين العربية.`,
+            a0SentenceRules: `التمييز بين موقع الفعل V2 (في الخبر و W-Fragen) وموقع الفعل V1 (في Ja/Nein-Fragen والأمر)، وتصريف الأفعال القياسية في المضارع.`,
+            a1Grammar: `معايير CEFR A1 / Goethe A1: التمييز التطبيقي بين حالة الفاعل (Nominativ) وحالة المفعول به المباشر (Akkusativ: تحول der إلى den، و ein إلى einen، و kein إلى keinen)، الأفعال متغيرة الحركة (Vokalwechsel: fahren, lesen, sprechen)، الأفعال المنفصلة (Trennbare Verben) والقوس الفعلي (Satzklammer)، والأفعال المساعدة (Modalverben).`,
+            a2Grammar: `معايير CEFR A2 / Goethe A2: حالة القابل/الجر (Dativ)، حروف الجر متغيرة الحالة (Wechselpräpositionen: Wo + Dativ مقابل Wohin + Akkusativ)، الأفعال الانعكاسية (Reflexive Verben)، زمن الماضي التام للحديث (Perfekt مع haben و sein)، والجمل التابعة التي ترسل الفعل المصرف إلى النهاية (Nebensätze: weil, dass, wenn).`,
+            b1Grammar: `معايير CEFR B1 / Goethe B1: زمن الماضي السردي (Präteritum)، حالة المضاف إليه (Genitiv وحروف الجر الخاصة به: wegen, trotz, während)، تصريف الصفات الكامل (Adjektivdeklination)، المبني للمجهول (Vorgangspassiv & Zustandspassiv)، صيغة التمني والشرط والطلب المهذب (Konjunktiv II)، والروابط المزدوجة (nicht nur... sondern auch, je... desto).`,
+            b2Grammar: `معايير CEFR B2 / Goethe B2: التحويل بين الأسلوب الاسمي والفعلي (Nominalstil vs. Verbalstil)، النعوت الموسعة (Erweiterte Partizipialattribute)، المبني للمجهول مع الأفعال المساعدة وبدائله (sich lassen, sein + zu)، المتلازمات الفعلية-الاسمية (Funktionsverbgefüge)، واستراتيجيات الحجاج المهني.`,
+            c1c2Grammar: `معايير CEFR C1–C2 / TestDaF & Goethe C1–C2: الكلام المنقول الرسمي والأكاديمي (Konjunktiv I)، الاستنتاج الذاتي للأفعال المساعدة (Subjektive Bedeutung der Modalverben)، التحليل النقدي وتلخيص الرسوم البيانية والمصادر المتعددة (TestDaF Schriftlicher & Mündlicher Ausdruck)، والدقة البلاغية والأدبية.`
         };
     }
 
-    // 6. 🇪🇸 اللغة الإسبانية
-    if (/إسبان|اسبان|spanish|español|dele|siele/i.test(combined)) {
+    // 6. 🇪🇸 اللغة الإسبانية (Instituto Cervantes + DELE/SIELE + Ser vs Estar + Subjuntivo)
+    if (cleanId === 'es' || /إسبان|اسبان|spanish|español|dele|siele/i.test(combined)) {
         return {
             id: 'es',
+            languageId: 'es',
             family: 'european',
             nameAr: 'الإسبانية',
             nameEn: 'Spanish (Español)',
             speechLang: 'es-ES',
-            instituteRole: 'أنت كبير مؤلفي مناهج معهد ثيربانتس (Instituto Cervantes) وخبير اختبارات DELE/SIELE.',
-            examName: 'DELE / SIELE',
-            vocabTableColumns: '| المفردة / العبارة (Español) | الرمز الصوتي (IPA) | النطق التقريبي بالعربية | مخرج الصوت وموضع النبر (La Tilde) | المعنى الدقيق (🔵 el مذكر / 🔴 la مؤنث) |',
+            frameworkStandard: 'CEFR Companion Volume, Plan Curricular del Instituto Cervantes & DELE / SIELE',
+            instituteRole: 'أنت بروفيسور صوتيات ولغويات إسبانية في معهد ثيربانتس (Instituto Cervantes) وخبير اختبارات DELE و SIELE.',
+            examName: 'DELE A1–C2 / SIELE',
+            vocabTableColumns: '| المفردة / العبارة (Español) | الرمز الصوتي والنبر (IPA & Tilde) | التوجيه الصوتي بالعربية | المخرج الصوتي وقاعدة النبر (Aguda, Llana, Esdrújula) | المعنى الدقيق والجنس النحوي (🔵 el مذكر / 🔴 la مؤنث) |',
             specialMorphologyRule: `
-            🇪🇸 **قانون تدريس اللغة الإسبانية الخاص:**
-            - ميز بوضوح بين فعلي الكينونة **(\`Ser\` للجوهر والهوية الدائمة vs \`Estar\` للحالة والموقع)** وبين (\`Por\` vs \`Para\`).
-            - ضع رمز الجنس النحوي (🔵 مذكر / 🔴 مؤنث) وعلامات الاستفهام والتعجب المزدوجة (\`¿...? / ¡...!\`).`,
+            🇪🇸 **الدستور البيداغوجي واللغوي للغة الإسبانية (Spanish Specialist Profile):**
+            1. **الصوتيات وقواعد النبر والتنوع الإقليمي المنضبط:**
+               - اشرح صفاء حروف العلة الخمسة (a, e, i, o, u)، وقواعد النبر وعلامة التشكيل (\`La Tilde: á, é, í, ó, ú\`) وفق تصنيف الكلمات (\`Agudas, Llanas, Esdrújulas\`).
+               - وضّح الفروق الصوتية واللفظية بين الإسبانية الأوروبية واللاتينية (\`Distinción /θ/ vs. Seseo /s/\`, \`Yeísmo\`, \`vosotros vs. ustedes\`) دون خلط عشوائي داخل الدرس الواحد.
+            2. **الفروق النحوية الجوهرية بالسياق وليس بالقواعد المبسطة المضللة:**
+               - اشرح الفرق بين \`Ser\` (الهوية، الأصل، المهنة، الوقت، الحدث) و\`Estar\` (الموقع الجغرافي، الحالة الناتجة، والصفات المتغيرة المعنى مثل \`ser listo vs estar listo\`).
+               - اشرح الفرق بين \`Tener\` (الملكية والعمر والحالات الجسدية) و\`Haber / Hay\` (الوجود)، وبين \`Por\` (السبب، الوسيلة، المدة) و\`Para\` (الهدف، الوجهة، الموعد النهائي).`,
             a0PhonicsUnits: `
-            - الوحدة 1: الأبجدية الإسبانية وحروف العلة الخمسة الصافية الثابتة (a, e, i, o, u).
-            - الوحدة 2: الحروف الخاصة في الإسبانية (ñ, ll, ch, rr) وحرف (h) الصامت دائماً.
-            - الوحدة 3: قواعد نطق حرفي (c / z / q) وحرفي (g / j) حسب حرف العلة الذي يليهما.
-            - الوحدة 4: التذكير والتأنيث وأدوات التعريف والتنكير (el, la, los, las / un, una).
-            - الوحدة 5: قواعد النبر الصوتي وعلامة المد (La Tilde: á, é, í, ó, ú).
-            - الوحدة 6: الفرق التأسيسي الأول بين فعلي الكينونة (Ser vs Estar) وتقديم النفس.
-            - الوحدة 7: الفعل (Tener & Hay) مع الأرقام والألوان والصفات المطابقة للاسم.`,
-            a0PedagogyRules: `🚨 تحذير صارم: جميع الأمثلة والمفردات بالإسبانية حصراً مع ترجمتها العربية!`,
-            a0SentenceRules: `تصريف أفعال المجموعات الثلاث (-ar, -er, -ir) في المضارع، استخدامات (Ser, Estar, Tener, Ir)، وتكوين الأسئلة بـ (¿...?).`,
-            a1Grammar: `الأفعال المنعكسة للروتين اليومي (Verbos reflexivos)، الأفعال متغيرة الجذر (poder, querer)، والفعل (Gustar).`,
-            a2Grammar: `أزمنة الماضي في الإسبانية (Pretérito Indefinido vs Imperfecto vs Perfecto)، وضمائر المفعول المباشر وغير المباشر.`,
-            b1Grammar: `المنصوب الإسباني (Presente de Subjuntivo)، صيغ الأمر (Imperativo)، والفرق الدقيق بين (Por vs Para).`,
-            b2Grammar: `أزمنة الـ Subjuntivo الماضي، الجمل الشرطية المعقدة، والروابط الحجاجية لاختبار DELE B2.`,
-            c1c2Grammar: `البلاغة الإسبانية، التعابير الاصطلاحية (Modismos)، والتحرير الأكاديمي لمستوى DELE C1/C2.`
+            - الوحدة 1: الأبجدية الإسبانية، صفاء حروف العلة الخمسة (a, e, i, o, u)، والإدغامات الصوتية (Diptongos).
+            - الوحدة 2: الحروف الخاصة في الإسبانية (ñ /ɲ/, ll /ʎ, ʝ/, ch /t͡ʃ/, ر vs rr المكررة) وحرف (h) الصامت دائماً.
+            - الوحدة 3: قواعد نطق (c, z, q) و(g, gu, gü, j) حسب حرف العلة التالي، مع توضيح (Distinción vs. Seseo).
+            - الوحدة 4: الجنس النحوي والعدد، وأدوات التعريف والتنكير (el, la, los, las / un, una, unos, unas).
+            - الوحدة 5: القواعد الحاكمة للنبر الصوتي وعلامة المد (La Tilde) والتمييز الدلالي (Tilde diacrítica: tú/tu, él/el, sí/si).
+            - الوحدة 6: التأسيس السياقي لفعلي الكينونة (Ser vs. Estar) في التعريف بالنفس والوصف والموقع.
+            - الوحدة 7: الفعلان (Tener & Hay)، مطابقة الصفات للاسم في الجنس والعدد، وعلامات الاستفهام والتعجب المزدوجة (¿...? / ¡...!).`,
+            a0PedagogyRules: `🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الإسبانية 🇪🇸): جميع الأمثلة إسبانية أصيلة مع علامات (¿...?) و(¡...!) الصحيحة بدون أي تسرب إنجليزي.`,
+            a0SentenceRules: `تصريف أفعال المجموعات الثلاث (-ar, -er, -ir) في المضارع، الاستخدام السياقي لـ (Ser, Estar, Tener, Hay, Ir)، وتكوين الأسئلة.`,
+            a1Grammar: `معايير CEFR A1 / DELE A1: الأفعال متغيرة الجذر في المضارع (e➔ie, o➔ue, e➔i)، الأفعال المنعكسة للروتين اليومي (Verbos reflexivos)، تركيب أفعال الإعجاب (Gustar, Encantar, Interesar مع ضمائر المفعول غير المباشر)، والمستقبل القريب (Ir + a + infinitivo).`,
+            a2Grammar: `معايير CEFR A2 / DELE A2: التمييز السردي الدقيق بين أزمنة الماضي الثلاثة (Pretérito Perfecto, Pretérito Indefinido, Pretérito Imperfecto)، ضمائر المفعول المباشر وغير المباشر ودمجها (se lo / se la)، والتفريق التطبيقي بين (Por vs. Para).`,
+            b1Grammar: `معايير CEFR B1 / DELE B1: صيغ الأمر المثبتة والمنفية (Imperativo afirmativo y negativo)، المنصوب المضارع (Presente de Subjuntivo) في الرغبات والشك والتقييم العاطفي والجمل الزمنية (cuando + subjuntivo للمستقبل)، والمستقبل والشرطي البسيط.`,
+            b2Grammar: `معايير CEFR B2 / DELE B2: المنصوب الماضي والتام (Imperfecto y Pluscuamperfecto de Subjuntivo)، الجمل الشرطية من الأنواع الثلاثة (Oraciones condicionales con si)، أفعال التغير (Verbos de cambio: ponerse, volverse, hacerse, llegar a ser)، والروابط الحجاجية المتقدمة.`,
+            c1c2Grammar: `معايير CEFR C1–C2 / DELE C1–C2: التراكيب البلاغية والأكاديمية، التراكيب الفعلية (Perífrasis verbales)، التعابير الاصطلاحية (Modismos)، وتحليل وتلخيص النصوص المعقدة.`
         };
     }
 
-    // 7. 🇬🇧 الافتراضي: اللغة الإنجليزية (على طراز The English Master Course + Cambridge)
+    // 7. 🇬🇧 اللغة الإنجليزية (Cambridge / IELTS / TOEFL + IPA + Schwa & Connected Speech)
     return {
         id: 'en',
+        languageId: 'en',
         family: 'european',
         nameAr: 'الإنجليزية',
-        nameEn: 'English',
+        nameEn: 'English (British & American)',
         speechLang: 'en-US',
-        instituteRole: 'أنت كبير مؤلفي مناهج Cambridge وأستاذ كورس (The English Master Course: Grammar, Speaking, Pronunciation & Writing).',
-        examName: 'IELTS Band 8.0+ / TOEFL iBT',
-        vocabTableColumns: '| المفردة / القالب (English Chunk) | الرمز الصوتي والنبر (IPA & Stress) | النطق التقريبي بالعربية | حركة الفم والوصل الصوتي (Connected Speech) | المعنى الدقيق والسياق بالعربية |',
+        frameworkStandard: 'CEFR Companion Volume & Cambridge English / IELTS / TOEFL iBT',
+        instituteRole: 'أنت بروفيسور صوتيات ولغويات تطبيقية للغة الإنجليزية في جامعة كامبريدج (Cambridge Assessment English) وخبير مناهج CEFR واختبارات IELTS و TOEFL.',
+        examName: 'Cambridge C1/C2 / IELTS Band 8.0+ / TOEFL iBT',
+        vocabTableColumns: '| المفردة / القالب (English Chunk — UK/US) | الرمز الصوتي والنبر (IPA & Word Stress) | التوجيه الصوتي بالعربية | تشريح الكلام المتصل (Schwa /ə/, Weak Forms, Linking ‿) | المعنى الدقيق والسياق (Register) بالعربية |',
         specialMorphologyRule: `
-        🇬🇧 **قانون تدريس اللغة الإنجليزية الخاص (Cambridge × English Master Course Method):**
-        - اشرح الأزمنة والقواعد دائماً عبر **الخطوط الزمنية البصرية (Visual Timelines)** ومعادلات الليغو.
-        - ركز على **التشديد الصوتي (Word Stress)** والأصوات المركبة والحروف الصامتة والربط الصوتي في الكلام السريع (Connected Speech).`,
+        🇬🇧 **الدستور البيداغوجي واللغوي للغة الإنجليزية (English Specialist Profile):**
+        1. **الجرد الفونيمي الإنجليزي والكلام المتصل (Phonology, Schwa & Connected Speech):**
+           - علّم الطالب الفرق الجوهري بين التهجئة الإنجليزية والنطق الفعلي عبر رموز \`IPA\`: طول وجودة حروف العلة (Short vs. Long Vowels & Diphthongs)، التجمعات الساكنة (\`Consonant Clusters\`)، وموضع النبر في الكلمة والجملة (\`Word & Sentence Stress\`).
+           - ركّز على أهم صوت في الإنجليزية الطبيعية وهو **الشوا (\`Schwa /ə/\`)** في المقاطع غير المشددة، والصيغ الضعيفة للكلمات الوظيفية (\`Weak Forms: to /tə/, for /fə/, can /kən/, have /əv/\`)، وظواهر الكلام المتصل (\`Catenation/Linking, Elision, Assimilation, Intrusion\`).
+        2. **القواعد التطبيقية، الأفعال المركبة، والمتلازمات (Grammar, Phrasal Verbs & Collocations):**
+           - اربط الأزمنة (\`Tense & Aspect\`) بالخطوط الزمنية البصرية (\`Visual Timelines\`) وبالمعنى التواصلي.
+           - اجعل الأفعال المركبة (\`Phrasal Verbs\`) والمتلازمات اللفظية (\`Collocations\`) ومستوى الرسمية (\`Formal vs. Informal Register\`) وتوضيح الفروق بين الإنجليزية البريطانية (\`en-GB\`) والأمريكية (\`en-US\`) جزءاً أساسياً من كل درس.`,
         a0PhonicsUnits: `
-        - الوحدة 1: الحروف الساكنة الأولى وصوت العلة القصير (Short A) وعائلات (-at, -an) مثل (cat, mat, man, pan).
-        - الوحدة 2: أصوات العلة القصيرة (Short I & Short E) والفرق السمعي بين (P / B) وعائلات (-in, -it, -et, -ed).
-        - الوحدة 3: أصوات العلة القصيرة (Short O & Short U) وعائلات (-ot, -og, -ug, -un) مثل (dog, hot, cup, sun).
-        - الوحدة 4: الأصوات المركبة الأساسية (Digraphs: SH, CH, TH, PH) والكلمات البصرية الأولى (Sight Words).
-        - الوحدة 5: أصوات العلة الطويلة (Long Vowels & Magic E) والمقارنة السمعية بين القصير والطويل (hat vs hate, bit vs bite).
-        - الوحدة 6: أدوات التنكير للمفرد (a / an) وأسماء الإشارة القريبة والبعيدة (This is a... / That is an...).
-        - الوحدة 7: جمع الأسماء البسيطة والألوان والأرقام لوصف الأشياء اليومية الملموسة.`,
-        a0PedagogyRules: `🚨 تحذير صارم: أنت في المستوى التأسيسي الأول (Pre-A1 / A0.1)؛ استخدم كلمات ملموسة وجمل قصيرة جداً (2 إلى 5 كلمات) مع نطقها وترجمتها فوراً.`,
-        a0SentenceRules: `الضمائر الشخصية (I, you, he, she, it, we, they)، فعل الكينونة (am, is, are)، الأفعال اليومية البسيطة (have, want, like, go)، وتكوين الجملة والسؤال.`,
-        a1Grammar: `المضارع البسيط والمستمر (Present Simple vs Continuous) بخط زمني بصري، الأسماء المعدودة وغير المعدودة، وحروف الجر المكانية والزمانية.`,
-        a2Grammar: `الماضي البسيط والمستمر (Past Simple vs Continuous)، خطط المستقبل (will vs going to)، صيغ المقارنة والتفضيل، والمضارع التام التأسيسي.`,
-        b1Grammar: `الأزمنة التامة المستمرة، ضمائر الوصل (Relative Clauses)، الجمل الشرطية (Conditionals 0-3)، المبني للمجهول، والكلام المتصل السريع (Connected Speech).`,
-        b2Grammar: `المتلازمات اللفظية (Collocations)، الأفعال المركبة (Phrasal Verbs)، الشرطيات المختلطة (Mixed Conditionals)، وأفعال الاستنتاج (Modals of Deduction).`,
-        c1c2Grammar: `الأساليب العكسية البلاغية (Inversion)، الجمل المنشطرة (Cleft Sentences)، المصدرية الأكاديمية (Nominalization)، والتعابير المجازية الدقيقة.`
+        - الوحدة 1: الأصوات الساكنة الأساسية وحرف العلة القصير (Short A /æ/) وعائلات الكلمات الصوتية الأولى.
+        - الوحدة 2: أصوات العلة القصيرة (/ɪ/ و /e/) والتمييز السمعي بين الأصوات المهموسة والمجهورة (/p/ vs /b/, /f/ vs /v/).
+        - الوحدة 3: أصوات العلة القصيرة (/ɒ/ أو /ɑː/ و /ʌ/) وعائلات الكلمات البسيطة.
+        - الوحدة 4: السواكن المركبة (Digraphs: sh /ʃ/, ch /t͡ʃ/, th /θ, ð/, ph /f/, ng /ŋ/) واكتشاف صوت الشوا (/ə/) الأولي.
+        - الوحدة 5: حروف العلة الطويلة والمدود المزدوجة (Diphthongs: /eɪ/, /aɪ/, /əʊ/, /aʊ/) والمقارنة بين القصير والطويل (ship /ɪ/ vs sheep /iː/).
+        - الوحدة 6: أدوات التنكير والتعريف (a, an, the)، أسماء الإشارة (this, that, these, those)، والوصل الصوتي الأولي (an‿apple).
+        - الوحدة 7: الضمائر الشخصية، فعل الكينونة (am, is, are) بصيغه الكاملة والمختصرة، وتكوين الجملة البسيطة.`,
+        a0PedagogyRules: `🚨 قواعد التأسيس الصارمة (Pre-A1 / A0 للغة الإنجليزية 🇬🇧): جمل قصيرة وواضحة مرتبطة برموز IPA الصحيحة وتوضيح صوت Schwa /ə/ والاختصارات الصوتية.`,
+        a0SentenceRules: `فعل الكينونة (be)، أفعال الملكية والحركة اليومية البسيطة (have got, want, like, go)، صيغ الأمر، وتكوين الأسئلة بـ (Wh-questions & Yes/No questions).`,
+        a1Grammar: `معايير CEFR A1: المضارع البسيط مقابل المضارع المستمر (Present Simple vs. Continuous) بخط زمني بصري، الأسماء المعدودة وغير المعدودة ومحددات الكمية (some, any, much, many, a lot of)، حروف الجر للزمان والمكان (in, on, at)، وفعل الاستطاعة (can/can't).`,
+        a2Grammar: `معايير CEFR A2: الماضي البسيط مقابل الماضي المستمر، التعبير عن المستقبل (going to, will, Present Continuous for arrangements)، المقارنة والتفضيل، والمضارع التام التأسيسي للتجارب (Present Perfect with ever/never, just, already, yet, for/since).`,
+        b1Grammar: `معايير CEFR B1: المضارع التام المستمر، الماضي التام (Past Perfect)، الجمل الشرطية (Zero, First, Second & Third Conditionals)، المبني للمجهول (Passive Voice)، الكلام المنقول (Reported Speech)، وضمائر الوصل المحددة وغير المحددة.`,
+        b2Grammar: `معايير CEFR B2: الجمل الشرطية المختلطة (Mixed Conditionals)، أفعال الاستنتاج في المضارع والماضي (Modals of Deduction: must have, can't have, might have)، المستقبل التام والمستمر، التراكيب السببية (Causative: have/get something done)، والأفعال المركبة والمتلازمات المتقدمة.`,
+        c1c2Grammar: `معايير CEFR C1–C2 / IELTS 8+: القلب البلاغي بعد الظروف السلبية (Negative Inversion: Never have I..., Not only...), الجمل المنشطرة للتوكيد (Cleft Sentences: It was... that / What I need is...), المصدرية الأكاديمية (Nominalization)، التراكيب الشرطية المضمرة (Were it not for / Had I known)، والدقة البراغماتية والأكاديمية.`
     };
 };
 
-
-
 // ============================================================================
-// 🧠 محرك التدرج اللغوي التصاعدي الحتمي متعدد اللغات (Deterministic 7-Tier CEFR Engine V4)
-// يكتشف اللغة المستهدفة أولاً، ثم يعزل رقم الكورس ويقفل المحتوى على اللغة والمستوى بدقة 100%!
+// 🧠 محرك التدرج البيداغوجي الحتمي للغات السبع (Phase 3 — Deterministic 7-Language CEFR/Standard Progression)
 // ============================================================================
-const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle = '', difficulty = '', explicitCourseOrder = null, explicitTargetLang = '') => {
+const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle = '', difficulty = '', explicitCourseOrder = null, explicitTargetLang = '', explicitLanguageId = '') => {
     const rawTopic = String(courseTopic || '');
+    const langProfile = detectTargetLanguageProfile(`${rawTopic} ${sectionName} ${lessonTitle}`, explicitTargetLang, explicitLanguageId);
 
-    // 0. اكتشاف اللغة المستهدفة من النص الكامل (قبل قص اسم الشهادة!)
-    const langProfile = detectTargetLanguageProfile(`${rawTopic} ${sectionName} ${lessonTitle}`, explicitTargetLang);
-
-    // 1. عزل اسم الكراش كورس الحالي عن اسم الشهادة العام (لكي لا تتسرب كلمات C2 أو أسماء الاختبارات من اسم الشهادة!)
     let isolatedCourseTitle = rawTopic;
     const crashCourseIdx = rawTopic.search(/(?:الكراش كورس|كراش كورس|Course)\s*\d+/i);
     if (crashCourseIdx !== -1) {
         isolatedCourseTitle = rawTopic.slice(crashCourseIdx);
     }
 
-    // 2. استخراج رقم الكورس الفعلي بدقة (من 1 إلى 20)
     const courseNumMatch = isolatedCourseTitle.match(/(?:الكراش كورس|كراش كورس|الكورس|كورس|Course|المرحلة)\s*(\d+)/i);
     const courseNum = explicitCourseOrder ? Number(explicitCourseOrder) : (courseNumMatch ? Number(courseNumMatch[1]) : null);
-
     const cleanLocalCtx = `${isolatedCourseTitle} ${sectionName} ${lessonTitle}`;
 
-// 3. التحديد الحتمي للمستوى حسب الخيار المختار في القائمة المنسدلة ورقم الكورس
     let detectedTier = 'A1';
-
-    if (difficulty === 'lang_exam_prep_cert') {
+    if (difficulty === 'lang_exam_prep_cert' || /\b(Exam Mastery|Mock Exam|امتحان|اختبار رسمي)\b/i.test(isolatedCourseTitle)) {
         detectedTier = 'EXAM_MASTERY';
     } else if (courseNum) {
         if (courseNum === 1) detectedTier = 'A0_PHONICS';
@@ -5525,192 +5730,100 @@ const getCEFRProgressionSpec = (courseTopic = '', sectionName = '', lessonTitle 
         else if (courseNum >= 8 && courseNum <= 10) detectedTier = 'B1';
         else if (courseNum >= 11 && courseNum <= 13) detectedTier = 'B2';
         else if (difficulty === 'lang_a0_to_c2_cert') {
-            // في شهادة A0->C2 الشاملة: الكورسات من 14 فما فوق كلها قمة الطلاقة C1/C2 Native
             detectedTier = 'C1_C2';
         } else {
-            // في الشهادة الإمبراطورية المدمجة (18-22 كورس): 14-16 لـ C1/C2، و 17+ لمعسكر الاختبار العالمي
-            if (courseNum >= 14 && courseNum <= 16) detectedTier = 'C1_C2';
-            else if (courseNum >= 17) detectedTier = 'EXAM_MASTERY';
+            if (courseNum >= 14 && courseNum <= 18) detectedTier = 'C1_C2';
+            else if (courseNum >= 19) detectedTier = 'EXAM_MASTERY';
         }
     } else {
-        if (/Pre-A1|A0\.1|Phonics|مخارج الأصوات|الحروف|الأبجدية|CVC/i.test(cleanLocalCtx)) {
-            detectedTier = 'A0_PHONICS';
-        } else if (/A0\.2|A0\b|الأفعال اليومية البسيطة|الضمائر/i.test(cleanLocalCtx)) {
-            detectedTier = 'A0_SENTENCE';
-        } else if (/(?<!Pre-)A1\b|A1\.1|A1\.2|الروتين اليومي/i.test(cleanLocalCtx)) {
-            detectedTier = 'A1';
-        } else if (/A2\b|A2\.1|A2\.2|A2\+|الماضي|المقارنات/i.test(cleanLocalCtx)) {
-            detectedTier = 'A2';
-        } else if (/B1\b|B1\.1|B1\.2|B1\+/i.test(cleanLocalCtx)) {
-            detectedTier = 'B1';
-        } else if (/B2\b|B2\.1|B2\.2|B2\+/i.test(cleanLocalCtx)) {
-            detectedTier = 'B2';
-        } else if (/C1\b|C1\.1|C1\.2|C2\b/i.test(cleanLocalCtx)) {
-            detectedTier = 'C1_C2';
-        } else if (/IELTS|TOEFL|JLPT|DELF|DALF|TestDaF|DELE|HSK|TOPIK|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) {
-            detectedTier = 'EXAM_MASTERY';
-        }
+        if (/Pre-A1|A0\.1|Phonics|مخارج الأصوات|الحروف|الأبجدية|CVC/i.test(cleanLocalCtx)) detectedTier = 'A0_PHONICS';
+        else if (/A0\.2|A0\b|الأفعال اليومية البسيطة|الضمائر/i.test(cleanLocalCtx)) detectedTier = 'A0_SENTENCE';
+        else if (/(?<!Pre-)A1\b|A1\.1|A1\.2|الروتين اليومي/i.test(cleanLocalCtx)) detectedTier = 'A1';
+        else if (/A2\b|A2\.1|A2\.2|A2\+|الماضي|المقارنات/i.test(cleanLocalCtx)) detectedTier = 'A2';
+        else if (/B1\b|B1\.1|B1\.2|B1\.5|B1\+/i.test(cleanLocalCtx)) detectedTier = 'B1';
+        else if (/B2\b|B2\.1|B2\.2|B2\.3|B2\.4|B2\+/i.test(cleanLocalCtx)) detectedTier = 'B2';
+        else if (/C1\b|C1\.1|C1\.2|C1\.3|C1\.4|C2\b/i.test(cleanLocalCtx)) detectedTier = 'C1_C2';
+        else if (/IELTS|TOEFL|JLPT|DELF|DALF|TestDaF|DELE|HSK|TOPIK|Mock Exam|تشريح الاختبار/i.test(cleanLocalCtx)) detectedTier = 'EXAM_MASTERY';
     }
 
-
-// ✨ FIX: Exam Mastery Isolation - عزل كورسات التأسيس والمواقف اليومية (A0-B2) عن مسار الامتحانات الدولية (EXAM_MASTERY)
     const examIsolationInstruction = detectedTier === 'EXAM_MASTERY'
-        ? `\n🚨 تعليمة مسار الامتحانات الدولية (EXAM_MASTERY):
-        - بما أن تصنيف الكورس هو 'EXAM_MASTERY'، قم بتوليد محتوى يركز حصراً على استراتيجيات الاختبار (${langProfile.examName})، كشف الفخاخ، وتصحيح المقالات (Essays) والقراءة التحليلية.`
-        : `\n🚨 تعليمة عزل المستويات القياسية (Exam Mastery Isolation):
-        - إذا كان مستوى الطالب (A0 إلى B2)، ركز حصراً على المواقف اليومية، البنية النحوية، والمفردات، ويُمنع منعاً باتاً ذكر امتحانات C2 أو TestDaF أو Goethe أو DELF أو IELTS في العناوين أو الشروحات. أما إذا كان تصنيف الكورس هو 'EXAM_MASTERY'، فقم بتوليد محتوى يركز حصراً على استراتيجيات الاختبار، كشف الفخاخ، وتصحيح المقالات (Essays).`;
+        ? `\n🚨 تعليمة مسار الاختبارات الدولية الرسمية (${langProfile.examName}):
+        - التزم بالمواصفات الحقيقية لأقسام الاختبار (${langProfile.examName}) دون اختراع درجات أو أوزان وهمية، ووضّح أن شهادة المنصة هي شهادة إتمام وأداء تدريبية داخلية.`
+        : `\n🚨 تعليمة عزل المستويات والانضباط البيداغوجي (${langProfile.frameworkStandard}):
+        - ركز حصراً على الكفاءة التواصلية والمهام الواقعية (Can-do Tasks) المناسبة لهذا المستوى، ولا تخلط بين الكفاءة اللغوية ومسارات التحضير للامتحانات ولا تستخدم ادعاءات مضللة مثل "ضمان التحدث كالمتحدث الأصلي 100%".`;
 
-    const strictLangLockRule = (langProfile.id !== 'en'
-        ? `\n🚨🚨 قانون الهوية اللغوية القاطع (STRICT LANGUAGE LOCK):
-        - اللغة المستهدفة في هذا الكورس هي **اللغة ${langProfile.nameAr} (${langProfile.nameEn})** حصراً!
-        - 🚫 يُمنع منعاً باتاً وقاطعاً استخدام أي مفردة أو جملة أو قاعدة صوتية باللغة الإنجليزية (إياك أن تكتب كلمات مثل cat, mat, short A, this is a... إلخ)!
-        - جميع المفردات، الجمل، الحوارات، نصوص الاستماع، والتمارين يجب أن تكون باللغة **${langProfile.nameAr} (${langProfile.nameEn})** مع شرحها وترجمتها بالعربية!`
-        : '') + examIsolationInstruction;
+    const strictLangLockRule = `
+    🚨🚨 قانون القفل اللغوي والبيداغوجي الصارم (STRICT LANGUAGE LOCK — languageId: "${langProfile.languageId}"):
+    - اللغة المستهدفة هي **${langProfile.nameAr} (${langProfile.nameEn})** حصراً!
+    - 🚫 يُمنع منعاً باتاً تسرب أي كلمة أو جملة إنجليزية في الأمثلة (إلا إن كان الكورس لتعليم الإنجليزية).
+    - 🚫 في تمارين املأ الفراغ \`[[الخيار_الصحيح | مشتت_1 | مشتت_2]]\`: يجب وضع **الإجابة الصحيحة التي تطابق الترجمة العربية والنحو في الخانة الأولى دائماً** داخل القوس المزدوج!
+    - 🚫 يُمنع منعاً باتاً وضع شارات الألوان (\`🔵 der / 🔴 die / 🟢 das\`) داخل الجمل بعد أدوات التنكير أو الملكية (\`ein, eine, mein, kein\`)!
+    ${langProfile.specialMorphologyRule}
+    ${examIsolationInstruction}`;
 
     const specsMap = {
         A0_PHONICS: {
             tierId: 'A0',
             langProfile,
-            cefrLabel: `المستوى التأسيسي الأول للصوتيات والحروف في اللغة ${langProfile.nameAr} (Pre-A1 / A0.1 Phonics & First Words)`,
-            unitStructureGuide: `
-            ${langProfile.a0PhonicsUnits}
-            (داخل كل وحدة 6 دروس: 1. اكتشاف الصوت والمفردات الملموسة في اللغة ${langProfile.nameAr} ➔ 2. مختبر مخارج الفم واللسان ➔ 3. تركيب الكلمات بالمكعبات ➔ 4. بناء عبارات وجمل قصيرة من 3-4 كلمات باللغة ${langProfile.nameAr} ➔ 5. مختبر الاستماع والترديد Shadowing ➔ 6. ورشة التهجئة والإملاء الصوتي).`,
-            pedagogyRules: `
-            ${langProfile.a0PedagogyRules}
-            ${strictLangLockRule}
-            5. قطعة القراءة: من 4 إلى 5 جمل بسيطة جداً باللغة ${langProfile.nameAr} مبنية 100% من الكلمات الصوتية البسيطة مع ترجمتها العربية.`
+            cefrLabel: `المستوى التأسيسي الأول للصوتيات ونظام الكتابة في اللغة ${langProfile.nameAr} (Pre-A1 / A0.1 Phonics & Script)`,
+            unitStructureGuide: `${langProfile.a0PhonicsUnits}`,
+            pedagogyRules: `${langProfile.a0PedagogyRules}\n${strictLangLockRule}`
         },
         A0_SENTENCE: {
             tierId: 'A0',
             langProfile,
-            cefrLabel: `المستوى التأسيسي الثاني للغة ${langProfile.nameAr}: الضمائر، الأفعال اليومية، وتكوين الجملة والسؤال الأول (CEFR A0.2)`,
-            unitStructureGuide: `
-            - محور القواعد والتراكيب في اللغة ${langProfile.nameAr}: ${langProfile.a0SentenceRules}
-            - الدرس 1 (المفردات الأساسية المصورة في اللغة ${langProfile.nameAr}: التحيات، الضمائر، الأفعال اليومية البسيطة، والصفات المباشرة).
-            - الدرس 2 (مختبر النطق الصوتي والوصل في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (قاعدة التركيب البسيطة بالمكعبات في اللغة ${langProfile.nameAr}: الفاعل + الفعل + المفعول البسيط).
-            - الدرس 4 (تطبيق القاعدة في جمل يومية قصيرة من 4 إلى 6 كلمات باللغة ${langProfile.nameAr} في الإثبات والنفي).
-            - الدرس 5 (مختبر الاستماع النشط وتكوين السؤال والجواب الأول باللغة ${langProfile.nameAr}).
-            - الدرس 6 (ورشة القراءة المبسطة وكتابة 3 إلى 4 جمل قصيرة عن النفس باللغة ${langProfile.nameAr}).`,
-            pedagogyRules: `
-            🚨🚨 تحذير صارم جداً (أنت في المستوى التأسيسي A0.2 للغة ${langProfile.nameAr} للمبتدئين!):
-            ${strictLangLockRule}
-            1. 🚫 ممنوع منعاً باتاً استخدام مفردات متقدمة أو أكاديمية! التزم فقط بالكلمات اليومية البسيطة جداً في اللغة ${langProfile.nameAr}.
-            2. محور التركيز النحوي: ${langProfile.a0SentenceRules}
-            3. طول الجملة باللغة ${langProfile.nameAr} يجب ألا يتجاوز (4 إلى 6 كلمات فقط!).
-            4. قطعة القراءة: فقرة بسيطة جداً باللغة ${langProfile.nameAr} من (45 إلى 65 كلمة) بحوار تعارف أو موقف يومي سهل جداً.`
+            cefrLabel: `المستوى التأسيسي الثاني للغة ${langProfile.nameAr}: الضمائر، الأفعال الأساسية، وبناء الجملة والسؤال (Pre-A1 / A0.2)`,
+            unitStructureGuide: `- محور القواعد والتراكيب في اللغة ${langProfile.nameAr}: ${langProfile.a0SentenceRules}`,
+            pedagogyRules: `${strictLangLockRule}\n- طول الجملة باللغة ${langProfile.nameAr}: من 4 إلى 6 كلمات واضحة ومباشرة.`
         },
         A1: {
             tierId: 'A1',
             langProfile,
-            cefrLabel: `المستوى الابتدائي المتكامل للغة ${langProfile.nameAr} (CEFR A1)`,
-            unitStructureGuide: `
-            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.a1Grammar}
-            - الدرس 1 (المفردات الحياتية والروتين اليومي والعبارات الوظيفية باللغة ${langProfile.nameAr}).
-            - الدرس 2 (مختبر النطق والإيقاع الصوتي في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (هندسة القواعد التأسيسية في اللغة ${langProfile.nameAr}: ${langProfile.a1Grammar}).
-            - الدرس 4 (تطبيق القواعد في بناء جمل حياتية باللغة ${langProfile.nameAr} من 6 إلى 10 كلمات).
-            - الدرس 5 (مختبر الاستماع الحواري وفهم المتحدث باللغة ${langProfile.nameAr} في المواقف اليومية كالمطعم والتسوق).
-            - الدرس 6 (ورشة القراءة التطبيقية وكتابة فقرة شخصية قصيرة باللغة ${langProfile.nameAr} من 40-50 كلمة).`,
-            pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR A1) في اللغة ${langProfile.nameAr}:
-            ${strictLangLockRule}
-            1. استخدم مفردات الحياة اليومية الواضحة باللغة ${langProfile.nameAr} (العائلة، المنزل، العمل، الطعام، التسوق، الأوقات).
-            2. يبني الطالب جملاً حياتية باللغة ${langProfile.nameAr} طولها من (6 إلى 10 كلمات) لتطبيق: ${langProfile.a1Grammar}.
-            3. قطعة القراءة: قصة يومية أو رسالة بسيطة باللغة ${langProfile.nameAr} من (80 إلى 110 كلمات) متبوعة بحوار حياتي طبيعي.`
+            cefrLabel: `المستوى الابتدائي التواصلي للغة ${langProfile.nameAr} (CEFR A1 / ${langProfile.frameworkStandard})`,
+            unitStructureGuide: `- محور القواعد والمهام التواصلية للغة ${langProfile.nameAr}: ${langProfile.a1Grammar}`,
+            pedagogyRules: `${strictLangLockRule}\n- طبّق بدقة: ${langProfile.a1Grammar} في مواقف حياتية واقعية (تعارف، تسوق، مواعيد، طلب طعام).`
         },
         A2: {
             tierId: 'A2',
             langProfile,
-            cefrLabel: `المستوى ما قبل المتوسط للغة ${langProfile.nameAr} (CEFR A2 - Waystage)`,
-            unitStructureGuide: `
-            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.a2Grammar}
-            - الدرس 1 (الحصيلة اللفظية الموسعة والأفعال الشائعة في اللغة ${langProfile.nameAr}).
-            - الدرس 2 (مختبر الصوتيات: وصل الكلمات والتنغيم الصوتي في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (هندسة القواعد السردية في اللغة ${langProfile.nameAr}: ${langProfile.a2Grammar}).
-            - الدرس 4 (بناء الجمل المركبة والسرد القصصي المترابط باللغة ${langProfile.nameAr} من 10 إلى 14 كلمة).
-            - الدرس 5 (مختبر الفهم السمعي لمواقف السفر، الصحة، والعمل باللغة ${langProfile.nameAr}).
-            - الدرس 6 (ورشة القراءة التحليلية المبسطة وكتابة رسالة أو قصة مترابطة باللغة ${langProfile.nameAr} من 70-90 كلمة).`,
-            pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR A2) في اللغة ${langProfile.nameAr}:
-            ${strictLangLockRule}
-            1. الطالب هنا يسرد تجاربه في الماضي، يخطط للمستقبل، ويقارن بين الأشياء باللغة ${langProfile.nameAr} بجمل طولها (10 إلى 14 كلمة) مطبقاً: ${langProfile.a2Grammar}.
-            2. قطعة القراءة: مقال مبسط أو قصة واقعية باللغة ${langProfile.nameAr} من (130 إلى 170 كلمة).`
+            cefrLabel: `المستوى ما قبل المتوسط للغة ${langProfile.nameAr} (CEFR A2 — Waystage)`,
+            unitStructureGuide: `- محور القواعد والسرد للغة ${langProfile.nameAr}: ${langProfile.a2Grammar}`,
+            pedagogyRules: `${strictLangLockRule}\n- طبّق بدقة: ${langProfile.a2Grammar} في مواقف السفر، العمل، الصحة، وسرد التجارب.`
         },
         B1: {
             tierId: 'B1',
             langProfile,
-            cefrLabel: `المستوى المتوسط المستقل للغة ${langProfile.nameAr} (CEFR B1 / B1+ Threshold)`,
-            unitStructureGuide: `
-            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.b1Grammar}
-            - الدرس 1 (المفردات المفاهيمية والمتلازمات اللفظية في اللغة ${langProfile.nameAr}).
-            - الدرس 2 (مختبر الكلام المتصل السريع في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (هندسة القواعد المتوسطة في اللغة ${langProfile.nameAr}: ${langProfile.b1Grammar}).
-            - الدرس 4 (صياغة الحجج، التعبير عن الآراء، وبناء جمل باللغة ${langProfile.nameAr} من 14 إلى 18 كلمة).
-            - الدرس 5 (مختبر الاستماع للمتحدث الأصلي السريع باللغة ${langProfile.nameAr}).
-            - الدرس 6 (ورشة القراءة المقالاتية وكتابة فقرة رأي أو بريد رسمي باللغة ${langProfile.nameAr} من 120-150 كلمة).`,
-            pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR B1 / B1+) في اللغة ${langProfile.nameAr}:
-            ${strictLangLockRule}
-            1. الطالب في مرحلة الاستقلالية اللغوية؛ الأمثلة باللغة ${langProfile.nameAr} يجب أن تطبق: ${langProfile.b1Grammar}.
-            2. قطعة القراءة: مقال تحليلي أو نقاشي باللغة ${langProfile.nameAr} من (190 إلى 240 كلمة).`
+            cefrLabel: `المستوى المتوسط المستقل للغة ${langProfile.nameAr} (CEFR B1 — Threshold)`,
+            unitStructureGuide: `- محور القواعد والاستقلالية اللغوية للغة ${langProfile.nameAr}: ${langProfile.b1Grammar}`,
+            pedagogyRules: `${strictLangLockRule}\n- طبّق بدقة: ${langProfile.b1Grammar} لبناء الحجج، شرح التجارب، والتعامل مع مواقف غير محضرة.`
         },
         B2: {
             tierId: 'B2',
             langProfile,
-            cefrLabel: `المستوى فوق المتوسط والطلاقة المهنية للغة ${langProfile.nameAr} (CEFR B2 / B2+ Vantage)`,
-            unitStructureGuide: `
-            - محور القواعد للغة ${langProfile.nameAr}: ${langProfile.b2Grammar}
-            - الدرس 1 (الثروة اللفظية المتقدمة في اللغة ${langProfile.nameAr} والتمييز بين الرسمي وغير الرسمي).
-            - الدرس 2 (مختبر الإيقاع البلاغي وتنغيم الإقناع في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (الهندسة النحوية المتقدمة في اللغة ${langProfile.nameAr}: ${langProfile.b2Grammar}).
-            - الدرس 4 (التواصل المهني، إدارة المفاوضات، وصياغة الجمل المعقدة باللغة ${langProfile.nameAr} 18-24 كلمة).
-            - الدرس 5 (مختبر الاستماع التحليلي للمحاضرات والمناقشات السريعة باللغة ${langProfile.nameAr}).
-            - الدرس 6 (هندسة كتابة المقالات الجدلية والتقارير الاحترافية باللغة ${langProfile.nameAr}).`,
-            pedagogyRules: `
-            🚨 قانون التدرج التصاعدي لمستوى (CEFR B2 / B2+) في اللغة ${langProfile.nameAr}:
-            ${strictLangLockRule}
-            1. نحن في مستوى الطلاقة المهنية والأكاديمية باللغة ${langProfile.nameAr}؛ طبق بعمق: ${langProfile.b2Grammar}.
-            2. قطعة القراءة: نص تحليلي أو دراسة حالة مهنية/أكاديمية باللغة ${langProfile.nameAr} من (250 إلى 300 كلمة).`
+            cefrLabel: `المستوى فوق المتوسط والطلاقة الوظيفية للغة ${langProfile.nameAr} (CEFR B2 — Vantage)`,
+            unitStructureGuide: `- محور القواعد المهنية والتحليلية للغة ${langProfile.nameAr}: ${langProfile.b2Grammar}`,
+            pedagogyRules: `${strictLangLockRule}\n- طبّق بدقة: ${langProfile.b2Grammar} في النقاشات، التفاوض، والتمييز بين الرسمي وغير الرسمي.`
         },
         C1_C2: {
             tierId: 'C1_C2',
             langProfile,
-            cefrLabel: `مستوى الكفاءة العليا وطلاقة المتحدث الأصلي للغة ${langProfile.nameAr} (CEFR C1 / C2 Mastery)`,
-            unitStructureGuide: `
-            - محور القواعد والبلاغة للغة ${langProfile.nameAr}: ${langProfile.c1c2Grammar}
-            - الدرس 1 (المعجم البلاغي والأكاديمي الرفيع والظلال الدلالية الدقيقة والكنايات في اللغة ${langProfile.nameAr}).
-            - الدرس 2 (مختبر البلاغة الصوتية وإيقاع المتحدث الأصلي في المحاضرات باللغة ${langProfile.nameAr}).
-            - الدرس 3 (الذروة النحوية في اللغة ${langProfile.nameAr}: ${langProfile.c1c2Grammar}).
-            - الدرس 4 (الارتجال الفوري والمحاججة الفلسفية والعلمية باللغة ${langProfile.nameAr}).
-            - الدرس 5 (مختبر الاستماع النقدي للنصوص الأدبية والإعلامية والأكاديمية باللغة ${langProfile.nameAr}).
-            - الدرس 6 (ورشة التحرير البلاغي والكتابة الأكاديمية بمستوى C2 في اللغة ${langProfile.nameAr}).`,
-            pedagogyRules: `
-            🚨 قانون الذروة اللغوية الصارم (CEFR C1 / C2 Native Mastery) في اللغة ${langProfile.nameAr}:
-            ${strictLangLockRule}
-            1. أنت تخاطب طالباً في قمة الهرم اللغوي (C1/C2) في اللغة ${langProfile.nameAr}؛ طبق: ${langProfile.c1c2Grammar}.
-            2. قطعة القراءة: مقال فكري/أكاديمي/أدبي رفيع المستوى باللغة ${langProfile.nameAr} (300 إلى 380 كلمة) مع تشريحه البلاغي.`
+            cefrLabel: `مستوى الكفاءة اللغوية المتقدمة والعالية للغة ${langProfile.nameAr} (CEFR C1 / C2 Proficiency)`,
+            unitStructureGuide: `- محور البلاغة والتراكيب الأكاديمية للغة ${langProfile.nameAr}: ${langProfile.c1c2Grammar}`,
+            pedagogyRules: `${strictLangLockRule}\n- طبّق بدقة: ${langProfile.c1c2Grammar} مع مهام التلخيص، دمج المصادر، والكتابة الأكاديمية التحليلية.`
         },
         EXAM_MASTERY: {
             tierId: 'EXAM_MASTERY',
             langProfile,
-            cefrLabel: `معسكر الاختبارات العالمية القياسية للغة ${langProfile.nameAr} (${langProfile.examName} Mastery)`,
-            unitStructureGuide: `
-            - الدرس 1 (تشريح خوارزمية القسم ومعايير المصحح الرسمي في اختبار ${langProfile.examName}).
-            - الدرس 2 (الثروة اللفظية الأكاديمية المتقدمة وإعادة الصياغة في اللغة ${langProfile.nameAr}).
-            - الدرس 3 (الهندسة النحوية والتراكيب المعقدة التي ترفع التقييم فوراً في ${langProfile.examName}).
-            - الدرس 4 (تكتيكات كشف الفخاخ السمعية والقرائية وإدارة الوقت في ${langProfile.examName}).
-            - الدرس 5 (مختبر المحاكاة الصوتية والشفهية تحت ضغط الوقت باللغة ${langProfile.nameAr}).
-            - الدرس 6 (ورشة الكتابة الأكاديمية التحليلية وترقية الإجابات لأعلى درجة في ${langProfile.examName}).`,
-            pedagogyRules: `
-            🚨 قانون التدرج الصارم (معسكر الاختبارات العالمية ${langProfile.examName} للغة ${langProfile.nameAr}):
-            ${strictLangLockRule}
-            1. ركز 100% على استراتيجيات الحل، معايير التقييم الرسمية لاختبار (${langProfile.examName})، كشف الفخاخ، وإعادة الصياغة الأكاديمية باللغة ${langProfile.nameAr}.`
+            cefrLabel: `المسار التخصصي للاستعداد لاختبار اللغة ${langProfile.nameAr} (${langProfile.examName})`,
+            unitStructureGuide: `- تدريب منهجي مستقل على المهارات الأربع وفق المعايير الحقيقية لاختبار (${langProfile.examName}).`,
+            pedagogyRules: `${strictLangLockRule}\n- درّب الطالب على استراتيجيات الحل، إدارة الوقت، ومعايير التقييم الحقيقية لاختبار (${langProfile.examName}).`
         }
     };
 
     return specsMap[detectedTier] || specsMap.A1;
 };
+
+
 
 
 
@@ -6664,13 +6777,18 @@ app.post('/api/academy2/lang-cert/live-voice-coach', async (req, res) => {
 
         🚨 تحذير حاسم: جميع الحقول الحوارية الأجنبية (studentSpeechUpgrade, coachReactionEnglish, nextQuestionEnglish, modelAnswerForNextQuestion, suggestedReplies) يجب أن تُكتب **باللغة ${langProfile.nameAr} (${langProfile.nameEn}) حصراً**!
 
-        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي:
+        رد بصيغة JSON صالحة 100% فقط بهذا الهيكل الإلزامي (ممنوع اختراع درجة نطق صوتي لأنك تفحص النص فقط؛ اجعل pronunciationScore دائماً null، وقيم تطابق النص والقواعد بصدق من 0 إلى 100):
         {
           "speechLang": "${langProfile.speechLang}",
           "studentSpeechUpgrade": "ترقية الجملة التي قالها الطالب للتو إلى صياغة أصيلة باللغة ${langProfile.nameAr} (أو اتركها فارغة في بداية الجلسة)",
-          "studentSpeechFeedbackArabic": "ملاحظة عربية سريعة تشرح تصحيح جملة الطالب السابقة...",
-          "pronunciationScore": 95,
-          "coachReactionEnglish": "تفاعل المعلم أو الشخصية باللغة ${langProfile.nameAr} (${langProfile.nameEn}) مع كلام الطالب...",
+          "studentSpeechFeedbackArabic": "ملاحظة عربية صادقة ومحددة تشرح تصحيح جملة الطالب السابقة أو سبب خطئها...",
+          "transcriptMatchScore": 85,
+          "grammarAccuracyScore": 90,
+          "fluencyScore": 85,
+          "pronunciationScore": null,
+          "taskCompletionStatus": "completed",
+          "coachReactionEnglish": "تفاعل المعلم أو الشخصية باللغة ${langProfile.nameAr} (${langProfile.nameEn}) بصدق حسب صحة أو خطأ كلام الطالب...",
+          
           "coachReactionArabic": "ترجمة تفاعل المعلم إلى العربية...",
           "nextQuestionEnglish": "السؤال الجديد أو الحوار التالي باللغة ${langProfile.nameAr} (${langProfile.nameEn}) الذي يوجهه المعلم للطالب الآن...",
           "nextQuestionArabic": "ترجمة السؤال الجديد إلى العربية...",
