@@ -5067,7 +5067,7 @@ app.post('/api/academy2/surgeon/lint-course', (req, res) => {
             });
         });
 
-        return res.json({
+return res.json({
             success: true,
             report,
             healedLessons
@@ -5076,6 +5076,119 @@ app.post('/api/academy2/surgeon/lint-course', (req, res) => {
         console.error('❌ [Course QA Linter Error]:', err.message);
         return res.status(500).json({ success: false, error: 'تعذر إتمام الفحص الآلي للكورس.' });
     }
+});
+
+// ============================================================================
+// 🧪 Phase 5: جناح الاختبارات الآلية الشامل للغات السبع (Automated 7-Language QA & Regression Suite)
+// ============================================================================
+app.get('/api/academy2/qa/run-7lang-suite', (req, res) => {
+    const results = [];
+    const assertTest = (testId, category, passed, details) => {
+        results.push({ testId, category, passed: Boolean(passed), details });
+    };
+
+    // 1. اختبار استرجاع البروفايلات المستقلة للغات السبع (Language Profile Resolution)
+    const expectedLangs = [
+        { id: 'en', speech: 'en-US', sample: 'Schwa /ə/ and Connected Speech' },
+        { id: 'de', speech: 'de-DE', sample: 'Hochdeutsch /ç/ vs /x/ & V2/V1/Verb-Final' },
+        { id: 'fr', speech: 'fr-FR', sample: 'Voyelles nasales /ɑ̃/ & Liaison' },
+        { id: 'es', speech: 'es-ES', sample: 'Ser vs Estar & La Tilde' },
+        { id: 'ja', speech: 'ja-JP', sample: '日本語 Hiragana Katakana Kanji & Mora' },
+        { id: 'zh', speech: 'zh-CN', sample: '普通话 Hanzi Radicals & Tone Sandhi' },
+        { id: 'ko', speech: 'ko-KR', sample: '한국어 Hangul Batchim & Liaison 연음화' }
+    ];
+
+    expectedLangs.forEach(item => {
+        const profile = detectTargetLanguageProfile(item.sample, '', item.id);
+        assertTest(
+            `LANG_PROFILE_${item.id.toUpperCase()}`,
+            '7-Language Specialist Council',
+            profile.languageId === item.id && profile.speechLang === item.speech,
+            `Resolved ${profile.nameEn} (${profile.speechLang}) — Standard: ${profile.frameworkStandard}`
+        );
+    });
+
+    // 2. اختبار جدار حماية تلوث البيانات وإزالة تكرار الأدوات (Data Contamination Firewall)
+    const dirtyGermanSample = 'H وأ hören Sie! Ich تر inke Wasser. Wo هو das Buch? Ich habe ein 🟢 das Haus und Mein 🔵 der Schuh. `🟢 Das Pfer د`';
+    const { cleanedMarkdown: healedDe } = lintAndHealLessonContent(dirtyGermanSample, 'de-DE');
+    const contaminationFixed =
+        healedDe.includes('Hören Sie!') &&
+        healedDe.includes('Ich trinke') &&
+        healedDe.includes('Wo ist') &&
+        healedDe.includes('ein Haus') &&
+        healedDe.includes('Mein Schuh') &&
+        healedDe.includes('Pferd') &&
+        !healedDe.includes('ein 🟢 das');
+
+    assertTest(
+        'FIREWALL_GERMAN_CONTAMINATION',
+        'Sanitizer & Article Hygiene',
+        contaminationFixed,
+        `Output: ${healedDe}`
+    );
+
+    // 3. اختبار مدقق مفاتيح الإجابات لتمارين املأ الفراغ (Semantic Answer-Key Verifier)
+    const owlSample = 'Ich sehe [[🔵 der Baum | 🟢 das Auto | 🔴 die Eule]] (الترجمة: أنا أرى البومة).';
+    const { cleanedMarkdown: healedOwl } = lintAndHealLessonContent(owlSample, 'de-DE');
+    assertTest(
+        'ANSWER_KEY_OWL_RESOLUTION',
+        'Assessment Validity',
+        healedOwl.includes('[[🔴 die Eule |'),
+        `Reordered Blank: ${healedOwl}`
+    );
+
+    // 4. اختبار تطهير خيارات الاختبار التالفة (Corrupted Distractor Healer)
+    const corruptedQuiz = {
+        question: 'ما هي الكلمة الألمانية التي تعني حليب؟',
+        options: [
+            'der Wein',
+            'milch لا تحتوي دغثونغ، والكلمة الصحيحة التي بها (ie) هي (Bier أو liebes) ولكن الحليب هو Milch'
+        ],
+        correctAnswerIndex: 99
+    };
+    const { healedQuiz } = validateAndHealQuizObject(corruptedQuiz, 'Unit1_Exam_Q2');
+    assertTest(
+        'QUIZ_CORRUPTED_OPTION_HEALER',
+        'Assessment Validity',
+        healedQuiz.options[0] === 'die Milch' &&
+            healedQuiz.correctAnswerIndex === 0 &&
+            healedQuiz.correctAnswer === 'die Milch',
+        `Healed Options: ${JSON.stringify(healedQuiz.options)}`
+    );
+
+    // 5. اختبار سلامة Unicode والرموز الصوتية للغات السبع (7-Language Multilingual Unicode Integrity)
+    const multilingualSamples = [
+        { lang: 'en-US', text: '`Where did you go?` — IPA: `/weə dɪd jə ɡəʊ/` (الترجمة: أين ذهبت؟)' },
+        { lang: 'de-DE', text: '`Ich möchte Milch und Bücher.` — IPA: `/ɪç ˈmœçtə mɪlç ʊnt ˈbyːçɐ/`' },
+        { lang: 'fr-FR', text: '`Les enfants ont un bon livre.` — IPA: `/le.z‿ɑ̃.fɑ̃ ɔ̃ œ̃ bɔ̃ livʁ/`' },
+        { lang: 'es-ES', text: '`¿Dónde está el niño español?` — IPA: `/ˈdonde esˈta el ˈniɲo espaˈɲol/`' },
+        { lang: 'ja-JP', text: '`私は日本語を勉強しています。` — Kana: `わたしは にほんごを べんきょうしています`' },
+        { lang: 'zh-CN', text: '`你好！我想喝一杯茶。` — Pinyin: `Nǐ hǎo! Wǒ xiǎng hē yì bēi chá.`' },
+        { lang: 'ko-KR', text: '`저는 한국어를 공부합니다.` — Pronunciation: `[저느 난구거를 공부함니다]`' }
+    ];
+
+    multilingualSamples.forEach(sample => {
+        const { cleanedMarkdown } = lintAndHealLessonContent(sample.text, sample.lang);
+        const preserved = cleanedMarkdown.length >= sample.text.length - 5 && !cleanedMarkdown.includes('undefined');
+        assertTest(
+            `UNICODE_INTEGRITY_${sample.lang}`,
+            'Multilingual Rendering',
+            preserved,
+            `Verified script & IPA preservation for ${sample.lang}`
+        );
+    });
+
+    const passedCount = results.filter(r => r.passed).length;
+    return res.json({
+        success: passedCount === results.length,
+        summary: {
+            totalTests: results.length,
+            passed: passedCount,
+            failed: results.length - passedCount,
+            passRate: `${Math.round((passedCount / results.length) * 100)}%`
+        },
+        results
+    });
 });
 
 

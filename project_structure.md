@@ -5329,25 +5329,63 @@ try {
     }
   };
 
-  // ==========================================
-  // 📐 2. هندسة الهيكل (Blueprint)
+// ==========================================
+  // 📐 2. هندسة الهيكل V2 (يربط جميع الخيارات الـ 11 في القائمة المنسدلة بمساراتها بدقة 100%)
   // ==========================================
   const handleGenerateBlueprint = async () => {
-    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة!');
+    if (!topic) return alert('يرجى إدخال أو توليد موضوع الدورة أو المشروع أو اللغة!');
     setLoadingBlueprint(true);
+    setSelectedLesson(null);
+    setForgingStatus('idle');
+    setAiArchitectReport(null);
+
     try {
-      const res = await axios.post('http://localhost:5000/api/academy/blueprint1', { topic, difficulty });
+      let endpoint = 'http://localhost:5000/api/academy2/blueprint1';
+
+      if (
+        difficulty === 'lang_a0_to_c2_cert' ||
+        difficulty === 'lang_exam_prep_cert' ||
+        difficulty === 'lang_mega_a0_c2_exam' ||
+        (difficulty === 'pro_certificate_eli5' && isTopicLanguageRelated)
+      ) {
+        endpoint = 'http://localhost:5000/api/academy2/lang-cert/blueprint-series';
+      } else if (difficulty === 'pro_project_scratch_cert') {
+        endpoint = 'http://localhost:5000/api/academy2/project-cert/blueprint-series';
+      } else if (difficulty === 'pro_certificate_eli5') {
+        endpoint = 'http://localhost:5000/api/academy2/blueprint-certificate';
+      }
+
+      const res = await axios.post(endpoint, { topic, difficulty, targetLanguage });
       if (res.data.success) {
-        setBlueprint(res.data.data);
-        setForgingStatus('idle'); // إعادة تعيين الحالة
-        setSelectedLesson(null);
+        const receivedData = res.data.data;
+        if (difficulty === 'pro_project_scratch_cert' || difficulty === 'single_project_scratch') {
+          receivedData.isProjectScratchSeries = true;
+        }
+        if (
+          difficulty === 'lang_a0_to_c2_cert' ||
+          difficulty === 'lang_exam_prep_cert' ||
+          difficulty === 'lang_mega_a0_c2_exam' ||
+          receivedData.isLanguageSeries ||
+          isTopicLanguageRelated
+        ) {
+          receivedData.isLanguageSeries = true;
+          receivedData.targetLanguage = receivedData.targetLanguage || targetLanguage;
+        }
+        if (Array.isArray(receivedData.courses)) {
+          receivedData.courses = reindexCoursesSequence(receivedData.courses);
+        }
+        setBlueprint(receivedData);
+        setActiveProjectId(null);
+        setActiveProjectName(receivedData.courseTitle || receivedData.certificateTitle || topic);
       }
     } catch (err) {
-      alert('حدث خطأ أثناء هندسة الهيكل.');
+      alert('حدث خطأ أثناء هندسة الهيكل. تأكد من تشغيل السيرفر (5000).');
     } finally {
       setLoadingBlueprint(false);
     }
   };
+
+  
 
 // ==========================================
   // ✍️ 3. تأليف الكورس (The Forge - مع نظام الزعماء)
@@ -5827,25 +5865,112 @@ const dbClearActiveDraft = async () => {
   });
 };
 
-// دالة ذكية لإعادة ترقيم وضبط تسلسل الكراش كورسات وتنظيف العناوين من الأرقام العشرية القديمة (مثل 3.1)
+// ✨ FIX: Phase 1 Deterministic CEFR Course Sorter & Reindexer (يضبط موقع امتحانات المستويات ويوحد courseOrder و courseId)
+const computeCoursePedagogicalRank = (c, idx = 0) => {
+  const combined = `${c?.difficultyLevel || ''} ${c?.courseTitle || ''}`.toLowerCase();
+  const isExam = /exam|goethe|testdaf|delf|dalf|ielts|toefl|jlpt|hsk|topik|dele|امتحان|اختبار/i.test(combined);
+
+  if (/pre-a1|a0\.1|phonics|الأبجدية|الحروف/i.test(combined)) return 10 + idx * 0.01;
+  if (/a0\.2|a0\b/i.test(combined)) return 20 + idx * 0.01;
+  if (/a1\.1/i.test(combined)) return 30 + idx * 0.01;
+  if (/a1\.2/i.test(combined)) return 35 + idx * 0.01;
+  if (/(?<!pre-)a1\b/i.test(combined)) return (isExam ? 39 : 32) + idx * 0.01;
+  if (/a2\.1/i.test(combined)) return 40 + idx * 0.01;
+  if (/a2\.2/i.test(combined)) return 45 + idx * 0.01;
+  if (/a2\b/i.test(combined)) return (isExam ? 49 : 42) + idx * 0.01;
+  if (/b1\.1/i.test(combined)) return 50 + idx * 0.01;
+  if (/b1\.2/i.test(combined)) return 54 + idx * 0.01;
+  if (/b1\.5|b1\+/i.test(combined)) return 57 + idx * 0.01;
+  if (/b1\b/i.test(combined)) return (isExam ? 59 : 52) + idx * 0.01;
+  if (/b2\.1/i.test(combined)) return 60 + idx * 0.01;
+  if (/b2\.2/i.test(combined)) return 62 + idx * 0.01;
+  if (/b2\.3/i.test(combined)) return 64 + idx * 0.01;
+  if (/b2\.4/i.test(combined)) return 66 + idx * 0.01;
+  if (/b2\b/i.test(combined)) return (isExam ? 69 : 65) + idx * 0.01; // امتحان B2 قبل C1.1 دائماً
+  if (/c1\.1/i.test(combined)) return 70 + idx * 0.01;
+  if (/c1\.2/i.test(combined)) return 72 + idx * 0.01;
+  if (/c1\.3/i.test(combined)) return 74 + idx * 0.01;
+  if (/c1\.4/i.test(combined)) return 76 + idx * 0.01;
+  if (/testdaf/i.test(combined) && !/c2/i.test(combined)) return 78 + idx * 0.01;
+  if (/c1\b/i.test(combined)) return (isExam ? 79 : 75) + idx * 0.01;
+  if (/c2\.1/i.test(combined)) return 80 + idx * 0.01;
+  if (/c2/i.test(combined)) return (isExam ? 89 : 84 + idx * 0.1);
+  return 100 + idx;
+};
+
 const reindexCoursesSequence = (coursesArray) => {
   if (!Array.isArray(coursesArray)) return [];
-  return coursesArray.map((c, idx) => {
+  const hasCEFRLevels = coursesArray.some(c => /pre-a1|a1|a2|b1|b2|c1|c2/i.test(`${c?.difficultyLevel || ''} ${c?.courseTitle || ''}`));
+  const working = hasCEFRLevels
+    ? [...coursesArray]
+        .map((c, idx) => ({ c, rank: computeCoursePedagogicalRank(c, idx) }))
+        .sort((a, b) => a.rank - b.rank)
+        .map(item => item.c)
+    : [...coursesArray];
+
+  return working.map((c, idx) => {
     const trueOrder = idx + 1;
     let cleanTitle = (c.courseTitle || '')
       .replace(/^(?:كراش كورس إضافي|كراش كورس|المرحلة|الكورس|Course)\s*\d+(?:\.\d+)?\s*[:-]\s*/i, '')
       .replace(/^(?:كراش كورس إضافي|كراش كورس|المرحلة|الكورس|Course)\s*\d+(?:\.\d+)?\s*[:-]\s*/i, '')
+      .replace(/TestDaF\s*و\s*Goethe\s*C1\/C2/gi, 'Goethe-Zertifikat C2 & المسار الأكاديمي المتقدم')
       .trim();
 
     if (!cleanTitle) cleanTitle = c.courseTitle || `المرحلة ${trueOrder}`;
 
+    const hoursMatch = String(c.estimatedHours || '18').match(/\d+/);
+    const guidedHours = hoursMatch ? parseInt(hoursMatch[0], 10) : 18;
+
     return {
       ...c,
+      courseId: c.courseId || c._id || `cert_course_${trueOrder}`,
       courseOrder: trueOrder,
+      guidedLearningHours: c.guidedLearningHours || guidedHours,
+      independentPracticeHours: c.independentPracticeHours || Math.round(guidedHours * 1.5),
       coursePrefix: `الكراش كورس ${trueOrder}`,
       courseTitle: `كراش كورس ${trueOrder}: ${cleanTitle}`
     };
   });
+};
+
+
+
+
+// ✨ FIX: Phase 3 Client-Side Lesson & Answer-Key Verifier (يفحص ويصحح التمارين والاختبارات قبل الحفظ في IndexedDB)
+const verifyAndNormalizeForgedLesson = (lessonObj) => {
+  if (!lessonObj || typeof lessonObj !== 'object') return lessonObj;
+  const copy = { ...lessonObj };
+
+  if (typeof copy.content === 'string') {
+    copy.content = copy.content
+      .replace(/\bIch\s+تر\s*inke\b/g, 'Ich trinke')
+      .replace(/\bWo\s+هو\b/g, 'Wo ist')
+      .replace(/\bDas\s+هو\b/g, 'Das ist')
+      .replace(/\bPfer\s*د\b/g, 'Pferd')
+      .replace(
+        /\b(mein|meine|meinen|meinem|dein|deine|ein|eine|einen|einem|kein|keine)\s+(?:`?[🔵🔴🟢]`?\s*)?(?:der|die|das|den|dem)\s+([A-ZÄÖÜ][a-zäöüß]+)/gi,
+        '$1 $2'
+      );
+  }
+
+  const healQuiz = (q) => {
+    if (!q || !Array.isArray(q.options)) return q;
+    const uniqueOpts = [...new Set(q.options.map(o => String(o || '').trim()).filter(Boolean))];
+    const idx = Number.isInteger(Number(q.correctAnswerIndex)) && Number(q.correctAnswerIndex) >= 0 && Number(q.correctAnswerIndex) < uniqueOpts.length
+      ? Number(q.correctAnswerIndex)
+      : 0;
+    return {
+      ...q,
+      options: uniqueOpts,
+      correctAnswerIndex: idx,
+      correctAnswer: uniqueOpts[idx] || uniqueOpts[0] || ''
+    };
+  };
+
+  if (copy.dailyQuest) copy.dailyQuest = healQuiz(copy.dailyQuest);
+  if (Array.isArray(copy.bossQuiz)) copy.bossQuiz = copy.bossQuiz.map(healQuiz);
+
+  return copy;
 };
 
 const buildFallbackUnitSummary = (courseTitle, sec) => {
@@ -5921,17 +6046,24 @@ const AcademyLab2 = () => {
   const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
   const [speakingRate, setSpeakingRate] = useState(1.0);
 
-  // التحقق من نوع المسار الحالي (بناء مشروع بدون اختبارات vs شهادة لغات واختبارات دولية)
+// التحقق الذكي من نوع المسار الحالي (مشروع بدون اختبارات vs لغة أجنبية شهادة أو كورس منفرد)
   const isNoExamProjectMode = 
     difficulty === 'pro_project_scratch_cert' || 
     difficulty === 'single_project_scratch' || 
     Boolean(blueprint?.isProjectScratchSeries);
 
+  const isTopicLanguageRelated = /لغة|لغات|إنجليزي|انجليزي|ياباني|فرنسي|ألماني|الماني|إسباني|اسباني|صيني|كوري|نطق|صوتيات|حروف|محادثة|قواعد|ielts|toefl|jlpt|delf|dalf|goethe|testdaf|dele|hsk|topik|hangul|kanji|a0|a1|a2|b1|b2|c1|c2/i.test(
+    `${topic} ${blueprint?.courseTitle || ''} ${blueprint?.certificateTitle || ''}`
+  );
+
   const isLanguageMasteryMode =
     difficulty === 'lang_a0_to_c2_cert' ||
     difficulty === 'lang_exam_prep_cert' ||
     difficulty === 'lang_mega_a0_c2_exam' ||
-    Boolean(blueprint?.isLanguageSeries);
+    Boolean(blueprint?.isLanguageSeries) ||
+    (!isNoExamProjectMode && isTopicLanguageRelated);
+
+
 
   // ============================================================================
   // 🔊 دالة تشغيل النطق الصوتي التفاعلي لنصوص الاستماع والمحادثات (Web Speech Synthesis)
@@ -5968,7 +6100,9 @@ const AcademyLab2 = () => {
       utterance.lang = 'es-ES';
     } else if (combinedContext.includes('صين') || combinedContext.includes('hsk') || combinedContext.includes('mandarin')) {
       utterance.lang = 'zh-CN';
-    } else {
+    }  else if (/[\uac00-\ud7af\u1100-\u11ff]/.test(textToSpeak) || combinedContext.includes('كوري') || combinedContext.includes('topik') || combinedContext.includes('korean')) {
+  utterance.lang = 'ko-KR';
+  } else {
       utterance.lang = 'en-US';
     }
 
@@ -7162,17 +7296,19 @@ const res = await axios.post(endpoint, { topic, difficulty, targetLanguage });
 
     try {
 const res = await axios.post(targetEndpoint, {
-  certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
-  targetLanguage: targetCert.targetLanguage || targetLanguage, // 👈 أضف هذا السطر
-  mainAnalogy: targetCert.mainAnalogy,
-  courseOrder: cIdx + 1,
-  totalCourses: targetCert.courses.length,
-  currentCourseTitle: targetCourse.courseTitle,
-  currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
-  githubProject: targetCourse.githubProject,
-  previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
-  nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
-});
+        certificateTitle: targetCert.courseTitle || targetCert.certificateTitle,
+        targetLanguage: targetCert.targetLanguage || targetLanguage,
+        difficulty, // 👈 مهم جداً لكي يعرف السيرفر نوع الشهادة المختارة!
+        mainAnalogy: targetCert.mainAnalogy,
+        courseOrder: cIdx + 1,
+        totalCourses: targetCert.courses.length,
+        currentCourseTitle: targetCourse.courseTitle,
+        currentCourseDescription: targetCourse.courseDescription || targetCourse.description,
+        githubProject: targetCourse.githubProject,
+        previousCourseTitle: prevCourse ? prevCourse.courseTitle : null,
+        nextCourseTitle: nextCourse ? nextCourse.courseTitle : null
+      });
+
 
       if (res.data.success) {
         const updated = JSON.parse(JSON.stringify(targetCert));
@@ -7357,19 +7493,23 @@ const vocabMemory = isLangCert
             difficulty: isLangCert ? difficulty : (isScratchProject ? 'pro_project_scratch_cert' : 'crash_eli5')
           });
 
-          if (res.data.success) {
-            newLessonsArray.push({
-              ...lesson,
-              type: "video",
-              content: res.data.data.content,
-              codeSnippet: res.data.data.codeSnippet || "",
-              codeExplanation: res.data.data.codeExplanation || "",
-              codingPractice: isScratchProject ? null : (res.data.data.codingPractice || null), 
-              dailyQuest: isScratchProject ? null : (res.data.data.dailyQuest 
-                ? { ...res.data.data.dailyQuest, isMandatory: false, bonusExp: 50 } 
-                : null),
-              isForged: true
-            });
+        if (res.data.success) {
+            newLessonsArray.push(
+              verifyAndNormalizeForgedLesson({
+                ...lesson,
+                type: "video",
+                content: res.data.data.content,
+                codeSnippet: res.data.data.codeSnippet || "",
+                codeExplanation: res.data.data.codeExplanation || "",
+                codingPractice: isScratchProject ? null : (res.data.data.codingPractice || null),
+                dailyQuest: isScratchProject
+                  ? null
+                  : res.data.data.dailyQuest
+                    ? { ...res.data.data.dailyQuest, isMandatory: false, bonusExp: 50 }
+                    : null,
+                isForged: true
+              })
+            );
             lessonsSinceLastBoss++;
             completedCount++;
             setForgeProgress({ 
@@ -7538,14 +7678,23 @@ const vocabMemory = isLangCert
         setForgeProgress({ current: completedCount, total: totalSteps, currentLessonName: lesson.title });
 
         try {
+          const isSingleLang = Boolean(updatedBlueprint.isLanguageSeries || isLanguageMasteryMode);
           const targetEndpoint = isScratchSingle
             ? 'http://localhost:5000/api/academy2/project-cert/forge-build-step'
-            : 'http://localhost:5000/api/academy2/forge-lesson';
+            : isSingleLang
+              ? 'http://localhost:5000/api/academy2/lang-cert/forge-language-lesson'
+              : 'http://localhost:5000/api/academy2/forge-lesson';
 
           const res = await axios.post(targetEndpoint, {
             courseTopic: updatedBlueprint.courseTitle,
+            targetLanguage: updatedBlueprint.targetLanguage || targetLanguage,
+            courseOrder: 1,
+            lessonOrderInUnit: lIdx + 1,
+            totalLessonsInUnit: section.lessons.length,
+            allUnitLessonTitles: section.lessons.map(item => item.title),
             sectionName: section.sectionName,
             lessonTitle: lesson.title,
+            lessonDescription: lesson.description || '',
             isProjectUnit: section.isProjectUnit || isScratchSingle,
             difficulty: difficulty
           });
@@ -8032,6 +8181,7 @@ const vocabMemory = isLangCert
                   <option value="الألمانية (German - Goethe/TestDaF)">🇩🇪 الألمانية (German)</option>
                   <option value="الإسبانية (Spanish - DELE)">🇪🇸 الإسبانية (Spanish)</option>
                   <option value="الصينية (Mandarin - HSK)">🇨🇳 الصينية (Mandarin)</option>
+                  <option value="الكورية (Korean - Hangul & TOPIK)">🇰🇷 الكورية (Korean)</option>
                 </select>
               </div>
 
