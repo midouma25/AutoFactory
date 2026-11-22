@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Sparkles, Layers, Loader2, Image as ImageIcon, Share2, Send, CheckCircle, Target } from 'lucide-react';
 
 export default function TripleTemplateLab() {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(6);
   const [platform, setPlatform] = useState('instagram'); 
@@ -49,6 +51,7 @@ export default function TripleTemplateLab() {
       
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -79,7 +82,9 @@ export default function TripleTemplateLab() {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
       <h1 className="text-3xl font-bold mb-8 text-amber-400 flex items-center gap-3">
         🚀 قالب المقارنة الثلاثية (سيئ، جيد، احترافي)
       </h1>
@@ -199,6 +204,19 @@ export default function TripleTemplateLab() {
           </div>
         </div>
       )}
+    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="template_triple"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 }

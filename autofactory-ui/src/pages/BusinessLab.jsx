@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Briefcase, Loader2, Image as ImageIcon, Share2, Send, CheckCircle, TrendingUp, Copy, Smartphone, Globe, Wand2, UserSquare2, MonitorPlay } from 'lucide-react';
 
 export default function BusinessLab() {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(6);
   const [platform, setPlatform] = useState('instagram'); 
@@ -63,6 +65,7 @@ export default function BusinessLab() {
       
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setCoverOptions(res.data.coverOptions); // 👈 إضافة هذا السطر
         setSelectedCoverIndex(0); // إعادة التعيين
         // استلام النصوص من السيرفر
@@ -193,7 +196,9 @@ const getMarketingAdvice = (topic, options) => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
       {/* 💼 الهيدر الفخم */}
       <h1 className="text-4xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 flex items-center gap-3">
         <Briefcase className="text-yellow-500" size={38} />
@@ -509,6 +514,19 @@ const getMarketingAdvice = (topic, options) => {
           </div>
         </div>
       )}
+    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="business_saas"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 }

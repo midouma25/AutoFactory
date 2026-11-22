@@ -674,12 +674,7 @@ const systemPrompt = `
                 generatedImages[currentPlatform].push(fileName);
             }
         }
-        res.json({ 
-            success: true, 
-            igCaption: lessonData.igCaption,
-            fbCaption: lessonData.fbCaption,
-            images: generatedImages 
-        });
+        res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, slides: lessonData.slides || [], images: generatedImages });
 
     } catch (error) {
         console.error('❌ خطأ:', error);
@@ -954,12 +949,7 @@ app.post('/api/generate-triple', async (req, res) => {
         const igCaption = contentData.caption;
         const fbCaption = contentData.caption + '\n\n🔗 روابط جميع المنصات المذكورة في أول تعليق 👇';
 
-        res.json({
-            success: true,
-            images: finalImages,
-            igCaption: igCaption,
-            fbCaption: fbCaption
-        });
+        res.json({ success: true, images: finalImages, slides: contentData.slides || [], igCaption: igCaption, fbCaption: fbCaption });
 
     } catch (error) {
         console.error('❌ خطأ في القالب الثلاثي:', error);
@@ -1691,7 +1681,7 @@ app.post('/api/generate-story', async (req, res) => {
         }
 
         console.log(`✅ تم رسم قصة من ${generatedImages.length} شرائح بنجاح!`);
-        res.json({ success: true, caption: storyData.caption, images: generatedImages });
+        res.json({ success: true, caption: storyData.caption, slides: storyData.slides || [], images: generatedImages });
 
     } catch (error) {
         console.error('❌ خطأ في مسار القصص:', error);
@@ -2782,7 +2772,8 @@ app.post('/webhook', async (req, res) => {
                         // 3. البحث عن تطابق مع أي كلمة مفتاحية لحملة نشطة
                         let matchedCampaign = null;
                         for (const campaign of activeCampaigns) {
-                            if (lowerComment.includes(campaign.keyword.toLowerCase())) {
+                            const _kwList = String(campaign.keyword || '').split(/[،,|]/).map(k => k.trim().toLowerCase()).filter(Boolean);
+                            if (_kwList.some(kw => lowerComment.includes(kw))) {
                                 matchedCampaign = campaign;
                                 break; // نكتفي بأول تطابق نجده
                             }
@@ -8157,4 +8148,658 @@ app.post('/api/academy2/lang-exam/evaluate', async (req, res) => {
 
 
 const PORT = process.env.PORT || 5000;
+
+// [AUTO-FUNNEL ENGINE - 6 DEDICATED STUDIO ROUTES V3]
+// ============================================================================
+// 🚀🎯 المحرك الهندسي ذو المسارات الستة المستقلة لتوليد كبسولات الكاروسيل (V3)
+// ============================================================================
+const STUDIO_CTA_DEFAULT_KEYWORD = {
+    template_binary: 'أدوات',
+    template_triple: 'أدوات',
+    roadmap_steps: 'دليل',
+    business_saas: 'أرباح',
+    story_lab: 'مسار',
+    commercial_lab: 'مشروع'
+};
+
+const extractStudioFunnelKeyword = (studioType = '', slides = [], igCaption = '', fbCaption = '') => {
+    const baseKw = STUDIO_CTA_DEFAULT_KEYWORD[studioType] || 'دليل';
+    const combined = JSON.stringify(slides || []) + ' ' + (igCaption || '') + ' ' + (fbCaption || '');
+    const match = combined.match(/(?:بكلمة|كلمة)\s*["«*]?([أ-يa-zA-Z0-9_]{2,15})["»*]?/i);
+    const found = match && match[1] ? match[1].trim() : '';
+    if (found && found !== baseKw) return baseKw + ", " + found;
+    return found || baseKw;
+};
+
+// دالة مساعدة لتوليد شرائح افتراضية ذكية بالـ AI إذا ضغط المستخدم على توليد الكورس قبل رسم الصور
+async function synthesizeStructuredSlidesIfEmpty(studioType, topic, rawSlides) {
+    const validSlides = (Array.isArray(rawSlides) ? rawSlides : []).filter(s => s && s.type !== "cta");
+    if (validSlides.length > 0) return validSlides;
+    const cleanTopic = topic || "أحدث أدوات الذكاء الاصطناعي والأتمتة";
+    try {
+        let prompt = "";
+        if (studioType === "template_binary") {
+            prompt = "أنت خبير أدوات تقنية. للموضوع: (" + cleanTopic + ")، ولد 4 مقارنات ثنائية بين أداة قديمة تقليدية (badTool) وأداة حديثة ذكية فائزة (goodTool) مع الدومين الرسمي لكل أداة. رد بصيغة JSON فقط: { \"slides\": [ { \"slideNumber\": 1, \"type\": \"comparison\", \"title\": \"مجال المقارنة\", \"badTool\": \"اسم الأداة القديمة\", \"badToolDomain\": \"old.com\", \"goodTool\": \"اسم الأداة الحديثة\", \"goodToolDomain\": \"new.com\", \"whyGoodWins\": \"لماذا تتفوق الأداة الحديثة عملياً\" } ] }";
+        } else if (studioType === "template_triple") {
+            prompt = "أنت خبير أدوات تقنية. للموضوع: (" + cleanTopic + ")، ولد 4 مقارنات ثلاثية (سيئ للمبتدئين badTool / جيد goodTool / احترافي للخبراء proTool) مع الدومين الرسمي لكل أداة. رد بصيغة JSON فقط: { \"slides\": [ { \"slideNumber\": 1, \"type\": \"comparison\", \"title\": \"مجال المقارنة\", \"badTool\": \"أداة ضعيفة\", \"badToolDomain\": \"bad.com\", \"goodTool\": \"أداة جيدة\", \"goodToolDomain\": \"good.com\", \"proTool\": \"أداة احترافية\", \"proToolDomain\": \"pro.com\" } ] }";
+        } else if (studioType === "roadmap_steps") {
+            prompt = "أنت مهندس برمجيات. للموضوع: (" + cleanTopic + ")، ولد خريطة طريق من 4 خطوات متسلسلة مع اسم الأداة (toolName) والدومين (toolDomain) والشرح التطبيقي (explanation). رد بصيغة JSON فقط: { \"slides\": [ { \"slideNumber\": 1, \"type\": \"step\", \"title\": \"اسم الخطوة\", \"toolName\": \"Tool\", \"toolDomain\": \"tool.com\", \"explanation\": \"شرح تطبيقي\" } ] }";
+        } else if (studioType === "business_saas") {
+            prompt = "أنت مستشار بناء SaaS. للمشروع: (" + cleanTopic + ")، ولد 4 خطوات لبناء المشروع وتحقيق الدخل منه مع الأدوات (toolName) والدومين (toolDomain). رد بصيغة JSON فقط: { \"slides\": [ { \"slideNumber\": 1, \"type\": \"step\", \"title\": \"مرحلة البناء أو الربح\", \"toolName\": \"Stripe\", \"toolDomain\": \"stripe.com\", \"explanation\": \"كيف نربطها لتحقيق الدخل\" } ] }";
+        } else {
+            prompt = "للموضوع: (" + cleanTopic + ")، ولد 4 محاور تطبيقية عملية بصيغة JSON: { \"slides\": [ { \"slideNumber\": 1, \"title\": \"عنوان المحور\", \"text\": \"التفصيل العملي\" } ] }";
+        }
+        const raw = await generateContentSmart(prompt, "ولد الشرائح المهيكلة بصيغة JSON الآن.", 0.7, 4000);
+        const parsed = typeof safeParseAIJson === "function" ? safeParseAIJson(raw) : JSON.parse(raw);
+        if (Array.isArray(parsed.slides) && parsed.slides.length > 0) return parsed.slides;
+    } catch (_) {}
+    return [
+        { slideNumber: 1, type: "comparison", title: cleanTopic, badTool: "الطريقة اليدوية التقليدية", badToolDomain: "google.com", goodTool: "Cursor AI", goodToolDomain: "cursor.com", proTool: "Claude Code", proToolDomain: "anthropic.com", toolName: "Cursor", toolDomain: "cursor.com", explanation: "أتمتة بناء الكود والأنظمة بسرعة 10x." }
+    ];
+}
+
+// ============================================================================
+// ⚖️ 1. المسار المستقل للمقارنة الثنائية (TemplateLab: Binary Comparison Course Engine)
+// ============================================================================
+async function forgeBinaryComparisonCapsule(body) {
+    const topic = body.topic || "مقارنة الأدوات الذكية الحديثة ضد الأدوات التقليدية";
+    const detectedKeyword = extractStudioFunnelKeyword("template_binary", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("template_binary", topic, body.slides);
+
+    const pairsSummary = slides.map((s, idx) => ({
+        index: idx + 1,
+        category: s.title || ("المقارنة " + (idx + 1)),
+        badTool: s.badTool || "الأداة التقليدية",
+        badToolDomain: s.badToolDomain || "",
+        goodTool: s.goodTool || "الأداة الذكية البديلة",
+        goodToolDomain: s.goodToolDomain || "",
+        goodToolUrl: s.goodToolDomain ? ("https://" + s.goodToolDomain.replace(/^https?:\/\//, "")) : ""
+    }));
+
+    try {
+        const sysPrompt = [
+            "أنت كبير مهندسي الإنتاجية والأدوات في منصة Cherif.Dev.",
+            "هذا المنشور عبارة عن مقارنة ثنائية حاسمة (أداة قديمة ❌ ضد أداة ذكية حديثة ✅) حول: " + topic,
+            "بيانات المقارنات الثنائية في الشرائح: " + JSON.stringify(pairsSummary),
+            "صمم كراش كورس تطبيقياً مصغراً (كبسولة من 3 دروس متخصصة في المقارنة الثنائية):",
+            "- الدرس 1: لماذا تتخلى فوراً عن الأدوات التقليدية (" + pairsSummary.map(p => p.badTool).join("، ") + ")؟ (تحليل نقاط الضعف واستنزاف الوقت).",
+            "- الدرس 2: الدليل التطبيقي الشامل للأدوات البديلة الفائزة (" + pairsSummary.map(p => p.goodTool).join("، ") + ") مع روابطها الرسمية وإعداداتها خطوة بخطوة.",
+            "- الدرس 3: ورشة الدمج العملي — كيف تربط هذه الأدوات الفائزة معاً في سير عمل واحد لمضاعفة إنتاجيتك 10x.",
+            "رد بصيغة JSON صالحة 100% تحتوي على courseBlueprint و campaignDraft."
+        ].join("\n");
+
+        const raw = await generateContentSmart(sysPrompt, "صمم كبسولة المقارنة الثنائية بصيغة JSON الآن.", 0.7, 11000);
+        const parsed = typeof safeParseAIJson === "function" ? safeParseAIJson(raw) : JSON.parse(raw);
+        if (parsed && parsed.courseBlueprint && Array.isArray(parsed.courseBlueprint.blueprint)) {
+            parsed.courseBlueprint.studioType = "template_binary";
+            parsed.courseBlueprint.structuredSlides = pairsSummary;
+            return { courseBlueprint: parsed.courseBlueprint, campaignDraft: parsed.campaignDraft || {} };
+        }
+    } catch (_) {}
+
+    const tableRows = pairsSummary.map(p => "| **" + p.category + "** | ❌ " + p.badTool + " | ✅ **" + p.goodTool + "** | " + (p.goodToolUrl || "—") + " |").join("\n");
+    const toolsDeepDive = pairsSummary.map(p => "#### ✅ " + p.index + ". أداة **" + p.goodTool + "** (البديل الفائز عن " + p.badTool + " في " + p.category + ")\n- **الرابط الرسمي المباشر:** " + (p.goodToolUrl || "ابحث عن الاسم الرسمي") + "\n- **لماذا تتفوق؟** توفر أتمتة ذكية وتختصر أكثر من 70% من الوقت مقارنة بـ `" + p.badTool + "`.").join("\n\n");
+
+    return {
+        courseBlueprint: {
+            courseTitle: "كبسولة المقارنة الثنائية: البدائل الذكية في " + topic,
+            courseDescription: "الدليل التطبيقي المقارن والروابط الرسمية المباشرة للانتقال من الأدوات التقليدية إلى الأدوات الذكية الفائزة في (" + topic + ").",
+            difficulty: "كبسولة مقارنة ثنائية تطبيقية",
+            courseCategory: "carousel_capsule",
+            studioType: "template_binary",
+            structuredSlides: pairsSummary,
+            blueprint: [{
+                sectionName: "مختبر المقارنة الثنائية: من الأدوات التقليدية إلى البدائل الذكية",
+                lessons: [
+                    {
+                        title: "الدرس 1: جدول المقارنة الحاسم — لماذا تتخلى عن الأدوات القديمة؟",
+                        type: "video",
+                        content: "### ⚖️ تشريح الفجوة بين الجيل القديم والجيل الذكي في (" + topic + ")\n\nفي الكاروسيل استعرضنا مقارنة مباشرة بين الأدوات التي تستهلك وقتك والأدوات الحديثة التي تضاعف إنتاجيتك. إليك جدول المقارنة المرجعي الكامل:\n\n| المجال / المهمة | الأداة التقليدية ❌ | الأداة الذكية الفائزة ✅ | الرابط المباشر |\n| --- | --- | --- | --- |\n" + tableRows + "\n\n### 💡 القاعدة الهندسية لعام 2026:\nالاستمرار في استخدام أدوات الجيل القديم يعني قضاء 5 ساعات في مهمة ينجزها البديل الذكي في 15 دقيقة.",
+                        codeSnippet: "// مصفوفة التحول الذكي للأدوات الفائزة\nconst smartToolSwitch = " + JSON.stringify(pairsSummary.map(p => ({ task: p.category, drop: p.badTool, adopt: p.goodTool, url: p.goodToolUrl })), null, 2) + ";",
+                        codeExplanation: "احتفظ بهذه الخريطة المرجعية للانتقال التدريجي نحو الأدوات الفائزة.",
+                        dailyQuest: {
+                            question: "ما هي الأداة الفائزة التي أوصينا بها كبديل متفوق في (" + (pairsSummary[0]?.category || topic) + ")؟",
+                            options: [pairsSummary[0]?.goodTool || "الأداة الذكية الحديثة", pairsSummary[0]?.badTool || "الأداة القديمة", "العمل اليدوي بدون أدوات", "تأجيل المهمة"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 2: الدليل العملي والروابط الرسمية للأدوات الفائزة خطوة بخطوة",
+                        type: "video",
+                        content: "### 🚀 كيف تبدأ استخدام كل أداة فائزة اليوم؟\n\nفيما يلي بطاقة التشغيل السريع والرابط الرسمي لكل أداة فائزة ظهرت في شرائح المقارنة:\n\n" + toolsDeepDive,
+                        codeSnippet: "# خطوات التفعيل الفوري للأدوات البديلة\n" + pairsSummary.map((p, i) => (i + 1) + ". افتح " + (p.goodToolUrl || p.goodTool) + " لإنشاء حساب مجاني وتجربة ميزة (" + p.category + ")").join("\n"),
+                        codeExplanation: "ابدأ بتجربة أداة واحدة على الأقل اليوم في مشروعك الحالي.",
+                        dailyQuest: {
+                            question: "ما هي الميزة الكبرى للانتقال إلى الأدوات الفائزة المشروحة في هذا الدرس؟",
+                            options: ["أتمتة المهام الروتينية ورفع جودة المخرجات بسرعة 10x", "زيادة تعقيد العمل", "إبطاء التنفيذ", "الاعتماد على الطرق التقليدية"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 3: ورشة الدمج العملي — كيف تربط هذه الأدوات في سير عمل واحد؟",
+                        type: "video",
+                        content: "### 🔗 هندسة سير العمل المتكامل (Workflow Integration)\n\nالسر الحقيقي لدى المحترفين في **Cherif.Dev** ليس استخدام كل أداة بمعزل عن الأخرى، بل ربط **" + pairsSummary.map(p => p.goodTool).join(" + ") + "** في خط إنتاج واحد مترابط.\n\n1. استخدم **" + (pairsSummary[0]?.goodTool || "الأداة الأولى") + "** لإنشاء الهيكل الأساسي.\n2. انقل المخرجات مباشرة إلى **" + (pairsSummary[1]?.goodTool || pairsSummary[0]?.goodTool || "الأداة الثانية") + "** لتحسينها وأتمتتها.\n3. استكشف مساراتنا الاحترافية وشهاداتنا المهنية الكاملة في المنصة لتعميق مهاراتك الهندسية.",
+                        codeSnippet: "// برومبت جاهز لدمج مخرجات الأدوات الذكية\nAct as a Senior Workflow Architect. Help me integrate (" + pairsSummary.map(p => p.goodTool).join(", ") + ") to automate my project in (" + topic + ") step by step.",
+                        codeExplanation: "انسخ هذا الأمر (Prompt) واستخدمه مع مساعدك الذكي لهندسة مشروعك.",
+                        dailyQuest: {
+                            question: "كيف تحقق أقصى استفادة من حزمة الأدوات الفائزة؟",
+                            options: ["دمجها في سير عمل مترابط وتطبيقها في مشاريع حقيقية", "الاكتفاء بحفظ أسمائها فقط", "العودة للأدوات القديمة", "عدم تجربة الروابط"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    }
+                ]
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 🚀 أرسلت لك جدول المقارنة الكامل وروابط الأدوات الفائزة وشرحها في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋⚖️\n\nكما وعدتك في منشور المقارنة، جهزت لك كبسولة تفاعلية تضم جميع روابط الأدوات الفائزة (" + pairsSummary.map(p => p.goodTool).slice(0, 3).join("، ") + ") مع شرح تشغيلها خطوة بخطوة:\n\n🔗 افتح الكبسولة والروابط من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 للحصول على الروابط المباشرة لجميع الأدوات الفائزة وشرح استخدامها، علق بكلمة \"" + primaryKw + "\" وسأرسلها لك في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 🏆 2. المسار المستقل للمقارنة الثلاثية (TripleTemplateLab: Bad / Good / Pro Engine)
+// ============================================================================
+async function forgeTripleComparisonCapsule(body) {
+    const topic = body.topic || "المقارنة الثلاثية للأدوات (مبتدئ / جيد / احترافي)";
+    const detectedKeyword = extractStudioFunnelKeyword("template_triple", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("template_triple", topic, body.slides);
+
+    const triplesSummary = slides.map((s, idx) => ({
+        index: idx + 1,
+        category: s.title || ("المحور " + (idx + 1)),
+        badTool: s.badTool || "أداة مبتدئة",
+        badToolDomain: s.badToolDomain || "",
+        goodTool: s.goodTool || "أداة جيدة",
+        goodToolDomain: s.goodToolDomain || "",
+        goodToolUrl: s.goodToolDomain ? ("https://" + s.goodToolDomain.replace(/^https?:\/\//, "")) : "",
+        proTool: s.proTool || "أداة احترافية",
+        proToolDomain: s.proToolDomain || "",
+        proToolUrl: s.proToolDomain ? ("https://" + s.proToolDomain.replace(/^https?:\/\//, "")) : ""
+    }));
+
+    const matrixRows = triplesSummary.map(t => "| **" + t.category + "** | 🔴 " + t.badTool + " | 🟡 **" + t.goodTool + "** | 🟢 🏆 **" + t.proTool + "** |").join("\n");
+    const goodBreakdown = triplesSummary.map(t => "- **" + t.category + " — أداة المستوى الجيد (`" + t.goodTool + "`):** مثالية للانطلاق السريع بدون تعقيد. " + (t.goodToolUrl ? ("الرابط: " + t.goodToolUrl) : "")).join("\n");
+    const proBreakdown = triplesSummary.map(t => "#### 🏆 " + t.index + ". المحرك الاحترافي: **" + t.proTool + "** (في مجال " + t.category + ")\n- **الرابط الرسمي:** " + (t.proToolUrl || t.proTool) + "\n- **لماذا هو الخيار رقم 1 للمحترفين؟** يمنحك تحكماً كاملاً وجودة إنتاجية (Production-Grade) تتفوق بمراحل على `" + t.badTool + "` و`" + t.goodTool + "`.").join("\n\n");
+
+    return {
+        courseBlueprint: {
+            courseTitle: "كبسولة المقارنة الثلاثية (سيئ / جيد / احترافي): " + topic,
+            courseDescription: "خريطة التدرج الثلاثي الكاملة والروابط المباشرة للارتقاء من أدوات المبتدئين إلى ترسانة المحترفين في (" + topic + ").",
+            difficulty: "كبسولة مقارنة ثلاثية (3-Tier Mastery)",
+            courseCategory: "carousel_capsule",
+            studioType: "template_triple",
+            structuredSlides: triplesSummary,
+            blueprint: [{
+                sectionName: "سُلّم الارتقاء الثلاثي: من أداة المبتدئين إلى ترسانة المحترفين",
+                lessons: [
+                    {
+                        title: "الدرس 1: مصفوفة المستويات الثلاثة (سيئ 🔴 / جيد 🟡 / احترافي 🟢)",
+                        type: "video",
+                        content: "### 🚀 تشريح المستويات الثلاثة في (" + topic + ")\n\nفي الكاروسيل الثلاثي، صنّفنا الأدوات إلى 3 مستويات واضحة. إليك الجدول الهندسي الكامل للمقارنة:\n\n| التخصص / المهمة | المستوى السيئ / المحدود 🔴 | المستوى الجيد والعملي 🟡 | المستوى الاحترافي (Pro) 🟢 🏆 |\n| --- | --- | --- | --- |\n" + matrixRows + "\n\n### 🎯 متى تستخدم المستوى الجيد ومتى تنتقل للاحترافي؟\n- ابدأ بـ **المستوى الجيد (🟡)** إذا كنت تريد نتائج سريعة ومنحنى تعلم سهل.\n- انتقل فوراً إلى **المستوى الاحترافي (🟢)** عندما تبني مشروعاً تجارياً أو نظاماً لعميل يتطلب أعلى دقة وأداء.",
+                        codeSnippet: "// خريطة الترقية الثلاثية للأدوات\nconst threeTierMatrix = " + JSON.stringify(triplesSummary.map(t => ({ category: t.category, good: t.goodTool, pro: t.proTool, proUrl: t.proToolUrl })), null, 2) + ";",
+                        codeExplanation: "استخدم هذه المصفوفة لاختيار الأداة المناسبة لحجم مشروعك.",
+                        dailyQuest: {
+                            question: "ما هي الأداة المصنفة في فئة (احترافي 🏆) لمجال (" + (triplesSummary[0]?.category || topic) + ")؟",
+                            options: [triplesSummary[0]?.proTool || "الأداة الاحترافية", triplesSummary[0]?.badTool || "الأداة السيئة", "لا توجد أداة", "الطريقة الورقية"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 2: دليل استخدام أدوات المستوى الجيد (Good Tier) للنتائج السريعة",
+                        type: "video",
+                        content: "### ⚡ متى وكيف تستغل أدوات المستوى الجيد؟\n\nأدوات الفئة المتوسطة (الجيدة) تمنحك 80% من النتيجة بـ 20% من الجهد:\n\n" + goodBreakdown,
+                        codeSnippet: "# روابط التشغيل السريع لأدوات المستوى الجيد\n" + triplesSummary.map((t, i) => (i + 1) + ". " + t.goodTool + " -> " + (t.goodToolUrl || t.goodToolDomain)).join("\n"),
+                        codeExplanation: "هذه الأدوات ممتازة للنماذج الأولية السريعة.",
+                        dailyQuest: {
+                            question: "متى يكون استخدام أدوات المستوى الجيد (🟡) خياراً ذكياً؟",
+                            options: ["عند الرغبة في إنجاز سريع وبسيط قبل الانتقال للتعقيد الاحترافي", "عند الرغبة في إبطاء العمل", "لا فائدة منها أبداً", "عند الرغبة في نتائج سيئة"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 3: أسرار المحترفين والروابط المباشرة لأدوات القمة (Pro Tier 🏆)",
+                        type: "video",
+                        content: "### 🏆 كيف تعمل كخبير باستخدام أدوات القمة؟\n\nإليك التفصيل الكامل والروابط الرسمية لأدوات الفئة الاحترافية التي ظهرت في الصف الثالث من كل شريحة:\n\n" + proBreakdown,
+                        codeSnippet: "# ترسانة المحترفين (Pro Stack Links)\n" + triplesSummary.map((t, i) => (i + 1) + ". [" + t.category + "] " + t.proTool + ": " + (t.proToolUrl || t.proToolDomain)).join("\n"),
+                        codeExplanation: "احفظ هذه الروابط في مفضلتك المهنية.",
+                        dailyQuest: {
+                            question: "ما الذي يميز أدوات الفئة الاحترافية (Pro Tier) عن غيرها؟",
+                            options: ["التحكم العميق، القابلية للتوسع، والجودة القياسية لسوق العمل", "قلة المميزات", "ضعف الأداء", "عدم قابليتها للربط البرمجي"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    }
+                ]
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 🚀 أرسلت لك روابط المقارنة الثلاثية الكاملة وشرح أدوات المحترفين في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋🏆\n\nتفضل كبسولة المقارنة الثلاثية الكاملة مع الروابط المباشرة لأدوات المستوى الجيد والاحترافي (" + triplesSummary.map(t => t.proTool).slice(0, 3).join("، ") + "):\n\n🔗 ادخل إلى الكبسولة والروابط من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 للحصول على الروابط الكاملة لأدوات المستوى الجيد والاحترافي مع شرحها، علق بكلمة \"" + primaryKw + "\" وسأرسلها لك في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 🗺️ 3. المسار المستقل لصانع الخطوات وخرائط الطريق (RoadmapLab: Step-by-Step Engine)
+// ============================================================================
+async function forgeRoadmapStepsCapsule(body) {
+    const topic = body.topic || "خريطة الطريق العملية خطوة بخطوة";
+    const detectedKeyword = extractStudioFunnelKeyword("roadmap_steps", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("roadmap_steps", topic, body.slides);
+
+    const stepSlides = slides.filter(s => s.type !== "hook" && s.type !== "cta");
+    const effectiveSteps = (stepSlides.length > 0 ? stepSlides : slides).map((s, idx) => ({
+        stepNumber: idx + 1,
+        title: s.title || ("الخطوة العملية " + (idx + 1)),
+        toolName: s.toolName || s.goodTool || ("الأداة " + (idx + 1)),
+        toolDomain: s.toolDomain || s.goodToolDomain || "",
+        toolUrl: s.toolDomain ? ("https://" + s.toolDomain.replace(/^https?:\/\//, "")) : "",
+        explanation: s.explanation || s.text || "تطبيق هذه المرحلة عملياً بالترتيب الصحيح."
+    }));
+
+    const stepLessons = effectiveSteps.map((st) => ({
+        title: "المحطة " + st.stepNumber + ": " + st.title + " باستخدام (" + st.toolName + ")",
+        type: "video",
+        content: "### 🛠️ المحطة " + st.stepNumber + ": " + st.title + "\n\n- **الأداة المعتمدة في هذه الخطوة:** `" + st.toolName + "`\n- **الرابط الرسمي المباشر:** " + (st.toolUrl || st.toolName) + "\n\n### 📋 كيف تنفذ هذه الخطوة عملياً؟\n" + st.explanation + "\n\n1. افتح الأداة `" + st.toolName + "` وجهّز بيئة العمل الخاصة بك.\n2. نفّذ الإعدادات الأساسية الموضحة في الكود التطبيقي أدناه.\n3. تأكد من جاهزية المخرجات لتمريرها إلى المحطة رقم " + (st.stepNumber + 1) + ".",
+        codeSnippet: "// المحطة " + st.stepNumber + ": " + st.title + " (" + st.toolName + ")\nconst stepConfig_" + st.stepNumber + " = {\n  step: " + st.stepNumber + ",\n  tool: \"" + st.toolName + "\",\n  officialUrl: \"" + (st.toolUrl || st.toolDomain) + "\",\n  mission: \"" + st.explanation.replace(/"/g, "'") + "\"\n};",
+        codeExplanation: "طبّق هذه المحطة قبل الانتقال للخطوة التالية لضمان تسلسل خريطة الطريق.",
+        dailyQuest: {
+            question: "ما هي الأداة الأساسية المستخدمة في المحطة " + st.stepNumber + " (" + st.title + ")؟",
+            options: [st.toolName, "أداة عشوائية غير مرتبطة", "تخطي هذه الخطوة", "العمل بدون خطة"],
+            correctAnswerIndex: 0
+        },
+        isForged: true
+    }));
+
+    return {
+        courseBlueprint: {
+            courseTitle: "كبسولة خريطة الطريق التطبيقية: " + topic,
+            courseDescription: "التطبيق العملي خطوة بخطوة وروابط جميع الأدوات الواردة في خريطة طريق (" + topic + ").",
+            difficulty: "خريطة طريق تطبيقية متسلسلة",
+            courseCategory: "carousel_capsule",
+            studioType: "roadmap_steps",
+            structuredSlides: effectiveSteps,
+            blueprint: [{
+                sectionName: "محطات التنفيذ العملي لخريطة الطريق (" + effectiveSteps.length + " خطوات)",
+                lessons: stepLessons
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 🗺️🚀 أرسلت لك خريطة الطريق الكاملة وروابط الأدوات خطوة بخطوة في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋🗺️\n\nتفضل الكبسولة التطبيقية الكاملة لخريطة طريق (" + topic + ") مع شرح وروابط كل خطوة (" + effectiveSteps.map(s => s.toolName).slice(0, 4).join(" ➔ ") + "):\n\n🔗 ابدأ التطبيق من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 للحصول على الدليل التطبيقي الكامل وروابط جميع خطوات خريطة الطريق، علق بكلمة \"" + primaryKw + "\" وسأرسله لك في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 💰 4. المسار المستقل لمصنع الأرباح والـ SaaS (BusinessLab: SaaS & Monetization Engine)
+// ============================================================================
+async function forgeBusinessSaasCapsule(body) {
+    const topic = body.topic || "بناء مشروع SaaS مربح وتحقيق دخل متكرر";
+    const detectedKeyword = extractStudioFunnelKeyword("business_saas", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("business_saas", topic, body.slides);
+
+    const setupSlide = slides.find(s => s.type === "setup") || slides[0] || {};
+    const stepSlides = slides.filter(s => s.type === "step");
+    const structuredTech = (stepSlides.length > 0 ? stepSlides : slides).map((s, idx) => ({
+        stepNumber: idx + 1,
+        title: s.title || ("ركيزة البناء " + (idx + 1)),
+        toolName: s.toolName || "SaaS Tool",
+        toolDomain: s.toolDomain || "",
+        toolUrl: s.toolDomain ? ("https://" + s.toolDomain.replace(/^https?:\/\//, "")) : "",
+        explanation: s.explanation || "توظيف الأداة في بناء النظام وتحقيق الربح."
+    }));
+
+    const stackListMd = structuredTech.map(t => "- **المرحلة " + t.stepNumber + " (" + t.title + "):** باستخدام أداة `" + t.toolName + "` (" + (t.toolUrl || "الرابط الرسمي") + ") — " + t.explanation).join("\n");
+
+    return {
+        courseBlueprint: {
+            courseTitle: "كبسولة هندسة الأرباح والـ SaaS: " + topic,
+            courseDescription: "المخطط التجاري والتقني الكامل لبناء وإطلاق (" + topic + ") وتحويله إلى مصدر دخل متكرر.",
+            difficulty: "مخطط عمل وربح تطبيقي (SaaS Blueprint)",
+            courseCategory: "carousel_capsule",
+            studioType: "business_saas",
+            structuredSlides: structuredTech,
+            blueprint: [{
+                sectionName: "مختبر بناء الـ SaaS وهندسة العائد المالي (MRR)",
+                lessons: [
+                    {
+                        title: "الدرس 1: تشريح نموذج العمل وآلية تحقيق الربح (Monetization Blueprint)",
+                        type: "video",
+                        content: "### 💰 كيف يطبع هذا المشروع المال فعلياً؟\n\n- **الفكرة المحورية:** " + topic + "\n- **الاستراتيجية السرية (Setup):** " + (setupSlide.explanation || "حل مشكلة محددة وعالية القيمة لأصحاب الأعمال مقابل اشتراك شهري متكرر.") + "\n\n### 📊 معادلة العائد الشهري المتكرر (MRR Target):\n- إذا قمت بتسعير الخدمة بـ **$29/شهرياً** فقط:\n  * **10 عملاء** = `$290 / شهرياً` (تغطية التكاليف وتحقيق أول ربح صافي).\n  * **50 عميلاً** = `$1,450 / شهرياً` (دخل ممتاز من نظام يعمل آلياً).\n  * **100 عميل** = `$2,900 / شهرياً`.",
+                        codeSnippet: "// حاسبة العائد الشهري المتكرر لمشروع الـ SaaS\nfunction calculateSaaSMRR(subscribers, monthlyPriceUSD = 29) {\n  const grossMRR = subscribers * monthlyPriceUSD;\n  const annualRunRate = grossMRR * 12;\n  return { subscribers, grossMRR: \"$" + "\"+grossMRR, ARR: \"$" + "\"+annualRunRate };\n}",
+                        codeExplanation: "ركّز في البداية على الوصول لأول 10 عملاء دافعين للتحقق من السوق.",
+                        dailyQuest: {
+                            question: "ما هي الميزة المالية الأهم لنموذج عمل الـ SaaS المشروح في هذا الدرس؟",
+                            options: ["تحقيق دخل شهري متكرر (MRR) قابل للنمو والتوسع", "بيع الوقت بالساعة لمرة واحدة", "العمل اليدوي المرهق", "عدم وجود نموذج ربح واضح"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 2: المعمارية التقنية وربط أدوات المشروع خطوة بخطوة",
+                        type: "video",
+                        content: "### ⚙️ الترسانة التقنية الكاملة لبناء المشروع (The Tech Stack)\n\nإليك الأدوات الدقيقة التي استعرضناها في شرائح الكاروسيل وكيفية ربطها معاً:\n\n" + stackListMd,
+                        codeSnippet: "# خريطة الأدوات والروابط الرسمية لبناء المشروع\n" + structuredTech.map(t => t.stepNumber + ". " + t.toolName + " (" + t.title + "): " + (t.toolUrl || t.toolDomain)).join("\n"),
+                        codeExplanation: "لا تقم ببرمجة كل شيء من الصفر؛ اربط هذه الأدوات الجاهزة لإطلاق النسخة الأولى بسرعة.",
+                        dailyQuest: {
+                            question: "ما هي الأداة المستخدمة في المرحلة الأولى (" + (structuredTech[0]?.title || "البناء") + ")؟",
+                            options: [structuredTech[0]?.toolName || "الأداة الأولى", "بدون أدوات", "أداة غير متوافقة", "تأجيل البناء"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 3: حقيبة أوامر الـ AI Agent لبناء النسخة الأولية (MVP) في 48 ساعة",
+                        type: "video",
+                        content: "### 🤖 كيف تجعل وكيل الذكاء الاصطناعي (Cursor / Claude) يبني معك هذا المشروع؟\n\nانسخ الأمر الهندسي التالي وضعه في محرر الأكواد الذكي لتوليد الهيكل الأساسي للمشروع فوراً، أو انضم إلى **شهاداتنا المهنية لبناء المشاريع من الصفر في Cherif.Dev** لاحتراف بناء الأنظمة الكاملة.",
+                        codeSnippet: "// انسخ هذا الـ Master Prompt وضعه في Cursor أو Claude:\nAct as a Principal SaaS Architect. Build a production-ready MVP for: (" + topic + ").\nUse the following stack & integrations: " + structuredTech.map(t => t.toolName).join(", ") + ".\nStart by generating the folder structure, database schema, and core API endpoints.",
+                        codeExplanation: "هذا الأمر يختصر عليك أسابيع من التخطيط الهيكلي.",
+                        dailyQuest: {
+                            question: "ما هو الهدف من بناء نسخة MVP أولية بمساعدة الـ AI Agent؟",
+                            options: ["إطلاق المنتج للسوق بسرعة واختباره مع عملاء حقيقيين بأقل تكلفة", "قضاء سنة كاملة قبل الإطلاق", "تعقيد الكود دون داعٍ", "عدم نشر المشروع"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    }
+                ]
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 💰🚀 أرسلت لك خطة الأرباح الكاملة وروابط أدوات الـ SaaS في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋💼\n\nكما وعدتك في منشور خريطة الأرباح، تفضل الكبسولة التطبيقية الكاملة لمشروع (" + topic + ") مع روابط الأدوات وأوامر البناء بالـ AI:\n\n🔗 افتح الخطة من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 للحصول على المخطط الكامل وروابط الأدوات وأوامر بناء هذا الـ SaaS، علق بكلمة \"" + primaryKw + "\" وسأرسلها لك في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 📖 5. المسار المستقل لاستوديو القصص ودراسات الحالة (StoryLab: Actionable Playbook Engine)
+// ============================================================================
+async function forgeStoryPlaybookCapsule(body) {
+    const topic = body.topic || "دراسة الحالة وخريطة الإتقان العملية";
+    const detectedKeyword = extractStudioFunnelKeyword("story_lab", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("story_lab", topic, body.slides);
+
+    const storyBeats = slides.map((s, idx) => ({
+        slideNumber: idx + 1,
+        title: String(s.title || ("المحطة " + (idx + 1))).replace(/\*/g, ""),
+        text: String(s.text || s.explanation || "").replace(/\*/g, "")
+    }));
+
+    const beatsMd = storyBeats.map(b => "- **الشريحة " + b.slideNumber + " (" + b.title + "):** " + b.text).join("\n");
+
+    return {
+        courseBlueprint: {
+            courseTitle: "الدليل التطبيقي وكواليس القصة: " + topic,
+            courseDescription: "تحويل القصة ودراسة الحالة في (" + topic + ") إلى خطوات عمل تطبيقية قابلة للتنفيذ الفوري.",
+            difficulty: "دليل تطبيقي ودراسة حالة (Playbook)",
+            courseCategory: "carousel_capsule",
+            studioType: "story_lab",
+            structuredSlides: storyBeats,
+            blueprint: [{
+                sectionName: "من القصة إلى التطبيق العملي (The Actionable Playbook)",
+                lessons: [
+                    {
+                        title: "الدرس 1: الكواليس الكاملة وتشريح المشكلة والفرصة",
+                        type: "video",
+                        content: "### 📖 القصة الكاملة وراء (" + topic + ")\n\nإليك تفصيل المحطات التي استعرضناها في شرائح القصة وماذا تعني لك عملياً:\n\n" + beatsMd,
+                        codeSnippet: "// ملخص الدروس المستفادة من القصة\nconst storyPlaybook = " + JSON.stringify(storyBeats.slice(0, 5), null, 2) + ";",
+                        codeExplanation: "كل قصة نجاح تقنية تبدأ بتحديد المشكلة بدقة ثم أتمتة الحل.",
+                        dailyQuest: {
+                            question: "ما هو الدرس الجوهري المستخلص من دراسة حالة (" + topic + ")؟",
+                            options: ["تحويل التحديات التقنية إلى أنظمة مؤتمتة ومهارات عملية", "الاستسلام عند أول خطأ برمجي", "الاكتفاء بالمشاهدة النظرية", "تجاهل التطوير المستمر"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 2: الترسانة التقنية والمنهجية التي صنعت الفارق",
+                        type: "video",
+                        content: "### 🛠️ كيف تطبق نفس الاستراتيجية في مشاريعك أو مسارك المهني؟\n\n1. **التشخيص الدقيق:** حدد عنق الزجاجة الذي يستهلك وقتك أو وقت عملائك.\n2. **البناء المنهجي:** قسّم الهدف الكبير إلى وحدات صغيرة قابلة للقياس والتنفيذ اليومي.\n3. **الأتمتة الذكية:** استعن بأدوات الذكاء الاصطناعي والبرمجة الحديثة لاختصار الوقت.",
+                        codeSnippet: "# خطة العمل اليومية المستخرجة من القصة\nDay 1-2: تحديد الهدف وتجهيز الأدوات الأساسية\nDay 3-5: بناء النموذج الأولي وتجربته عملياً\nDay 6-7: قياس النتائج وتطوير الأداء",
+                        codeExplanation: "الانضباط اليومي مع الأدوات الصحيحة يضمن لك نفس النتيجة.",
+                        dailyQuest: {
+                            question: "ما هي الخطوة الأولى لتطبيق هذا المسار عملياً؟",
+                            options: ["تحديد الهدف بوضوح وتقسيمه إلى مهام يومية مركزة", "العمل العشوائي بدون خطة", "انتظار الظروف المثالية", "تشتيت التركيز على 10 مجالات في وقت واحد"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    }
+                ]
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 📖🚀 أرسلت لك الدليل التطبيقي الكامل وكواليس القصة في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋📖\n\nشكراً لتفاعلك مع القصة! جهزت لك الدليل التطبيقي الكامل (Playbook) لـ (" + topic + ") لتطبق نفس الخطوات عملياً:\n\n🔗 اقرأ الدليل من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 للحصول على الخطة التطبيقية الكاملة وكواليس هذه القصة، علق بكلمة \"" + primaryKw + "\" وسأرسلها لك في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 🎥 6. المسار المستقل لاستوديو الإعلانات التجارية (CommercialLab: B2B & Product Showcase)
+// ============================================================================
+async function forgeCommercialShowcaseCapsule(body) {
+    const topic = body.topic || "النظام التقني المتكامل لأتمتة الأعمال";
+    const detectedKeyword = extractStudioFunnelKeyword("commercial_lab", body.slides, body.igCaption, body.fbCaption);
+    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();
+    const slides = await synthesizeStructuredSlidesIfEmpty("commercial_lab", topic, body.slides);
+
+    const scenesSummary = slides.map((s, idx) => ({
+        sceneNumber: s.sceneNumber || (idx + 1),
+        title: s.onScreenText || s.title || ("الميزة " + (idx + 1)),
+        narration: s.narration || s.explanation || s.text || "حل ذكي وسريع لأتمتة العمليات."
+    }));
+
+    const scenesMd = scenesSummary.map(sc => "- **المحطة " + sc.sceneNumber + " (" + sc.title + "):** " + sc.narration).join("\n");
+
+    return {
+        courseBlueprint: {
+            courseTitle: "عرض النظام والدليل التنفيذي: " + topic,
+            courseDescription: "جولة تفاعلية شاملة تشرح كيف يعمل نظام (" + topic + ")، فوائده لأصحاب المشاريع، وكيفية طلبه أو بنائه.",
+            difficulty: "عرض مشروع ودليل تنفيذي (Product & B2B Showcase)",
+            courseCategory: "carousel_capsule",
+            studioType: "commercial_lab",
+            structuredSlides: scenesSummary,
+            blueprint: [{
+                sectionName: "جولة النظام والعائد الاستثماري وخيارات التنفيذ",
+                lessons: [
+                    {
+                        title: "الدرس 1: كيف يحل هذا النظام مشكلة مشروعك ويضاعف الأرباح؟",
+                        type: "video",
+                        content: "### 🎯 لماذا يحتاج مشروعك إلى (" + topic + ") الآن؟\n\nفي الإعلان استعرضنا كيف ينقل هذا النظام عملك من الفوضى اليدوية إلى الأتمتة الكاملة:\n\n" + scenesMd,
+                        codeSnippet: "// مؤشرات الأداء والعائد الاستثماري (ROI)\nconst systemROI = {\n  timeSaved: \"80%\",\n  errorReduction: \"95%\",\n  availability: \"24/7 Automated\"\n};",
+                        codeExplanation: "الأتمتة الذكية توفر تكاليف التشغيل وتزيد رضا الزبائن.",
+                        dailyQuest: {
+                            question: "ما هي الفائدة المباشرة من تطبيق هذا النظام في مشروعك؟",
+                            options: ["توفير الوقت وتقليل الأخطاء ومضاعفة سرعة خدمة العملاء", "زيادة الفوضى الورقية", "إبطاء المبيعات", "تعقيد رحلة الزبون"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    },
+                    {
+                        title: "الدرس 2: كيف تحصل على هذا النظام لشركتك أو تتعلم بناءه في منصتنا؟",
+                        type: "video",
+                        content: "### 🤝 خياران أمامك على منصة Cherif.Dev:\n\n1. **لأصحاب الشركات والمشاريع (B2B Solutions):** يمكنك طلب تخصيص وتنفيذ هذا النظام لمؤسستك مباشرة عبر قسم **حلول الشركات (B2B)** في منصتنا.\n2. **للمطورين والطلبة:** يمكنك تعلم كيفية برمجة وبناء أنظمة مشابهة من الصفر عبر **الشهادات المهنية ومعسكرات البرمجة في أكاديمية Cherif.Dev**.",
+                        codeSnippet: "# خطوتك التالية:\n- لطلب النظام لشركتك: انتقل إلى قسم (حلول الشركات B2B) في القائمة.\n- لتعلم برمجة النظام: انتقل إلى قسم (الأكاديمية والشهادات المهنية).",
+                        codeExplanation: "اختر المسار المناسب لك من البطاقات الموجودة في هذه الصفحة.",
+                        dailyQuest: {
+                            question: "من أين يمكنك طلب بناء هذا النظام لشركتك أو تعلم برمجته؟",
+                            options: ["عبر قسم حلول الشركات (B2B) أو قسم الأكاديمية في منصة Cherif.Dev", "لا يمكن طلبه", "بدون تواصل", "تأجيل الرقمنة"],
+                            correctAnswerIndex: 0
+                        },
+                        isForged: true
+                    }
+                ]
+            }]
+        },
+        campaignDraft: {
+            keyword: detectedKeyword,
+            public_reply: "تم يا {username} 🚀 أرسلت لك رابط العرض التفصيلي للنظام وكيفية الاستفادة منه في رسائلك الخاصة (DM)!",
+            dm_message: "مرحباً {username}! 👋🚀\n\nتفضل الجولة التفاعلية الكاملة والتفاصيل الخاصة بـ (" + topic + ") على منصتنا:\n\n🔗 استكشف التفاصيل من هنا:\n{{COURSE_URL}}",
+            suggestedCaptionCTA: "🎁 لمعرفة كافة التفاصيل وكيف يعمل هذا النظام، علق بكلمة \"" + primaryKw + "\" وسأرسل لك الرابط المباشر في الخاص فوراً! 👇"
+        }
+    };
+}
+
+// ============================================================================
+// 🛣️ المسارات الستة المستقلة + الموجه المركزي في Express
+// ============================================================================
+app.post('/api/funnel/forge/binary-comparison', async (req, res) => {
+    try { res.json({ success: true, data: await forgeBinaryComparisonCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/funnel/forge/triple-comparison', async (req, res) => {
+    try { res.json({ success: true, data: await forgeTripleComparisonCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/funnel/forge/roadmap-steps', async (req, res) => {
+    try { res.json({ success: true, data: await forgeRoadmapStepsCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/funnel/forge/business-saas', async (req, res) => {
+    try { res.json({ success: true, data: await forgeBusinessSaasCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/funnel/forge/story-playbook', async (req, res) => {
+    try { res.json({ success: true, data: await forgeStoryPlaybookCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/funnel/forge/commercial-showcase', async (req, res) => {
+    try { res.json({ success: true, data: await forgeCommercialShowcaseCapsule(req.body) }); }
+    catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// الموجه الذكي المتوافق مع جميع الاستدعاءات
+app.post('/api/funnel/generate-companion-course', async (req, res) => {
+    try {
+        const st = req.body.studioType || "template_binary";
+        let data;
+        if (st === "template_binary") data = await forgeBinaryComparisonCapsule(req.body);
+        else if (st === "template_triple") data = await forgeTripleComparisonCapsule(req.body);
+        else if (st === "roadmap_steps") data = await forgeRoadmapStepsCapsule(req.body);
+        else if (st === "business_saas") data = await forgeBusinessSaasCapsule(req.body);
+        else if (st === "story_lab") data = await forgeStoryPlaybookCapsule(req.body);
+        else if (st === "commercial_lab") data = await forgeCommercialShowcaseCapsule(req.body);
+        else data = await forgeBinaryComparisonCapsule(req.body);
+        return res.json({ success: true, data });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// مسار الرفع لـ Cherif-Platform (5001) وتوجيه الرابط إلى قاعة الكبسولات المستقلة (/capsule/:id)
+app.post('/api/funnel/deploy-course-and-campaign', async (req, res) => {
+    try {
+        const { courseBlueprint, campaignDraft, studioType = '', carouselTopic = '', slides = [] } = req.body;
+        if (!courseBlueprint || !campaignDraft?.keyword) {
+            return res.status(400).json({ success: false, error: 'بيانات الكورس أو الكلمة المفتاحية غير مكتملة.' });
+        }
+        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';
+        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';
+
+        const capsuleMetaObj = {
+            isCarouselCapsule: true,
+            studioType: studioType || courseBlueprint.studioType || "template_binary",
+            carouselTopic: carouselTopic || courseBlueprint.courseTitle || "",
+            triggerKeyword: campaignDraft.keyword,
+            structuredSlides: courseBlueprint.structuredSlides || slides || []
+        };
+
+        const enrichedDesc = (courseBlueprint.courseDescription || '') + ' |||CAPSULE_META:' + JSON.stringify(capsuleMetaObj);
+
+        const importRes = await axios.post(platformApiBase + '/api/courses/auto-import', {
+            courseTitle: courseBlueprint.courseTitle,
+            courseDescription: enrichedDesc,
+            difficulty: courseBlueprint.difficulty || 'كبسولة تطبيقية (Micro-Course)',
+            courseCategory: 'carousel_capsule',
+            certificateMeta: capsuleMetaObj,
+            blueprint: courseBlueprint.blueprint
+        });
+
+        const createdCourseId = importRes.data?.courseId || importRes.data?.course?._id || importRes.data?.data?._id || "";
+        const finalCourseUrl = createdCourseId ? (platformFrontendBase + '/capsule/' + createdCourseId) : (importRes.data?.courseUrl || (platformFrontendBase + '/academy'));
+
+        let finalDmMessage = String(campaignDraft.dm_message || '').trim();
+        if (finalDmMessage.includes('{{COURSE_URL}}')) finalDmMessage = finalDmMessage.replace(/\{\{COURSE_URL\}\}/g, finalCourseUrl);
+        else if (!finalDmMessage.includes(finalCourseUrl)) finalDmMessage = finalDmMessage + '\n\n🔗 رابط الكبسولة والروابط المباشرة:\n' + finalCourseUrl;
+
+        const cleanKeyword = String(campaignDraft.keyword).trim();
+        const savedCampaign = await Campaign.findOneAndUpdate(
+            { keyword: cleanKeyword },
+            {
+                $set: {
+                    keyword: cleanKeyword,
+                    public_reply: campaignDraft.public_reply || "تم يا {username} 🚀 تفقد رسائلك في الخاص!",
+                    dm_message: finalDmMessage,
+                    is_active: true,
+                    course_id: String(createdCourseId),
+                    course_title: courseBlueprint.courseTitle || "",
+                    course_url: finalCourseUrl,
+                    studio_type: studioType || courseBlueprint.studioType || "",
+                    carousel_topic: carouselTopic || courseBlueprint.courseTitle || ""
+                }
+            },
+            { upsert: true, new: true }
+        );
+
+        return res.json({ success: true, courseId: createdCourseId, courseUrl: finalCourseUrl, campaign: savedCampaign });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: 'تعذر رفع الكبسولة إلى المنصة (تأكد من تشغيل سيرفر 5001).' });
+    }
+});
+
+app.get('/api/funnel/platform-courses', async (req, res) => {
+    try {
+        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';
+        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';
+        const response = await axios.get(platformApiBase + '/api/courses/public');
+        const courses = (response.data?.courses || []).map(c => {
+            const isCap = c.courseCategory === "carousel_capsule" || c.certificateMeta?.isCarouselCapsule || (c.description || "").includes("|||CAPSULE_META:");
+            return {
+                ...c,
+                courseUrl: platformFrontendBase + (isCap ? '/capsule/' : '/classroom/') + c._id
+            };
+        });
+        return res.json({ success: true, courses });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: 'تعذر جلب الكورسات من سيرفر المنصة (5001).' });
+    }
+});
+
+app.post('/api/funnel/platform-reset', async (req, res) => {
+    try {
+        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';
+        const response = await axios.post(platformApiBase + '/api/courses/platform-reset', req.body);
+        return res.json(response.data);
+    } catch (error) {
+        return res.status(500).json({ success: false, error: 'تعذر تنفيذ إعادة التهيئة على سيرفر المنصة (5001).' });
+    }
+});
+
 app.listen(PORT, () => console.log(`🚀 خادم AutoFactory يعمل على ${PORT}`));

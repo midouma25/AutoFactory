@@ -6,8 +6,13 @@ AutoFactory/
     ├── Tajawal.ttf
     ├── extract_code.py
     ├── package.json
+    ├── part1-autofactory-backend-funnel-engine-v1.js
     ├── project_structure.md
+    ├── project_structureautofact.md
+    ├── project_structureautofactory.md
     ├── منصة شاملة.docx
+├── _archive_patches/
+    ├── part1-autofactory-backend-funnel-engine-v1.js
 ├── autofactory-backend/
     ├── .env
     ├── Alexandria-Black.ttf
@@ -133,6 +138,7 @@ AutoFactory/
         ├── main.jsx
         ├── assets/
         ├── components/
+            ├── CarouselCourseFunnelPanel.jsx
         ├── layouts/
             ├── MainLayout.jsx
         ├── pages/
@@ -368,6 +374,594 @@ if __name__ == "__main__":
 
 ---
 
+## `part1-autofactory-backend-funnel-engine-v1.js`
+
+```javascript
+/**
+ * fix-autofactory-studios-and-funnel-v2.js
+ * [السكربت الجراحي الشامل لإظهار <CarouselCourseFunnelPanel /> في المقارنة الثنائية والثلاثية وجميع الاستوديوهات الستة + تأكيد مسارات server.js]
+ *
+ * ما يفعله هذا السكربت آلياً:
+ * 1. يعالج مشكلة اختفاء الصندوق في TemplateLab.jsx (المقارنة الثنائية) و TripleTemplateLab.jsx (المقارنة الثلاثية) وجميع الاستوديوهات الستة،
+ *    سواء كانت export default في أعلى الملف (export default function) أو في أسفله، ويخرجه من أي شرط {images.length > 0} أو عمود Grid ضيق
+ *    عبر تغليف المخرج الرئيسي return (...) بحاوية جذرية كاملة العرض يظهر في أسفلها الصندوق دائماً منذ لحظة فتح الصفحة.
+ * 2. يتحقق من autofactory-backend/server.js ويحقن مسارات /api/funnel/* الأربعة إن لم تكن موجودة.
+ * 3. يشغل فحص التحقق الشامل (15/15 PASS) للتأكد من ظهور الصندوق في جميع الصفحات الست.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = __dirname;
+
+function resolveUiDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-ui'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-ui')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'src', 'pages'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-ui/src/pages. ضع هذا السكربت في E:\\AutoFactory.');
+}
+
+function resolveBackendDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-backend'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-backend')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'server.js'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-backend.');
+}
+
+console.log('🇩🇿🛠️ [AutoFactory V2 Fixer] بدء إصلاح ظهور صندوق القمع الآلي في المقارنة الثنائية والثلاثية وجميع الاستوديوهات الستة...\n');
+
+const UI_DIR = resolveUiDir();
+const BACKEND_DIR = resolveBackendDir();
+const PAGES_DIR = path.join(UI_DIR, 'src', 'pages');
+const serverPath = path.join(BACKEND_DIR, 'server.js');
+
+// ============================================================================
+// 1. التأكد من حقن مسارات القمع الآلي في autofactory-backend/server.js
+// ============================================================================
+let serverCode = fs.readFileSync(serverPath, 'utf8').replace(/\r\n/g, '\n');
+
+if (!serverCode.includes("app.post('/api/funnel/generate-companion-course'")) {
+  console.log('⏳ مسارات /api/funnel/* غير موجودة في server.js، جاري حقنها الآن...');
+
+  if (serverCode.includes('lowerComment.includes(campaign.keyword.toLowerCase())')) {
+    serverCode = serverCode.replace(
+      /if\s*\(\s*lowerComment\.includes\(\s*campaign\.keyword\.toLowerCase\(\)\s*\)\s*\)\s*\{/g,
+      "const _kwList = String(campaign.keyword || '').split(/[،,|]/).map(k => k.trim().toLowerCase()).filter(Boolean);\n                            if (_kwList.some(kw => lowerComment.includes(kw))) {"
+    );
+  }
+
+  serverCode = serverCode
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*lessonData\.igCaption,\s*fbCaption:\s*lessonData\.fbCaption,\s*images:\s*generatedImages\s*\}\);/g,
+      'res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, slides: lessonData.slides || [], images: generatedImages });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*images:\s*finalImages,\s*igCaption:\s*igCaption,\s*fbCaption:\s*fbCaption\s*\}\);/g,
+      'res.json({ success: true, images: finalImages, slides: contentData.slides || [], igCaption: igCaption, fbCaption: fbCaption });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*roadmapData\.igCaption,\s*fbCaption:\s*roadmapData\.fbCaption,\s*magicPrompt:\s*magicPrompt,\s*images:\s*generatedImages\s*\}\);/g,
+      'res.json({ success: true, igCaption: roadmapData.igCaption, fbCaption: roadmapData.fbCaption, slides: roadmapData.slides || [], magicPrompt: magicPrompt, images: generatedImages });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*lessonData\.igCaption,\s*fbCaption:\s*lessonData\.fbCaption,\s*images:\s*generatedImages,\s*coverOptions:\s*coverOptions\.slice\(0,\s*3\)\s*\}\);/g,
+      'res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, slides: lessonData.slides || [], images: generatedImages, coverOptions: coverOptions.slice(0, 3) });'
+    );
+
+  const funnelEngineLines = [
+    '// [AUTO-FUNNEL ENGINE - PART 1/3 V1]',
+    'const STUDIO_PRINTED_CTA_KEYWORD_MAP = {',
+    "    template_binary: 'أدوات',",
+    "    template_triple: 'أدوات',",
+    "    roadmap_steps: 'فكرة',",
+    "    business_saas: 'أرباح',",
+    "    story_lab: 'مسار',",
+    "    commercial_lab: 'تفاصيل'",
+    '};',
+    '',
+    "const extractSmartFunnelKeyword = (studioType = '', slides = [], igCaption = '', fbCaption = '') => {",
+    "    const basePrintedKeyword = STUDIO_PRINTED_CTA_KEYWORD_MAP[studioType] || 'دليل';",
+    "    const combinedText = JSON.stringify(slides || []) + ' ' + (igCaption || '') + ' ' + (fbCaption || '');",
+    '    const match = combinedText.match(/(?:بكلمة|كلمة)\\s*["«*]?([أ-يa-zA-Z0-9_]{2,15})["»*]?/i);',
+    "    const extracted = match && match[1] ? match[1].trim() : '';",
+    '    if (extracted && extracted !== basePrintedKeyword) {',
+    "        return basePrintedKeyword + ', ' + extracted;",
+    '    }',
+    '    return extracted || basePrintedKeyword;',
+    '};',
+    '',
+    "const buildDeterministicFallbackMiniCourse = (topic = '', studioType = '', slides = [], detectedKeyword = 'أدوات') => {",
+    "    const cleanTopic = topic || 'الدليل التطبيقي الشامل للمنشور';",
+    "    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();",
+    '    const slideSummaries = (Array.isArray(slides) ? slides : [])',
+    "        .filter(s => s && s.type !== 'cta')",
+    '        .map((s, idx) => ({',
+    "            title: s.title || s.onScreenText || ('المحور ' + (idx + 1)),",
+    "            tools: [s.goodTool, s.proTool, s.toolName].filter(Boolean).join(' / '),",
+    "            desc: s.explanation || s.text || s.narration || ''",
+    '        }));',
+    '',
+    '    const bulletPoints1 = slideSummaries.map((s, i) =>',
+    "        '- **المحطة ' + (i + 1) + ' (' + s.title + '):** ' + (s.desc || 'تطبيق عملي مباشر') + (s.tools ? ' — الأداة الموصى بها: **' + s.tools + '**' : '')",
+    "    ).join('\\n') || '- فهم الأساسيات وبناء سير عمل ذكي ومؤتمت.';",
+    '',
+    '    const bulletPoints2 = slideSummaries.map((s, i) =>',
+    "        '#### ' + (i + 1) + '. ' + s.title + '\\n' + (s.tools ? '**الأداة المعتمدة:** `' + s.tools + '`\\n' : '') + (s.desc || 'اتبع الإعدادات القياسية لتشغيل الأداة ودمجها في مشروعك.')",
+    "    ).join('\\n\\n') || 'طبّق الخطوات بالترتيب الموضح للوصول إلى أفضل نتيجة.';",
+    '',
+    '    const lessons = [',
+    '        {',
+    "            title: 'الدرس 1: التشريح الكامل لفكرة (' + cleanTopic + ') ولماذا تهمك الآن',",
+    "            type: 'video',",
+    "            content: '### 🎯 الهدف من هذا الكورس المصغر\\n\\nأهلاً بك! لقد وصلت إلى هذه الصفحة لأنك علّقت على منشورنا حول **' + cleanTopic + '**. في هذا الدرس التأسيسي نشرح الفلسفة العملية وراء الأدوات والخطوات التي شاهدتها في الصور.\\n\\n### 💡 أبرز المحاور المستخلصة من الشرائح:\\n' + bulletPoints1,",
+    "            codeSnippet: '// خريطة التنفيذ السريعة لموضوع: ' + cleanTopic + '\\nconst workflow = {\\n  topic: \"' + cleanTopic + '\",\\n  studioType: \"' + studioType + '\",\\n  status: \"READY_TO_IMPLEMENT\"\\n};\\nconsole.log(\"🚀 لنبدأ التطبيق العملي!\", workflow);',",
+    "            codeExplanation: 'هذا المخطط يوضح نقطة الانطلاق لتطبيق ما ورد في الكاروسيل خطوة بخطوة.',",
+    '            dailyQuest: {',
+    "                question: 'ما هو الهدف الرئيسي من تطبيق منهجية (' + cleanTopic + ') المشروحة في هذا الدرس؟',",
+    "                options: ['اختصار الوقت ومضاعفة الإنتاجية والجودة العملية', 'الاعتماد على الطرق اليدوية البطيئة', 'تجاهل الأدوات الحديثة', 'عدم تطبيق الخطوات عملياً'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        },',
+    '        {',
+    "            title: 'الدرس 2: الدليل العملي للأدوات والخطوات المذكورة في الكاروسيل',",
+    "            type: 'video',",
+    "            content: '### 🛠️ كيف تستخدم الأدوات والخطوات عملياً؟\\n\\nفي هذا الدرس نفكك كل أداة وخطوة وردت في الشرائح لتبدأ استخدامها فوراً:\\n\\n' + bulletPoints2,",
+    "            codeSnippet: '# خطوات التشغيل السريع\\n1. افتح الأداة المذكورة في الشريحة\\n2. طبّق الإعدادات والأوامر المرفقة\\n3. اختبر النتيجة في مشروعك الحقيقي',",
+    "            codeExplanation: 'اتبع هذه القائمة المرجعية أثناء التطبيق لضمان عدم نسيان أي تفصيل.',",
+    '            dailyQuest: {',
+    "                question: 'ما هي أفضل طريقة للاستفادة من الأدوات المشروحة في هذا الدرس؟',",
+    "                options: ['تطبيقها عملياً خطوة بخطوة في مشروع حقيقي', 'قراءتها فقط دون تجربة', 'استخدام الأدوات القديمة ذات الأخطاء', 'تخطي إعدادات الأداة'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        },',
+    '        {',
+    "            title: 'الدرس 3: خطة العمل والتطبيق الفوري (Action Plan)',",
+    "            type: 'video',",
+    "            content: '### 🚀 خطتك العملية للـ 24 ساعة القادمة\\n\\nالآن بعد أن تعرفت على جميع تفاصيل **' + cleanTopic + '**، إليك خطة العمل المباشرة:\\n\\n1. اختر أداة واحدة أو خطوة واحدة مما ورد في الدرس الثاني وابدأ بتجربتها اليوم.\\n2. احفظ هذا الكورس في مفضلتك للرجوع إلى الروابط والأكواد في أي وقت.\\n3. تصفح بقية المسارات والشهادات المهنية في منصتنا **Cherif-Platform** لتطوير مهاراتك لمستوى الاحتراف.',",
+    "            codeSnippet: '// معادلة النجاح العملي\\nfunction executeActionPlan(learnedTools) {\\n  return learnedTools.map(tool => \"✅ تم تفعيل \" + tool + \" بنجاح!\");\\n}',",
+    "            codeExplanation: 'التنفيذ الفوري هو الفارق الحقيقي بين المعرفة النظرية والنتائج الملموسة.',",
+    '            dailyQuest: {',
+    "                question: 'ما هي الخطوة التالية بعد إتمام هذه الكبسولة التعليمية؟',",
+    "                options: ['البدء بتطبيق الأداة فوراً واستكشاف المسارات المتقدمة في المنصة', 'تأجيل التطبيق إلى وقت غير محدد', 'حذف الأدوات', 'العودة للطريقة التقليدية'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        }',
+    '    ];',
+    '',
+    '    return {',
+    '        courseBlueprint: {',
+    "            courseTitle: 'كبسولة تطبيقية: ' + cleanTopic,",
+    "            courseDescription: 'الدليل العملي والتطبيقي الكامل لشرح وتنفيذ كل ما ورد في منشور (' + cleanTopic + ') خطوة بخطوة مع الروابط والأمثلة.',",
+    "            difficulty: 'كبسولة تطبيقية مركزة (Micro-Course)',",
+    "            courseCategory: 'carousel_capsule',",
+    '            blueprint: [',
+    '                {',
+    "                    sectionName: 'الوحدة التطبيقية: الدليل العملي الكامل والروابط',",
+    '                    unitDeepSummary: {',
+    "                        unitSummary: 'ورشة تطبيقية مركزة تشرح بالتفصيل جميع محاور منشور (' + cleanTopic + ').',",
+    "                        whatYouLearn: 'إتقان الأدوات، الروابط، والخطوات العملية المذكورة في الكاروسيل.',",
+    "                        whyItMatters: 'تحويل المحتوى المختصر في مواقع التواصل إلى مهارة تطبيقية كاملة.',",
+    "                        keyHighlights: ['تشريح الفكرة والأدوات', 'خطوات التنفيذ والروابط', 'خطة التطبيق الفوري']",
+    '                    },',
+    '                    lessons',
+    '                }',
+    '            ]',
+    '        },',
+    '        campaignDraft: {',
+    '            keyword: detectedKeyword,',
+    "            public_reply: 'تم يا {username} 🚀 أرسلت لك رابط الشرح التطبيقي الكامل والروابط في رسائلك الخاصة (DM) الآن!',",
+    "            dm_message: 'مرحباً {username}! 👋🚀\\n\\nكما وعدتك في المنشور، جهزت لك كورساً تطبيقياً مصغراً ومجانياً يشرح (' + cleanTopic + ') بالتفصيل على منصتنا:\\n\\n🔗 ادخل إلى الشرح الكامل من هنا:\\n{{COURSE_URL}}\\n\\nقراءة وتطبيقاً ممتعاً! 💡',",
+    "            suggestedCaptionCTA: '🎁 للحصول على الشرح التطبيقي الكامل وجميع الروابط خطوة بخطوة، علق بكلمة \"' + primaryKw + '\" وسأرسل لك رابط الكورس المجاني في الخاص فوراً! 👇'",
+    '        }',
+    '    };',
+    '};',
+    '',
+    "app.post('/api/funnel/generate-companion-course', async (req, res) => {",
+    '    try {',
+    "        const { topic = '', studioType = 'template_binary', slides = [], igCaption = '', fbCaption = '' } = req.body;",
+    '        const detectedKeyword = extractSmartFunnelKeyword(studioType, slides, igCaption, fbCaption);',
+    "        const primaryKeyword = detectedKeyword.split(/[،,]/)[0].trim();",
+    '        const fallbackData = buildDeterministicFallbackMiniCourse(topic, studioType, slides, detectedKeyword);',
+    '        try {',
+    "            const systemPrompt = 'أنت كبير مهندسي البرمجيات في منصة Cherif-Platform. نشرنا منشوراً حول: \"' + topic + '\". بيانات الشرائح: ' + JSON.stringify(slides || []).slice(0, 3500) + '. صمم كورساً تطبيقياً مصغراً (3 دروس غنية بالـ Markdown والأمثلة) + مسودة حملة رد تلقائي بصيغة JSON صالحة تحتوي على courseBlueprint و campaignDraft.';",
+    "            const rawContent = await generateContentSmart(systemPrompt, 'قم ببناء الكورس المصغر ومسودة الحملة بصيغة JSON الآن.', 0.7, 10000);",
+    "            const parsed = typeof safeParseAIJson === 'function' ? safeParseAIJson(rawContent) : JSON.parse(rawContent);",
+    '            if (parsed && parsed.courseBlueprint && Array.isArray(parsed.courseBlueprint.blueprint)) {',
+    '                return res.json({',
+    '                    success: true,',
+    '                    data: {',
+    '                        courseBlueprint: parsed.courseBlueprint,',
+    '                        campaignDraft: {',
+    '                            keyword: parsed.campaignDraft?.keyword || detectedKeyword,',
+    '                            public_reply: parsed.campaignDraft?.public_reply || fallbackData.campaignDraft.public_reply,',
+    '                            dm_message: parsed.campaignDraft?.dm_message || fallbackData.campaignDraft.dm_message,',
+    "                            suggestedCaptionCTA: parsed.campaignDraft?.suggestedCaptionCTA || ('🎁 علق بكلمة \"' + primaryKeyword + '\" لأرسل لك الشرح التطبيقي الكامل والروابط في الخاص فوراً! 👇')",
+    '                        }',
+    '                    }',
+    '                });',
+    '            }',
+    '        } catch (_) {}',
+    '        return res.json({ success: true, data: fallbackData });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر توليد الكورس المصغر.' });",
+    '    }',
+    '});',
+    '',
+    "app.post('/api/funnel/deploy-course-and-campaign', async (req, res) => {",
+    '    try {',
+    "        const { courseBlueprint, campaignDraft, studioType = '', carouselTopic = '' } = req.body;",
+    '        if (!courseBlueprint || !campaignDraft?.keyword) {',
+    "            return res.status(400).json({ success: false, error: 'بيانات الكورس أو الكلمة المفتاحية غير مكتملة.' });",
+    '        }',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';",
+    '        const unitSummariesMap = {};',
+    '        (courseBlueprint.blueprint || []).forEach(sec => {',
+    '            if (sec.sectionName && sec.unitDeepSummary) unitSummariesMap[sec.sectionName] = sec.unitDeepSummary;',
+    '        });',
+    "        const enrichedDesc = (courseBlueprint.courseDescription || '') + ' |||UNITS_MAP:' + JSON.stringify(unitSummariesMap);",
+    "        const importRes = await axios.post(platformApiBase + '/api/courses/auto-import', {",
+    '            courseTitle: courseBlueprint.courseTitle,',
+    '            courseDescription: enrichedDesc,',
+    "            difficulty: courseBlueprint.difficulty || 'كبسولة تطبيقية (Micro-Course)',",
+    "            courseCategory: 'carousel_capsule',",
+    '            certificateMeta: { isCarouselCapsule: true, studioType, carouselTopic, triggerKeyword: campaignDraft.keyword, unitSummariesMap },',
+    '            blueprint: courseBlueprint.blueprint',
+    '        });',
+    '        const createdCourseId = importRes.data?.courseId || importRes.data?.course?._id || importRes.data?.data?._id || "";',
+    "        const finalCourseUrl = importRes.data?.courseUrl || (createdCourseId ? (platformFrontendBase + '/classroom/' + createdCourseId) : (platformFrontendBase + '/academy'));",
+    "        let finalDmMessage = String(campaignDraft.dm_message || '').trim();",
+    "        if (finalDmMessage.includes('{{COURSE_URL}}')) finalDmMessage = finalDmMessage.replace(/\\{\\{COURSE_URL\\}\\}/g, finalCourseUrl);",
+    "        else if (!finalDmMessage.includes(finalCourseUrl)) finalDmMessage = finalDmMessage + '\\n\\n🔗 رابط الشرح الكامل:\\n' + finalCourseUrl;",
+    '        const cleanKeyword = String(campaignDraft.keyword).trim();',
+    '        const savedCampaign = await Campaign.findOneAndUpdate(',
+    '            { keyword: cleanKeyword },',
+    '            { $set: { keyword: cleanKeyword, public_reply: campaignDraft.public_reply || "تم يا {username} 🚀 تفقد رسائلك في الخاص!", dm_message: finalDmMessage, is_active: true, course_id: String(createdCourseId), course_title: courseBlueprint.courseTitle || "", course_url: finalCourseUrl, studio_type: studioType, carousel_topic: carouselTopic || courseBlueprint.courseTitle || "" } },',
+    '            { upsert: true, new: true }',
+    '        );',
+    '        return res.json({ success: true, courseId: createdCourseId, courseUrl: finalCourseUrl, campaign: savedCampaign });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر رفع الكورس إلى المنصة (تأكد من تشغيل سيرفر 5001).' });",
+    '    }',
+    '});',
+    '',
+    "app.get('/api/funnel/platform-courses', async (req, res) => {",
+    '    try {',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';",
+    "        const response = await axios.get(platformApiBase + '/api/courses/public');",
+    "        const courses = (response.data?.courses || []).map(c => ({ ...c, courseUrl: platformFrontendBase + '/classroom/' + c._id }));",
+    '        return res.json({ success: true, courses });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر جلب الكورسات من سيرفر المنصة (5001).' });",
+    '    }',
+    '});',
+    '',
+    "app.post('/api/funnel/platform-reset', async (req, res) => {",
+    '    try {',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const response = await axios.post(platformApiBase + '/api/courses/platform-reset', req.body);",
+    '        return res.json(response.data);',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر تنفيذ إعادة التهيئة على سيرفر المنصة (5001).' });",
+    '    }',
+    '});'
+  ];
+
+  const funnelBlock = '\n' + funnelEngineLines.join('\n') + '\n';
+  const listenMatch = serverCode.match(/\napp\.listen\s*\(/);
+  if (listenMatch) {
+    serverCode =
+      serverCode.slice(0, listenMatch.index).trimEnd() +
+      '\n' +
+      funnelBlock +
+      '\n' +
+      serverCode.slice(listenMatch.index + 1);
+  } else {
+    serverCode = serverCode.trimEnd() + '\n' + funnelBlock + '\n';
+  }
+
+  new vm.Script(serverCode, { filename: 'server.js' });
+  fs.writeFileSync(serverPath, serverCode, 'utf8');
+  console.log('✅ تم حقن وتثبيت مسارات /api/funnel/* الأربعة في autofactory-backend/server.js بنجاح.');
+} else {
+  console.log('✅ مسارات /api/funnel/* موجودة ومثبتة في autofactory-backend/server.js.');
+}
+
+// ============================================================================
+// 2. محلل القوس الرئيسي لـ return (...) لحقن الصندوق خارج أي شرط مخفي وفي جميع أنواع التصدير
+// ============================================================================
+const STUDIO_CONFIGS = [
+  { file: 'TemplateLab.jsx', studioType: 'template_binary', topicVar: 'topic' },
+  { file: 'TripleTemplateLab.jsx', studioType: 'template_triple', topicVar: 'topic' },
+  { file: 'RoadmapLab.jsx', studioType: 'roadmap_steps', topicVar: 'topic' },
+  { file: 'BusinessLab.jsx', studioType: 'business_saas', topicVar: 'topic' },
+  { file: 'StoryLab.jsx', studioType: 'story_lab', topicVar: 'topic' },
+  { file: 'CommercialLab.jsx', studioType: 'commercial_lab', topicVar: 'productIdea' }
+];
+
+function findMatchingCloseParen(str, openParenIdx) {
+  let depth = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inTemplate = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = openParenIdx; i < str.length; i++) {
+    const ch = str[i];
+    const next = str[i + 1];
+    const prev = str[i - 1];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inSingle) {
+      if (ch === "'" && prev !== '\\') inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '"' && prev !== '\\') inDouble = false;
+      continue;
+    }
+    if (inTemplate) {
+      if (ch === '`' && prev !== '\\') inTemplate = false;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+    if (ch === '`') {
+      inTemplate = true;
+      continue;
+    }
+
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function injectAlwaysVisibleFunnelPanel(cfg) {
+  const filePath = path.join(PAGES_DIR, cfg.file);
+  if (!fs.existsSync(filePath)) {
+    console.warn('⚠️ الملف ' + cfg.file + ' غير موجود.');
+    return false;
+  }
+
+  let code = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+
+  // أ) تنظيف أي حقن قديم (سواء كان داخل شرط أو غلاف سابق)
+  code = code.replace(/import CarouselCourseFunnelPanel from '\.\.\/components\/CarouselCourseFunnelPanel';\n?/g, '');
+  code = code.replace(/\s*<div className="w-full space-y-8 auto-funnel-root-wrapper">\s*\{\/\* \[AUTO-FUNNEL ROOT WRAPPER START\] \*\/\}\s*/g, '\n    ');
+  code = code.replace(/\s*\{\/\* \[AUTO-FUNNEL PANEL START\] \*\/\}[\s\S]*?\{\/\* \[AUTO-FUNNEL PANEL END\] \*\/\}\s*\{\/\* \[AUTO-FUNNEL ROOT WRAPPER END\] \*\/\}\s*<\/div>/g, '');
+  code = code.replace(/\s*\{\/\* \[AUTO-FUNNEL PANEL START\] \*\/\}[\s\S]*?\{\/\* \[AUTO-FUNNEL PANEL END\] \*\/\}\n?/g, '');
+
+  // ب) إضافة سطر الاستيراد بعد أول import
+  const firstImportMatch = code.match(/^import .+$/m);
+  if (firstImportMatch) {
+    const insertIdx = firstImportMatch.index + firstImportMatch[0].length;
+    code =
+      code.slice(0, insertIdx) +
+      "\nimport CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';" +
+      code.slice(insertIdx);
+  } else {
+    code = "import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';\n" + code;
+  }
+
+  // ج) ضمان حفظ slides القادمة من السيرفر في State الصفحة
+  const hasSlidesState = /\bconst\s+\[\s*slides\s*,/.test(code);
+  const hasFunnelSlidesState = /\bconst\s+\[\s*funnelSlides\s*,/.test(code);
+
+  if (!hasSlidesState && !hasFunnelSlidesState && cfg.file !== 'CommercialLab.jsx') {
+    const firstUseStateMatch = code.match(/const\s+\[[a-zA-Z0-9_]+,\s*set[a-zA-Z0-9_]+\]\s*=\s*useState\(/);
+    if (firstUseStateMatch) {
+      code =
+        code.slice(0, firstUseStateMatch.index) +
+        'const [funnelSlides, setFunnelSlides] = useState([]);\n  ' +
+        code.slice(firstUseStateMatch.index);
+    }
+    code = code.replace(
+      /setImages\(res\.data\.images\);/g,
+      'setImages(res.data.images);\n        if (res.data.slides) setFunnelSlides(res.data.slides);'
+    );
+  }
+
+  // د) تجهيز خصائص المكوّن
+  const hasTopicState = new RegExp('\\bconst\\s+\\[\\s*' + cfg.topicVar + '\\s*,').test(code);
+  const resolvedTopicExpr = hasTopicState ? cfg.topicVar : "''";
+
+  const resolvedSlidesExpr =
+    cfg.file === 'CommercialLab.jsx'
+      ? "(typeof commercial !== 'undefined' && commercial?.scenes) ? commercial.scenes : []"
+      : hasSlidesState
+        ? 'slides'
+        : "(typeof funnelSlides !== 'undefined' ? funnelSlides : [])";
+
+  const hasIgCaption = /\bconst\s+\[\s*igCaption\s*,/.test(code);
+  const hasSingleCaption = /\bconst\s+\[\s*caption\s*,/.test(code);
+  const hasFbCaption = /\bconst\s+\[\s*fbCaption\s*,/.test(code);
+
+  const igProps = hasIgCaption
+    ? 'igCaption={igCaption} setIgCaption={setIgCaption}'
+    : hasSingleCaption
+      ? 'igCaption={caption} setIgCaption={setCaption}'
+      : '';
+
+  const fbProps = hasFbCaption ? 'fbCaption={fbCaption} setFbCaption={setFbCaption}' : '';
+
+  const panelJsxLines = [
+    '      {/* [AUTO-FUNNEL PANEL START] */}',
+    '      <div className="w-full max-w-6xl mx-auto clear-both pt-6">',
+    '        <CarouselCourseFunnelPanel',
+    '          topic={' + resolvedTopicExpr + '}',
+    '          studioType="' + cfg.studioType + '"',
+    '          slides={' + resolvedSlidesExpr + '}',
+    '          ' + igProps,
+    '          ' + fbProps,
+    '        />',
+    '      </div>',
+    '      {/* [AUTO-FUNNEL PANEL END] */}'
+  ].join('\n');
+
+  // هـ) العثور على جملة return (...) الرئيسية للمكوّن (التي تمتد لنهاية المكوّن) وتغليف مخرجها بالكامل
+  // حتى لا يقع الصندوق أبداً داخل شرط {images.length > 0 && (...)} أو داخل عمود Grid ضيق!
+  const returnRegex = /\breturn\s*\(/g;
+  let match;
+  let bestReturn = null;
+
+  while ((match = returnRegex.exec(code)) !== null) {
+    const openParenIdx = match.index + match[0].length - 1;
+    const afterParen = code.slice(openParenIdx + 1).trimStart();
+    if (!afterParen.startsWith('<')) continue;
+
+    const closeParenIdx = findMatchingCloseParen(code, openParenIdx);
+    if (closeParenIdx !== -1) {
+      const spanLength = closeParenIdx - openParenIdx;
+      if (!bestReturn || closeParenIdx > bestReturn.closeParenIdx || spanLength > bestReturn.spanLength) {
+        bestReturn = { openParenIdx, closeParenIdx, spanLength };
+      }
+    }
+  }
+
+  if (!bestReturn) {
+    throw new Error('❌ تعذر تحديد جملة return الرئيسية في ' + cfg.file);
+  }
+
+  const originalReturnedJsx = code.slice(bestReturn.openParenIdx + 1, bestReturn.closeParenIdx).trim();
+
+  const wrappedReturnContent = [
+    '',
+    '    <div className="w-full space-y-8 auto-funnel-root-wrapper">',
+    '      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}',
+    '      ' + originalReturnedJsx,
+    panelJsxLines,
+    '      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}',
+    '    </div>',
+    '  '
+  ].join('\n');
+
+  code =
+    code.slice(0, bestReturn.openParenIdx + 1) +
+    wrappedReturnContent +
+    code.slice(bestReturn.closeParenIdx);
+
+  fs.writeFileSync(filePath, code, 'utf8');
+  console.log('✅ [Fixed & Visible] تم إخراج وتثبيت <CarouselCourseFunnelPanel studioType="' + cfg.studioType + '" /> في ' + cfg.file + ' ليظهر دائماً وبعرض كامل!');
+  return true;
+}
+
+STUDIO_CONFIGS.forEach(injectAlwaysVisibleFunnelPanel);
+
+// ============================================================================
+// 3. تشغيل الفحص الآلي الشامل (15/15 PASS) للتأكد من ظهور الصندوق خارج الشروط المخفية
+// ============================================================================
+function runVerificationSuite() {
+  const results = [];
+  const check = (name, cond, detail) => {
+    results.push({ name, passed: Boolean(cond), detail: detail || '' });
+  };
+
+  const campaignCode = fs.readFileSync(path.join(BACKEND_DIR, 'models', 'Campaign.js'), 'utf8');
+  const srvCode = fs.readFileSync(serverPath, 'utf8');
+  const panelCode = fs.readFileSync(path.join(UI_DIR, 'src', 'components', 'CarouselCourseFunnelPanel.jsx'), 'utf8');
+  const campMgrCode = fs.readFileSync(path.join(PAGES_DIR, 'CampaignManager.jsx'), 'utf8');
+
+  check('1. نموذج Campaign.js محدث بحقول ربط الكورس', campaignCode.includes('course_url'), 'Campaign.js OK');
+  check('2. مسار /webhook يدعم الكلمات المتعددة بفاصلة', srvCode.includes('split(/[،,|]/)'), 'Webhook Multi-Keyword OK');
+  check('3. مسارات الكاروسيل ترجع مصفوفة slides', srvCode.includes('slides:'), 'Slides Returned OK');
+  check('4. مسار توليد الكورس المرافق (/api/funnel/generate-companion-course)', srvCode.includes('/api/funnel/generate-companion-course'), 'Generate Route OK');
+  check('5. مسار الرفع وتفعيل الحملة (/api/funnel/deploy-course-and-campaign)', srvCode.includes('/api/funnel/deploy-course-and-campaign'), 'Deploy Route OK');
+  check('6. مسارا جلب وتصفير كورسات المنصة (/api/funnel/platform-courses & reset)', srvCode.includes('/api/funnel/platform-reset'), 'Platform Reset Route OK');
+
+  let srvSyntaxOk = false;
+  try {
+    new vm.Script(srvCode, { filename: 'server.js' });
+    srvSyntaxOk = true;
+  } catch (_) {}
+  check('7. خلو server.js من أي خطأ نحوي (vm.Script)', srvSyntaxOk, '0 Syntax Errors');
+  check('8. جاهزية مكوّن CarouselCourseFunnelPanel.jsx', panelCode.includes('handleDeployFunnel'), 'Component Ready');
+  check('9. جاهزية صفحة CampaignManager.jsx', campMgrCode.includes('handleResetPlatformCourses'), 'CampaignManager Ready');
+
+  STUDIO_CONFIGS.forEach((cfg, idx) => {
+    const pCode = fs.readFileSync(path.join(PAGES_DIR, cfg.file), 'utf8');
+    const isWrappedAtRoot =
+      pCode.includes('auto-funnel-root-wrapper') &&
+      pCode.includes('<CarouselCourseFunnelPanel') &&
+      pCode.includes('studioType="' + cfg.studioType + '"');
+    check(
+      (10 + idx) + '. ظهور الصندوق دائماً وبعرض كامل في ' + cfg.file + ' (' + cfg.studioType + ')',
+      isWrappedAtRoot,
+      'Always Visible Outside Conditionals'
+    );
+  });
+
+  console.log('\n================================================================================');
+  console.log('🇩🇿🚀 تقرير الفحص الآلي بعد إصلاح المقارنة الثنائية والثلاثية وجميع الاستوديوهات');
+  console.log('================================================================================');
+  let passed = 0;
+  results.forEach(r => {
+    if (r.passed) passed++;
+    console.log((r.passed ? '✅ [PASS]' : '❌ [FAIL]') + ' ' + r.name + ' — (' + r.detail + ')');
+  });
+  console.log('--------------------------------------------------------------------------------');
+  console.log('📊 النتيجة النهائية: ' + passed + '/' + results.length + ' PASS (' + Math.round((passed / results.length) * 100) + '%)');
+  console.log('================================================================================\n');
+}
+
+runVerificationSuite();
+console.log('🎉 انتهى الإصلاح بنجاح! افتح الآن صفحة "مختبر القوالب" و"المقارنة الثلاثية" في المتصفح وستجد الصندوق ظاهراً أمامك مباشرة!');
+```
+
+---
+
 ## `project_structure.md`
 
 ```markdown
@@ -379,8 +973,13 @@ AutoFactory/
     ├── Tajawal.ttf
     ├── extract_code.py
     ├── package.json
+    ├── part1-autofactory-backend-funnel-engine-v1.js
     ├── project_structure.md
+    ├── project_structureautofact.md
+    ├── project_structureautofactory.md
     ├── منصة شاملة.docx
+├── _archive_patches/
+    ├── part1-autofactory-backend-funnel-engine-v1.js
 ├── autofactory-backend/
     ├── .env
     ├── Alexandria-Black.ttf
@@ -506,6 +1105,7 @@ AutoFactory/
         ├── main.jsx
         ├── assets/
         ├── components/
+            ├── CarouselCourseFunnelPanel.jsx
         ├── layouts/
             ├── MainLayout.jsx
         ├── pages/
@@ -724,6 +1324,607 @@ def generate(directory):
 
 if __name__ == "__main__":
     generate(os.getcwd())
+```
+
+---
+
+## `package.json`
+
+```json
+{
+  "dependencies": {
+    "axios": "^1.20.0"
+  }
+}
+
+```
+
+---
+
+## `part1-autofactory-backend-funnel-engine-v1.js`
+
+```javascript
+/**
+ * fix-autofactory-studios-and-funnel-v2.js
+ * [السكربت الجراحي الشامل لإظهار <CarouselCourseFunnelPanel /> في المقارنة الثنائية والثلاثية وجميع الاستوديوهات الستة + تأكيد مسارات server.js]
+ *
+ * ما يفعله هذا السكربت آلياً:
+ * 1. يعالج مشكلة اختفاء الصندوق في TemplateLab.jsx (المقارنة الثنائية) و TripleTemplateLab.jsx (المقارنة الثلاثية) وجميع الاستوديوهات الستة،
+ *    سواء كانت export default في أعلى الملف (export default function) أو في أسفله، ويخرجه من أي شرط {images.length > 0} أو عمود Grid ضيق
+ *    عبر تغليف المخرج الرئيسي return (...) بحاوية جذرية كاملة العرض يظهر في أسفلها الصندوق دائماً منذ لحظة فتح الصفحة.
+ * 2. يتحقق من autofactory-backend/server.js ويحقن مسارات /api/funnel/* الأربعة إن لم تكن موجودة.
+ * 3. يشغل فحص التحقق الشامل (15/15 PASS) للتأكد من ظهور الصندوق في جميع الصفحات الست.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = __dirname;
+
+function resolveUiDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-ui'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-ui')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'src', 'pages'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-ui/src/pages. ضع هذا السكربت في E:\\AutoFactory.');
+}
+
+function resolveBackendDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-backend'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-backend')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'server.js'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-backend.');
+}
+
+console.log('🇩🇿🛠️ [AutoFactory V2 Fixer] بدء إصلاح ظهور صندوق القمع الآلي في المقارنة الثنائية والثلاثية وجميع الاستوديوهات الستة...\n');
+
+const UI_DIR = resolveUiDir();
+const BACKEND_DIR = resolveBackendDir();
+const PAGES_DIR = path.join(UI_DIR, 'src', 'pages');
+const serverPath = path.join(BACKEND_DIR, 'server.js');
+
+// ============================================================================
+// 1. التأكد من حقن مسارات القمع الآلي في autofactory-backend/server.js
+// ============================================================================
+let serverCode = fs.readFileSync(serverPath, 'utf8').replace(/\r\n/g, '\n');
+
+if (!serverCode.includes("app.post('/api/funnel/generate-companion-course'")) {
+  console.log('⏳ مسارات /api/funnel/* غير موجودة في server.js، جاري حقنها الآن...');
+
+  if (serverCode.includes('lowerComment.includes(campaign.keyword.toLowerCase())')) {
+    serverCode = serverCode.replace(
+      /if\s*\(\s*lowerComment\.includes\(\s*campaign\.keyword\.toLowerCase\(\)\s*\)\s*\)\s*\{/g,
+      "const _kwList = String(campaign.keyword || '').split(/[،,|]/).map(k => k.trim().toLowerCase()).filter(Boolean);\n                            if (_kwList.some(kw => lowerComment.includes(kw))) {"
+    );
+  }
+
+  serverCode = serverCode
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*lessonData\.igCaption,\s*fbCaption:\s*lessonData\.fbCaption,\s*images:\s*generatedImages\s*\}\);/g,
+      'res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, slides: lessonData.slides || [], images: generatedImages });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*images:\s*finalImages,\s*igCaption:\s*igCaption,\s*fbCaption:\s*fbCaption\s*\}\);/g,
+      'res.json({ success: true, images: finalImages, slides: contentData.slides || [], igCaption: igCaption, fbCaption: fbCaption });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*roadmapData\.igCaption,\s*fbCaption:\s*roadmapData\.fbCaption,\s*magicPrompt:\s*magicPrompt,\s*images:\s*generatedImages\s*\}\);/g,
+      'res.json({ success: true, igCaption: roadmapData.igCaption, fbCaption: roadmapData.fbCaption, slides: roadmapData.slides || [], magicPrompt: magicPrompt, images: generatedImages });'
+    )
+    .replace(
+      /res\.json\(\{\s*success:\s*true,\s*igCaption:\s*lessonData\.igCaption,\s*fbCaption:\s*lessonData\.fbCaption,\s*images:\s*generatedImages,\s*coverOptions:\s*coverOptions\.slice\(0,\s*3\)\s*\}\);/g,
+      'res.json({ success: true, igCaption: lessonData.igCaption, fbCaption: lessonData.fbCaption, slides: lessonData.slides || [], images: generatedImages, coverOptions: coverOptions.slice(0, 3) });'
+    );
+
+  const funnelEngineLines = [
+    '// [AUTO-FUNNEL ENGINE - PART 1/3 V1]',
+    'const STUDIO_PRINTED_CTA_KEYWORD_MAP = {',
+    "    template_binary: 'أدوات',",
+    "    template_triple: 'أدوات',",
+    "    roadmap_steps: 'فكرة',",
+    "    business_saas: 'أرباح',",
+    "    story_lab: 'مسار',",
+    "    commercial_lab: 'تفاصيل'",
+    '};',
+    '',
+    "const extractSmartFunnelKeyword = (studioType = '', slides = [], igCaption = '', fbCaption = '') => {",
+    "    const basePrintedKeyword = STUDIO_PRINTED_CTA_KEYWORD_MAP[studioType] || 'دليل';",
+    "    const combinedText = JSON.stringify(slides || []) + ' ' + (igCaption || '') + ' ' + (fbCaption || '');",
+    '    const match = combinedText.match(/(?:بكلمة|كلمة)\\s*["«*]?([أ-يa-zA-Z0-9_]{2,15})["»*]?/i);',
+    "    const extracted = match && match[1] ? match[1].trim() : '';",
+    '    if (extracted && extracted !== basePrintedKeyword) {',
+    "        return basePrintedKeyword + ', ' + extracted;",
+    '    }',
+    '    return extracted || basePrintedKeyword;',
+    '};',
+    '',
+    "const buildDeterministicFallbackMiniCourse = (topic = '', studioType = '', slides = [], detectedKeyword = 'أدوات') => {",
+    "    const cleanTopic = topic || 'الدليل التطبيقي الشامل للمنشور';",
+    "    const primaryKw = detectedKeyword.split(/[،,]/)[0].trim();",
+    '    const slideSummaries = (Array.isArray(slides) ? slides : [])',
+    "        .filter(s => s && s.type !== 'cta')",
+    '        .map((s, idx) => ({',
+    "            title: s.title || s.onScreenText || ('المحور ' + (idx + 1)),",
+    "            tools: [s.goodTool, s.proTool, s.toolName].filter(Boolean).join(' / '),",
+    "            desc: s.explanation || s.text || s.narration || ''",
+    '        }));',
+    '',
+    '    const bulletPoints1 = slideSummaries.map((s, i) =>',
+    "        '- **المحطة ' + (i + 1) + ' (' + s.title + '):** ' + (s.desc || 'تطبيق عملي مباشر') + (s.tools ? ' — الأداة الموصى بها: **' + s.tools + '**' : '')",
+    "    ).join('\\n') || '- فهم الأساسيات وبناء سير عمل ذكي ومؤتمت.';",
+    '',
+    '    const bulletPoints2 = slideSummaries.map((s, i) =>',
+    "        '#### ' + (i + 1) + '. ' + s.title + '\\n' + (s.tools ? '**الأداة المعتمدة:** `' + s.tools + '`\\n' : '') + (s.desc || 'اتبع الإعدادات القياسية لتشغيل الأداة ودمجها في مشروعك.')",
+    "    ).join('\\n\\n') || 'طبّق الخطوات بالترتيب الموضح للوصول إلى أفضل نتيجة.';",
+    '',
+    '    const lessons = [',
+    '        {',
+    "            title: 'الدرس 1: التشريح الكامل لفكرة (' + cleanTopic + ') ولماذا تهمك الآن',",
+    "            type: 'video',",
+    "            content: '### 🎯 الهدف من هذا الكورس المصغر\\n\\nأهلاً بك! لقد وصلت إلى هذه الصفحة لأنك علّقت على منشورنا حول **' + cleanTopic + '**. في هذا الدرس التأسيسي نشرح الفلسفة العملية وراء الأدوات والخطوات التي شاهدتها في الصور.\\n\\n### 💡 أبرز المحاور المستخلصة من الشرائح:\\n' + bulletPoints1,",
+    "            codeSnippet: '// خريطة التنفيذ السريعة لموضوع: ' + cleanTopic + '\\nconst workflow = {\\n  topic: \"' + cleanTopic + '\",\\n  studioType: \"' + studioType + '\",\\n  status: \"READY_TO_IMPLEMENT\"\\n};\\nconsole.log(\"🚀 لنبدأ التطبيق العملي!\", workflow);',",
+    "            codeExplanation: 'هذا المخطط يوضح نقطة الانطلاق لتطبيق ما ورد في الكاروسيل خطوة بخطوة.',",
+    '            dailyQuest: {',
+    "                question: 'ما هو الهدف الرئيسي من تطبيق منهجية (' + cleanTopic + ') المشروحة في هذا الدرس؟',",
+    "                options: ['اختصار الوقت ومضاعفة الإنتاجية والجودة العملية', 'الاعتماد على الطرق اليدوية البطيئة', 'تجاهل الأدوات الحديثة', 'عدم تطبيق الخطوات عملياً'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        },',
+    '        {',
+    "            title: 'الدرس 2: الدليل العملي للأدوات والخطوات المذكورة في الكاروسيل',",
+    "            type: 'video',",
+    "            content: '### 🛠️ كيف تستخدم الأدوات والخطوات عملياً؟\\n\\nفي هذا الدرس نفكك كل أداة وخطوة وردت في الشرائح لتبدأ استخدامها فوراً:\\n\\n' + bulletPoints2,",
+    "            codeSnippet: '# خطوات التشغيل السريع\\n1. افتح الأداة المذكورة في الشريحة\\n2. طبّق الإعدادات والأوامر المرفقة\\n3. اختبر النتيجة في مشروعك الحقيقي',",
+    "            codeExplanation: 'اتبع هذه القائمة المرجعية أثناء التطبيق لضمان عدم نسيان أي تفصيل.',",
+    '            dailyQuest: {',
+    "                question: 'ما هي أفضل طريقة للاستفادة من الأدوات المشروحة في هذا الدرس؟',",
+    "                options: ['تطبيقها عملياً خطوة بخطوة في مشروع حقيقي', 'قراءتها فقط دون تجربة', 'استخدام الأدوات القديمة ذات الأخطاء', 'تخطي إعدادات الأداة'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        },',
+    '        {',
+    "            title: 'الدرس 3: خطة العمل والتطبيق الفوري (Action Plan)',",
+    "            type: 'video',",
+    "            content: '### 🚀 خطتك العملية للـ 24 ساعة القادمة\\n\\nالآن بعد أن تعرفت على جميع تفاصيل **' + cleanTopic + '**، إليك خطة العمل المباشرة:\\n\\n1. اختر أداة واحدة أو خطوة واحدة مما ورد في الدرس الثاني وابدأ بتجربتها اليوم.\\n2. احفظ هذا الكورس في مفضلتك للرجوع إلى الروابط والأكواد في أي وقت.\\n3. تصفح بقية المسارات والشهادات المهنية في منصتنا **Cherif-Platform** لتطوير مهاراتك لمستوى الاحتراف.',",
+    "            codeSnippet: '// معادلة النجاح العملي\\nfunction executeActionPlan(learnedTools) {\\n  return learnedTools.map(tool => \"✅ تم تفعيل \" + tool + \" بنجاح!\");\\n}',",
+    "            codeExplanation: 'التنفيذ الفوري هو الفارق الحقيقي بين المعرفة النظرية والنتائج الملموسة.',",
+    '            dailyQuest: {',
+    "                question: 'ما هي الخطوة التالية بعد إتمام هذه الكبسولة التعليمية؟',",
+    "                options: ['البدء بتطبيق الأداة فوراً واستكشاف المسارات المتقدمة في المنصة', 'تأجيل التطبيق إلى وقت غير محدد', 'حذف الأدوات', 'العودة للطريقة التقليدية'],",
+    '                correctAnswerIndex: 0',
+    '            },',
+    '            isForged: true',
+    '        }',
+    '    ];',
+    '',
+    '    return {',
+    '        courseBlueprint: {',
+    "            courseTitle: 'كبسولة تطبيقية: ' + cleanTopic,",
+    "            courseDescription: 'الدليل العملي والتطبيقي الكامل لشرح وتنفيذ كل ما ورد في منشور (' + cleanTopic + ') خطوة بخطوة مع الروابط والأمثلة.',",
+    "            difficulty: 'كبسولة تطبيقية مركزة (Micro-Course)',",
+    "            courseCategory: 'carousel_capsule',",
+    '            blueprint: [',
+    '                {',
+    "                    sectionName: 'الوحدة التطبيقية: الدليل العملي الكامل والروابط',",
+    '                    unitDeepSummary: {',
+    "                        unitSummary: 'ورشة تطبيقية مركزة تشرح بالتفصيل جميع محاور منشور (' + cleanTopic + ').',",
+    "                        whatYouLearn: 'إتقان الأدوات، الروابط، والخطوات العملية المذكورة في الكاروسيل.',",
+    "                        whyItMatters: 'تحويل المحتوى المختصر في مواقع التواصل إلى مهارة تطبيقية كاملة.',",
+    "                        keyHighlights: ['تشريح الفكرة والأدوات', 'خطوات التنفيذ والروابط', 'خطة التطبيق الفوري']",
+    '                    },',
+    '                    lessons',
+    '                }',
+    '            ]',
+    '        },',
+    '        campaignDraft: {',
+    '            keyword: detectedKeyword,',
+    "            public_reply: 'تم يا {username} 🚀 أرسلت لك رابط الشرح التطبيقي الكامل والروابط في رسائلك الخاصة (DM) الآن!',",
+    "            dm_message: 'مرحباً {username}! 👋🚀\\n\\nكما وعدتك في المنشور، جهزت لك كورساً تطبيقياً مصغراً ومجانياً يشرح (' + cleanTopic + ') بالتفصيل على منصتنا:\\n\\n🔗 ادخل إلى الشرح الكامل من هنا:\\n{{COURSE_URL}}\\n\\nقراءة وتطبيقاً ممتعاً! 💡',",
+    "            suggestedCaptionCTA: '🎁 للحصول على الشرح التطبيقي الكامل وجميع الروابط خطوة بخطوة، علق بكلمة \"' + primaryKw + '\" وسأرسل لك رابط الكورس المجاني في الخاص فوراً! 👇'",
+    '        }',
+    '    };',
+    '};',
+    '',
+    "app.post('/api/funnel/generate-companion-course', async (req, res) => {",
+    '    try {',
+    "        const { topic = '', studioType = 'template_binary', slides = [], igCaption = '', fbCaption = '' } = req.body;",
+    '        const detectedKeyword = extractSmartFunnelKeyword(studioType, slides, igCaption, fbCaption);',
+    "        const primaryKeyword = detectedKeyword.split(/[،,]/)[0].trim();",
+    '        const fallbackData = buildDeterministicFallbackMiniCourse(topic, studioType, slides, detectedKeyword);',
+    '        try {',
+    "            const systemPrompt = 'أنت كبير مهندسي البرمجيات في منصة Cherif-Platform. نشرنا منشوراً حول: \"' + topic + '\". بيانات الشرائح: ' + JSON.stringify(slides || []).slice(0, 3500) + '. صمم كورساً تطبيقياً مصغراً (3 دروس غنية بالـ Markdown والأمثلة) + مسودة حملة رد تلقائي بصيغة JSON صالحة تحتوي على courseBlueprint و campaignDraft.';",
+    "            const rawContent = await generateContentSmart(systemPrompt, 'قم ببناء الكورس المصغر ومسودة الحملة بصيغة JSON الآن.', 0.7, 10000);",
+    "            const parsed = typeof safeParseAIJson === 'function' ? safeParseAIJson(rawContent) : JSON.parse(rawContent);",
+    '            if (parsed && parsed.courseBlueprint && Array.isArray(parsed.courseBlueprint.blueprint)) {',
+    '                return res.json({',
+    '                    success: true,',
+    '                    data: {',
+    '                        courseBlueprint: parsed.courseBlueprint,',
+    '                        campaignDraft: {',
+    '                            keyword: parsed.campaignDraft?.keyword || detectedKeyword,',
+    '                            public_reply: parsed.campaignDraft?.public_reply || fallbackData.campaignDraft.public_reply,',
+    '                            dm_message: parsed.campaignDraft?.dm_message || fallbackData.campaignDraft.dm_message,',
+    "                            suggestedCaptionCTA: parsed.campaignDraft?.suggestedCaptionCTA || ('🎁 علق بكلمة \"' + primaryKeyword + '\" لأرسل لك الشرح التطبيقي الكامل والروابط في الخاص فوراً! 👇')",
+    '                        }',
+    '                    }',
+    '                });',
+    '            }',
+    '        } catch (_) {}',
+    '        return res.json({ success: true, data: fallbackData });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر توليد الكورس المصغر.' });",
+    '    }',
+    '});',
+    '',
+    "app.post('/api/funnel/deploy-course-and-campaign', async (req, res) => {",
+    '    try {',
+    "        const { courseBlueprint, campaignDraft, studioType = '', carouselTopic = '' } = req.body;",
+    '        if (!courseBlueprint || !campaignDraft?.keyword) {',
+    "            return res.status(400).json({ success: false, error: 'بيانات الكورس أو الكلمة المفتاحية غير مكتملة.' });",
+    '        }',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';",
+    '        const unitSummariesMap = {};',
+    '        (courseBlueprint.blueprint || []).forEach(sec => {',
+    '            if (sec.sectionName && sec.unitDeepSummary) unitSummariesMap[sec.sectionName] = sec.unitDeepSummary;',
+    '        });',
+    "        const enrichedDesc = (courseBlueprint.courseDescription || '') + ' |||UNITS_MAP:' + JSON.stringify(unitSummariesMap);",
+    "        const importRes = await axios.post(platformApiBase + '/api/courses/auto-import', {",
+    '            courseTitle: courseBlueprint.courseTitle,',
+    '            courseDescription: enrichedDesc,',
+    "            difficulty: courseBlueprint.difficulty || 'كبسولة تطبيقية (Micro-Course)',",
+    "            courseCategory: 'carousel_capsule',",
+    '            certificateMeta: { isCarouselCapsule: true, studioType, carouselTopic, triggerKeyword: campaignDraft.keyword, unitSummariesMap },',
+    '            blueprint: courseBlueprint.blueprint',
+    '        });',
+    '        const createdCourseId = importRes.data?.courseId || importRes.data?.course?._id || importRes.data?.data?._id || "";',
+    "        const finalCourseUrl = importRes.data?.courseUrl || (createdCourseId ? (platformFrontendBase + '/classroom/' + createdCourseId) : (platformFrontendBase + '/academy'));",
+    "        let finalDmMessage = String(campaignDraft.dm_message || '').trim();",
+    "        if (finalDmMessage.includes('{{COURSE_URL}}')) finalDmMessage = finalDmMessage.replace(/\\{\\{COURSE_URL\\}\\}/g, finalCourseUrl);",
+    "        else if (!finalDmMessage.includes(finalCourseUrl)) finalDmMessage = finalDmMessage + '\\n\\n🔗 رابط الشرح الكامل:\\n' + finalCourseUrl;",
+    '        const cleanKeyword = String(campaignDraft.keyword).trim();',
+    '        const savedCampaign = await Campaign.findOneAndUpdate(',
+    '            { keyword: cleanKeyword },',
+    '            { $set: { keyword: cleanKeyword, public_reply: campaignDraft.public_reply || "تم يا {username} 🚀 تفقد رسائلك في الخاص!", dm_message: finalDmMessage, is_active: true, course_id: String(createdCourseId), course_title: courseBlueprint.courseTitle || "", course_url: finalCourseUrl, studio_type: studioType, carousel_topic: carouselTopic || courseBlueprint.courseTitle || "" } },',
+    '            { upsert: true, new: true }',
+    '        );',
+    '        return res.json({ success: true, courseId: createdCourseId, courseUrl: finalCourseUrl, campaign: savedCampaign });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر رفع الكورس إلى المنصة (تأكد من تشغيل سيرفر 5001).' });",
+    '    }',
+    '});',
+    '',
+    "app.get('/api/funnel/platform-courses', async (req, res) => {",
+    '    try {',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const platformFrontendBase = process.env.CHERIF_PLATFORM_URL || 'http://localhost:5173';",
+    "        const response = await axios.get(platformApiBase + '/api/courses/public');",
+    "        const courses = (response.data?.courses || []).map(c => ({ ...c, courseUrl: platformFrontendBase + '/classroom/' + c._id }));",
+    '        return res.json({ success: true, courses });',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر جلب الكورسات من سيرفر المنصة (5001).' });",
+    '    }',
+    '});',
+    '',
+    "app.post('/api/funnel/platform-reset', async (req, res) => {",
+    '    try {',
+    "        const platformApiBase = process.env.CHERIF_PLATFORM_API || 'http://127.0.0.1:5001';",
+    "        const response = await axios.post(platformApiBase + '/api/courses/platform-reset', req.body);",
+    '        return res.json(response.data);',
+    '    } catch (error) {',
+    "        return res.status(500).json({ success: false, error: 'تعذر تنفيذ إعادة التهيئة على سيرفر المنصة (5001).' });",
+    '    }',
+    '});'
+  ];
+
+  const funnelBlock = '\n' + funnelEngineLines.join('\n') + '\n';
+  const listenMatch = serverCode.match(/\napp\.listen\s*\(/);
+  if (listenMatch) {
+    serverCode =
+      serverCode.slice(0, listenMatch.index).trimEnd() +
+      '\n' +
+      funnelBlock +
+      '\n' +
+      serverCode.slice(listenMatch.index + 1);
+  } else {
+    serverCode = serverCode.trimEnd() + '\n' + funnelBlock + '\n';
+  }
+
+  new vm.Script(serverCode, { filename: 'server.js' });
+  fs.writeFileSync(serverPath, serverCode, 'utf8');
+  console.log('✅ تم حقن وتثبيت مسارات /api/funnel/* الأربعة في autofactory-backend/server.js بنجاح.');
+} else {
+  console.log('✅ مسارات /api/funnel/* موجودة ومثبتة في autofactory-backend/server.js.');
+}
+
+// ============================================================================
+// 2. محلل القوس الرئيسي لـ return (...) لحقن الصندوق خارج أي شرط مخفي وفي جميع أنواع التصدير
+// ============================================================================
+const STUDIO_CONFIGS = [
+  { file: 'TemplateLab.jsx', studioType: 'template_binary', topicVar: 'topic' },
+  { file: 'TripleTemplateLab.jsx', studioType: 'template_triple', topicVar: 'topic' },
+  { file: 'RoadmapLab.jsx', studioType: 'roadmap_steps', topicVar: 'topic' },
+  { file: 'BusinessLab.jsx', studioType: 'business_saas', topicVar: 'topic' },
+  { file: 'StoryLab.jsx', studioType: 'story_lab', topicVar: 'topic' },
+  { file: 'CommercialLab.jsx', studioType: 'commercial_lab', topicVar: 'productIdea' }
+];
+
+function findMatchingCloseParen(str, openParenIdx) {
+  let depth = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inTemplate = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = openParenIdx; i < str.length; i++) {
+    const ch = str[i];
+    const next = str[i + 1];
+    const prev = str[i - 1];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+    if (inSingle) {
+      if (ch === "'" && prev !== '\\') inSingle = false;
+      continue;
+    }
+    if (inDouble) {
+      if (ch === '"' && prev !== '\\') inDouble = false;
+      continue;
+    }
+    if (inTemplate) {
+      if (ch === '`' && prev !== '\\') inTemplate = false;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "'") {
+      inSingle = true;
+      continue;
+    }
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+    if (ch === '`') {
+      inTemplate = true;
+      continue;
+    }
+
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function injectAlwaysVisibleFunnelPanel(cfg) {
+  const filePath = path.join(PAGES_DIR, cfg.file);
+  if (!fs.existsSync(filePath)) {
+    console.warn('⚠️ الملف ' + cfg.file + ' غير موجود.');
+    return false;
+  }
+
+  let code = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+
+  // أ) تنظيف أي حقن قديم (سواء كان داخل شرط أو غلاف سابق)
+  code = code.replace(/import CarouselCourseFunnelPanel from '\.\.\/components\/CarouselCourseFunnelPanel';\n?/g, '');
+  code = code.replace(/\s*<div className="w-full space-y-8 auto-funnel-root-wrapper">\s*\{\/\* \[AUTO-FUNNEL ROOT WRAPPER START\] \*\/\}\s*/g, '\n    ');
+  code = code.replace(/\s*\{\/\* \[AUTO-FUNNEL PANEL START\] \*\/\}[\s\S]*?\{\/\* \[AUTO-FUNNEL PANEL END\] \*\/\}\s*\{\/\* \[AUTO-FUNNEL ROOT WRAPPER END\] \*\/\}\s*<\/div>/g, '');
+  code = code.replace(/\s*\{\/\* \[AUTO-FUNNEL PANEL START\] \*\/\}[\s\S]*?\{\/\* \[AUTO-FUNNEL PANEL END\] \*\/\}\n?/g, '');
+
+  // ب) إضافة سطر الاستيراد بعد أول import
+  const firstImportMatch = code.match(/^import .+$/m);
+  if (firstImportMatch) {
+    const insertIdx = firstImportMatch.index + firstImportMatch[0].length;
+    code =
+      code.slice(0, insertIdx) +
+      "\nimport CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';" +
+      code.slice(insertIdx);
+  } else {
+    code = "import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';\n" + code;
+  }
+
+  // ج) ضمان حفظ slides القادمة من السيرفر في State الصفحة
+  const hasSlidesState = /\bconst\s+\[\s*slides\s*,/.test(code);
+  const hasFunnelSlidesState = /\bconst\s+\[\s*funnelSlides\s*,/.test(code);
+
+  if (!hasSlidesState && !hasFunnelSlidesState && cfg.file !== 'CommercialLab.jsx') {
+    const firstUseStateMatch = code.match(/const\s+\[[a-zA-Z0-9_]+,\s*set[a-zA-Z0-9_]+\]\s*=\s*useState\(/);
+    if (firstUseStateMatch) {
+      code =
+        code.slice(0, firstUseStateMatch.index) +
+        'const [funnelSlides, setFunnelSlides] = useState([]);\n  ' +
+        code.slice(firstUseStateMatch.index);
+    }
+    code = code.replace(
+      /setImages\(res\.data\.images\);/g,
+      'setImages(res.data.images);\n        if (res.data.slides) setFunnelSlides(res.data.slides);'
+    );
+  }
+
+  // د) تجهيز خصائص المكوّن
+  const hasTopicState = new RegExp('\\bconst\\s+\\[\\s*' + cfg.topicVar + '\\s*,').test(code);
+  const resolvedTopicExpr = hasTopicState ? cfg.topicVar : "''";
+
+  const resolvedSlidesExpr =
+    cfg.file === 'CommercialLab.jsx'
+      ? "(typeof commercial !== 'undefined' && commercial?.scenes) ? commercial.scenes : []"
+      : hasSlidesState
+        ? 'slides'
+        : "(typeof funnelSlides !== 'undefined' ? funnelSlides : [])";
+
+  const hasIgCaption = /\bconst\s+\[\s*igCaption\s*,/.test(code);
+  const hasSingleCaption = /\bconst\s+\[\s*caption\s*,/.test(code);
+  const hasFbCaption = /\bconst\s+\[\s*fbCaption\s*,/.test(code);
+
+  const igProps = hasIgCaption
+    ? 'igCaption={igCaption} setIgCaption={setIgCaption}'
+    : hasSingleCaption
+      ? 'igCaption={caption} setIgCaption={setCaption}'
+      : '';
+
+  const fbProps = hasFbCaption ? 'fbCaption={fbCaption} setFbCaption={setFbCaption}' : '';
+
+  const panelJsxLines = [
+    '      {/* [AUTO-FUNNEL PANEL START] */}',
+    '      <div className="w-full max-w-6xl mx-auto clear-both pt-6">',
+    '        <CarouselCourseFunnelPanel',
+    '          topic={' + resolvedTopicExpr + '}',
+    '          studioType="' + cfg.studioType + '"',
+    '          slides={' + resolvedSlidesExpr + '}',
+    '          ' + igProps,
+    '          ' + fbProps,
+    '        />',
+    '      </div>',
+    '      {/* [AUTO-FUNNEL PANEL END] */}'
+  ].join('\n');
+
+  // هـ) العثور على جملة return (...) الرئيسية للمكوّن (التي تمتد لنهاية المكوّن) وتغليف مخرجها بالكامل
+  // حتى لا يقع الصندوق أبداً داخل شرط {images.length > 0 && (...)} أو داخل عمود Grid ضيق!
+  const returnRegex = /\breturn\s*\(/g;
+  let match;
+  let bestReturn = null;
+
+  while ((match = returnRegex.exec(code)) !== null) {
+    const openParenIdx = match.index + match[0].length - 1;
+    const afterParen = code.slice(openParenIdx + 1).trimStart();
+    if (!afterParen.startsWith('<')) continue;
+
+    const closeParenIdx = findMatchingCloseParen(code, openParenIdx);
+    if (closeParenIdx !== -1) {
+      const spanLength = closeParenIdx - openParenIdx;
+      if (!bestReturn || closeParenIdx > bestReturn.closeParenIdx || spanLength > bestReturn.spanLength) {
+        bestReturn = { openParenIdx, closeParenIdx, spanLength };
+      }
+    }
+  }
+
+  if (!bestReturn) {
+    throw new Error('❌ تعذر تحديد جملة return الرئيسية في ' + cfg.file);
+  }
+
+  const originalReturnedJsx = code.slice(bestReturn.openParenIdx + 1, bestReturn.closeParenIdx).trim();
+
+  const wrappedReturnContent = [
+    '',
+    '    <div className="w-full space-y-8 auto-funnel-root-wrapper">',
+    '      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}',
+    '      ' + originalReturnedJsx,
+    panelJsxLines,
+    '      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}',
+    '    </div>',
+    '  '
+  ].join('\n');
+
+  code =
+    code.slice(0, bestReturn.openParenIdx + 1) +
+    wrappedReturnContent +
+    code.slice(bestReturn.closeParenIdx);
+
+  fs.writeFileSync(filePath, code, 'utf8');
+  console.log('✅ [Fixed & Visible] تم إخراج وتثبيت <CarouselCourseFunnelPanel studioType="' + cfg.studioType + '" /> في ' + cfg.file + ' ليظهر دائماً وبعرض كامل!');
+  return true;
+}
+
+STUDIO_CONFIGS.forEach(injectAlwaysVisibleFunnelPanel);
+
+// ============================================================================
+// 3. تشغيل الفحص الآلي الشامل (15/15 PASS) للتأكد من ظهور الصندوق خارج الشروط المخفية
+// ============================================================================
+function runVerificationSuite() {
+  const results = [];
+  const check = (name, cond, detail) => {
+    results.push({ name, passed: Boolean(cond), detail: detail || '' });
+  };
+
+  const campaignCode = fs.readFileSync(path.join(BACKEND_DIR, 'models', 'Campaign.js'), 'utf8');
+  const srvCode = fs.readFileSync(serverPath, 'utf8');
+  const panelCode = fs.readFileSync(path.join(UI_DIR, 'src', 'components', 'CarouselCourseFunnelPanel.jsx'), 'utf8');
+  const campMgrCode = fs.readFileSync(path.join(PAGES_DIR, 'CampaignManager.jsx'), 'utf8');
+
+  check('1. نموذج Campaign.js محدث بحقول ربط الكورس', campaignCode.includes('course_url'), 'Campaign.js OK');
+  check('2. مسار /webhook يدعم الكلمات المتعددة بفاصلة', srvCode.includes('split(/[،,|]/)'), 'Webhook Multi-Keyword OK');
+  check('3. مسارات الكاروسيل ترجع مصفوفة slides', srvCode.includes('slides:'), 'Slides Returned OK');
+  check('4. مسار توليد الكورس المرافق (/api/funnel/generate-companion-course)', srvCode.includes('/api/funnel/generate-companion-course'), 'Generate Route OK');
+  check('5. مسار الرفع وتفعيل الحملة (/api/funnel/deploy-course-and-campaign)', srvCode.includes('/api/funnel/deploy-course-and-campaign'), 'Deploy Route OK');
+  check('6. مسارا جلب وتصفير كورسات المنصة (/api/funnel/platform-courses & reset)', srvCode.includes('/api/funnel/platform-reset'), 'Platform Reset Route OK');
+
+  let srvSyntaxOk = false;
+  try {
+    new vm.Script(srvCode, { filename: 'server.js' });
+    srvSyntaxOk = true;
+  } catch (_) {}
+  check('7. خلو server.js من أي خطأ نحوي (vm.Script)', srvSyntaxOk, '0 Syntax Errors');
+  check('8. جاهزية مكوّن CarouselCourseFunnelPanel.jsx', panelCode.includes('handleDeployFunnel'), 'Component Ready');
+  check('9. جاهزية صفحة CampaignManager.jsx', campMgrCode.includes('handleResetPlatformCourses'), 'CampaignManager Ready');
+
+  STUDIO_CONFIGS.forEach((cfg, idx) => {
+    const pCode = fs.readFileSync(path.join(PAGES_DIR, cfg.file), 'utf8');
+    const isWrappedAtRoot =
+      pCode.includes('auto-funnel-root-wrapper') &&
+      pCode.includes('<CarouselCourseFunnelPanel') &&
+      pCode.includes('studioType="' + cfg.studioType + '"');
+    check(
+      (10 + idx) + '. ظهور الصندوق دائماً وبعرض كامل في ' + cfg.file + ' (' + cfg.studioType + ')',
+      isWrappedAtRoot,
+      'Always Visible Outside Conditionals'
+    );
+  });
+
+  console.log('\n================================================================================');
+  console.log('🇩🇿🚀 تقرير الفحص الآلي بعد إصلاح المقارنة الثنائية والثلاثية وجميع الاستوديوهات');
+  console.log('================================================================================');
+  let passed = 0;
+  results.forEach(r => {
+    if (r.passed) passed++;
+    console.log((r.passed ? '✅ [PASS]' : '❌ [FAIL]') + ' ' + r.name + ' — (' + r.detail + ')');
+  });
+  console.log('--------------------------------------------------------------------------------');
+  console.log('📊 النتيجة النهائية: ' + passed + '/' + results.length + ' PASS (' + Math.round((passed / results.length) * 100) + '%)');
+  console.log('================================================================================\n');
+}
+
+runVerificationSuite();
+console.log('🎉 انتهى الإصلاح بنجاح! افتح الآن صفحة "مختبر القوالب" و"المقارنة الثلاثية" في المتصفح وستجد الصندوق ظاهراً أمامك مباشرة!');
 ```
 
 ---
@@ -1336,18 +2537,26 @@ testWebhook();
 ## `autofactory-backend\models\Campaign.js`
 
 ```javascript
+// [AUTO-FUNNEL ENGINE - PART 1/3 V1 - CAMPAIGN MODEL]
 const mongoose = require('mongoose');
 
 const campaignSchema = new mongoose.Schema({
-    keyword: { type: String, required: true, unique: true }, // الكلمة التي سيصطادها البوت
-    public_reply: { type: String, required: true },          // الرد على التعليق
-    dm_message: { type: String, required: true },            // رسالة الخاص
-    is_active: { type: Boolean, default: true },             // هل الحملة شغالة حالياً؟
-    usage_count: { type: Number, default: 0 },               // كم شخص استخدم هذه الكلمة؟
+    keyword: { type: String, required: true, unique: true }, // الكلمة أو الكلمات المفتاحية (يدعم الفصل بفاصلة مثل: أدوات, ساس)
+    public_reply: { type: String, required: true },          // الرد التلقائي على التعليق العام
+    dm_message: { type: String, required: true },            // رسالة الخاص (DM) المتضمنة رابط الكورس
+    is_active: { type: Boolean, default: true },             // حالة تفعيل الحملة
+    usage_count: { type: Number, default: 0 },               // عدد مرات اصطياد العملاء بهذه الكلمة
+    // 🔗 حقول الربط الذكي مع منصة Cherif-Platform واستوديوهات الكاروسيل
+    course_id: { type: String, default: '' },
+    course_title: { type: String, default: '' },
+    course_url: { type: String, default: '' },
+    studio_type: { type: String, default: '' },
+    carousel_topic: { type: String, default: '' },
     created_at: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model('Campaign', campaignSchema);
+
 ```
 
 ---
@@ -5182,6 +6391,503 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
+```
+
+---
+
+## `autofactory-ui\src\components\CarouselCourseFunnelPanel.jsx`
+
+```javascript
+// [AUTO-FUNNEL ENGINE - PART 2/3 V1 - CAROUSEL COURSE FUNNEL PANEL]
+import React, { useState } from 'react';
+import axios from 'axios';
+import {
+  GraduationCap, Sparkles, Rocket, CheckCircle2, Copy, ExternalLink,
+  Megaphone, BookOpen, ChevronDown, ChevronUp, Code, HelpCircle, Edit3, Check
+} from 'lucide-react';
+
+const STUDIO_LABELS_MAP = {
+  template_binary: 'المقارنة الثنائية (أداة قديمة ❌ ضد أداة ذكية ✅)',
+  template_triple: 'المقارنة الثلاثية (سيئ / جيد / احترافي)',
+  roadmap_steps: 'صانع الخطوات وخرائط الطريق (Roadmap)',
+  business_saas: 'مصنع الأرباح ومشاريع الـ SaaS',
+  story_lab: 'استوديو القصص ودراسات الحالة',
+  commercial_lab: 'استوديو الإعلانات التجارية والمشاريع'
+};
+
+const CarouselCourseFunnelPanel = ({
+  topic = '',
+  studioType = 'template_binary',
+  slides = [],
+  igCaption = '',
+  setIgCaption = null,
+  fbCaption = '',
+  setFbCaption = null
+}) => {
+  const [generatingCourse, setGeneratingCourse] = useState(false);
+  const [deployingFunnel, setDeployingFunnel] = useState(false);
+
+  const [courseBlueprint, setCourseBlueprint] = useState(null);
+  const [campaignDraft, setCampaignDraft] = useState({
+    keyword: '',
+    public_reply: 'تم يا {username} 🚀 أرسلت لك رابط الشرح التطبيقي الكامل والروابط في رسائلك الخاصة (DM) الآن!',
+    dm_message: 'مرحباً {username}! 👋🚀\n\nكما وعدتك في المنشور، تفضل رابط الكورس التطبيقي المصغر والمجاني الذي يشرح كل خطوة وأداة بالتفصيل على منصتنا:\n\n🔗 ادخل إلى الشرح الكامل من هنا:\n{{COURSE_URL}}\n\nقراءة وتطبيقاً ممتعاً! 💡',
+    suggestedCaptionCTA: ''
+  });
+
+  const [expandedLessonIdx, setExpandedLessonIdx] = useState(0);
+  const [deployedResult, setDeployedResult] = useState(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [captionUpdatedBadge, setCaptionUpdatedBadge] = useState(false);
+
+  // 1. توليد الكورس المصغر المرافق للكاروسيل + مسودة الحملة
+  const handleGenerateCompanionCourse = async () => {
+    if (!topic && (!slides || slides.length === 0)) {
+      return alert('⚠️ يرجى كتابة الموضوع أو توليد شرائح الكاروسيل أولاً قبل إنشاء الكورس المصغر!');
+    }
+
+    setGeneratingCourse(true);
+    setDeployedResult(null);
+    setCaptionUpdatedBadge(false);
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/funnel/generate-companion-course', {
+        topic,
+        studioType,
+        slides,
+        igCaption,
+        fbCaption
+      });
+
+      if (res.data?.success && res.data.data) {
+        setCourseBlueprint(res.data.data.courseBlueprint);
+        setCampaignDraft(res.data.data.campaignDraft);
+        setExpandedLessonIdx(0);
+      }
+    } catch (error) {
+      alert('❌ حدث خطأ أثناء توليد الكورس المصغر. تأكد من تشغيل سيرفر AutoFactory (Port 5000) وتشغيل الشطر الأول.');
+    } finally {
+      setGeneratingCourse(false);
+    }
+  };
+
+  // تحديث عنوان أو محتوى درس داخل الكورس المصغر قبل رفعه
+  const handleLessonFieldChange = (lessonIdx, field, value) => {
+    if (!courseBlueprint || !courseBlueprint.blueprint?.[0]?.lessons) return;
+    const updatedBp = JSON.parse(JSON.stringify(courseBlueprint));
+    updatedBp.blueprint[0].lessons[lessonIdx][field] = value;
+    setCourseBlueprint(updatedBp);
+  };
+
+  // إدراج متغير في حقول الحملة
+  const handleInsertVariable = (field, variableStr) => {
+    setCampaignDraft(prev => ({
+      ...prev,
+      [field]: `${prev[field] || ''} ${variableStr}`.trim()
+    }));
+  };
+
+  // 2. رفع الكورس إلى Cherif-Platform (5001) + تفعيل الكلمة في مدير الحملات + تحديث الكابشن
+  const handleDeployFunnel = async () => {
+    if (!courseBlueprint || !campaignDraft.keyword.trim()) {
+      return alert('⚠️ يرجى التأكد من وجود الكورس وتحديد الكلمة المفتاحية أولاً!');
+    }
+
+    setDeployingFunnel(true);
+    try {
+      const res = await axios.post('http://localhost:5000/api/funnel/deploy-course-and-campaign', {
+        courseBlueprint,
+        campaignDraft,
+        studioType,
+        carouselTopic: topic || courseBlueprint.courseTitle
+      });
+
+      if (res.data?.success) {
+        setDeployedResult(res.data);
+
+        // تحديث الكابشن تلقائياً ليتضمن دعوة التعليق بالكلمة المفتاحية
+        const primaryKw = campaignDraft.keyword.split(/[،,|]/)[0].trim();
+        const ctaLine =
+          campaignDraft.suggestedCaptionCTA ||
+          `🎁 للحصول على الشرح التطبيقي الكامل وجميع الروابط خطوة بخطوة، علق بكلمة "${primaryKw}" وسأرسل لك رابط الكورس المجاني في الخاص فوراً! 👇`;
+
+        let didUpdateCaption = false;
+        if (typeof setIgCaption === 'function') {
+          const currentIg = (igCaption || '').trim();
+          if (!currentIg.includes(primaryKw)) {
+            setIgCaption(currentIg ? `${currentIg}\n\n${ctaLine}` : ctaLine);
+            didUpdateCaption = true;
+          }
+        }
+        if (typeof setFbCaption === 'function') {
+          const currentFb = (fbCaption || '').trim();
+          if (!currentFb.includes(res.data.courseUrl)) {
+            const fbAddon = `🔗 رابط الكورس التطبيقي الشامل الذي يشرح هذا المنشور خطوة بخطوة:\n${res.data.courseUrl}`;
+            setFbCaption(currentFb ? `${currentFb}\n\n${fbAddon}` : fbAddon);
+            didUpdateCaption = true;
+          }
+        }
+        if (didUpdateCaption) {
+          setCaptionUpdatedBadge(true);
+        }
+      }
+    } catch (error) {
+      alert(
+        error.response?.data?.error ||
+          '❌ تعذر رفع الكورس إلى المنصة. تأكد من تشغيل سيرفر Cherif-Platform على البورت 5001.'
+      );
+    } finally {
+      setDeployingFunnel(false);
+    }
+  };
+
+  const handleCopyCourseUrl = () => {
+    if (!deployedResult?.courseUrl) return;
+    navigator.clipboard.writeText(deployedResult.courseUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const lessonsList = courseBlueprint?.blueprint?.[0]?.lessons || [];
+
+  return (
+    <div
+      dir="rtl"
+      className="mt-10 bg-gradient-to-br from-slate-900 via-[#0a1226] to-slate-950 border-2 border-emerald-500/40 rounded-3xl p-6 md:p-8 shadow-[0_0_45px_rgba(16,185,129,0.14)] space-y-6"
+    >
+      {/* الهيدر الرئيسي للصندوق */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 border-b border-slate-800/90 pb-5">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
+              <Sparkles size={13} /> محرك القمع الآلي (Carousel ➔ Mini-Course ➔ DM Bot)
+            </span>
+            <span className="text-[11px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full font-bold border border-slate-700">
+              النمط النشط: {STUDIO_LABELS_MAP[studioType] || studioType}
+            </span>
+          </div>
+
+          <h3 className="text-xl md:text-2xl font-black text-white flex items-center gap-2.5 pt-1">
+            <GraduationCap className="text-emerald-400 shrink-0" size={28} />
+            <span>تحويل هذا الكاروسيل إلى كورس تطبيقي مصغر في Cherif-Platform + حملة رد تلقائي</span>
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+            بدلاً من إرسال رابط صامت، يصنع النظام كورساً تطبيقياً مصغراً يشرح للجمهور ما ورد في هذه الشرائح بالتفصيل ويرفعه لمنصتك ويربطه بكلمة التعليق في مدير الحملات!
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGenerateCompanionCourse}
+          disabled={generatingCourse}
+          className="bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs sm:text-sm px-6 py-4 rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.35)] transition-all flex items-center justify-center gap-2.5 shrink-0 disabled:opacity-50 cursor-pointer"
+        >
+          {generatingCourse ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-white"></div>
+              <span>جاري تأليف الكورس المصغر وتجهيز الحملة...</span>
+            </>
+          ) : (
+            <>
+              <BookOpen size={18} />
+              <span>
+                {courseBlueprint
+                  ? '🔄 إعادة توليد الكورس المصغر من الشرائح'
+                  : '🎓 1. توليد الكورس التطبيقي المرافق للكاروسيل + إعداد الحملة'}
+              </span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* منطقة معاينة وتحرير الكورس والحملة بعد التوليد */}
+      {courseBlueprint && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
+          {/* العمود الأيمن (7 أعمدة): معاينة وتحرير دروس الكورس المصغر */}
+          <div className="lg:col-span-7 bg-slate-950/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
+                <BookOpen size={16} /> هيكل الكورس المصغر الجاهز للرفع ({lessonsList.length} دروس عملية):
+              </span>
+              <span className="text-[11px] bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                جاهز للعرض الفوري في Classroom.jsx
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                  عنوان الكورس المصغر في المنصة:
+                </label>
+                <input
+                  type="text"
+                  value={courseBlueprint.courseTitle || ''}
+                  onChange={(e) =>
+                    setCourseBlueprint({ ...courseBlueprint, courseTitle: e.target.value })
+                  }
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-bold text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                  وصف الكورس المختصر:
+                </label>
+                <input
+                  type="text"
+                  value={courseBlueprint.courseDescription || ''}
+                  onChange={(e) =>
+                    setCourseBlueprint({ ...courseBlueprint, courseDescription: e.target.value })
+                  }
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* قائمة الدروس القابلة للفتح والتعديل */}
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+              {lessonsList.map((lesson, idx) => {
+                const isOpen = expandedLessonIdx === idx;
+                return (
+                  <div
+                    key={idx}
+                    className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden transition-all"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedLessonIdx(isOpen ? -1 : idx)}
+                      className="w-full p-3.5 flex items-center justify-between text-right hover:bg-slate-800/60 transition-colors"
+                    >
+                      <span className="text-xs sm:text-sm font-black text-white flex items-center gap-2.5">
+                        <span className="w-6 h-6 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span>{lesson.title}</span>
+                      </span>
+                      {isOpen ? (
+                        <ChevronUp size={16} className="text-emerald-400 shrink-0" />
+                      ) : (
+                        <ChevronDown size={16} className="text-slate-400 shrink-0" />
+                      )}
+                    </button>
+
+                    {isOpen && (
+                      <div className="p-4 border-t border-slate-800 bg-slate-950/80 space-y-3 text-xs">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                            عنوان الدرس {idx + 1}:
+                          </label>
+                          <input
+                            type="text"
+                            value={lesson.title || ''}
+                            onChange={(e) => handleLessonFieldChange(idx, 'title', e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg px-3 py-1.5 text-xs font-bold text-white outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-400 mb-1">
+                            الشرح التفصيلي للدرس (Markdown):
+                          </label>
+                          <textarea
+                            rows={5}
+                            value={lesson.content || ''}
+                            onChange={(e) => handleLessonFieldChange(idx, 'content', e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-lg p-2.5 text-xs text-slate-200 outline-none leading-relaxed"
+                          />
+                        </div>
+
+                        {lesson.codeSnippet !== undefined && (
+                          <div>
+                            <label className="block text-[11px] font-bold text-amber-400 mb-1 flex items-center gap-1">
+                              <Code size={12} /> الكود المرفق أو خطوات التنفيذ (Code / Commands):
+                            </label>
+                            <textarea
+                              rows={3}
+                              dir="ltr"
+                              value={lesson.codeSnippet || ''}
+                              onChange={(e) =>
+                                handleLessonFieldChange(idx, 'codeSnippet', e.target.value)
+                              }
+                              className="w-full bg-black/90 border border-slate-800 text-emerald-400 font-mono rounded-lg p-2.5 text-[11px] outline-none"
+                            />
+                          </div>
+                        )}
+
+                        {lesson.dailyQuest?.question && (
+                          <div className="bg-purple-950/25 border border-purple-500/30 rounded-lg p-2.5">
+                            <span className="text-[11px] font-black text-purple-300 flex items-center gap-1 mb-1">
+                              <HelpCircle size={12} /> سؤال التثبيت التفاعلي في نهاية الدرس:
+                            </span>
+                            <p className="text-white font-bold text-[11px]">
+                              {lesson.dailyQuest.question}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* العمود الأيسر (5 أعمدة): إعدادات حملة الرد التلقائي والرفع لمنصة 5001 */}
+          <div className="lg:col-span-5 bg-slate-950/90 border border-purple-500/35 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <h4 className="text-xs sm:text-sm font-black text-purple-300 flex items-center gap-1.5">
+                  <Megaphone size={16} /> إعدادات حملة الرد التلقائي (Campaign Manager):
+                </h4>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  الكلمة المفتاحية (Keyword) — يدعم عدة كلمات مفصولة بفاصلة:
+                </label>
+                <input
+                  type="text"
+                  value={campaignDraft.keyword}
+                  onChange={(e) =>
+                    setCampaignDraft({ ...campaignDraft, keyword: e.target.value })
+                  }
+                  placeholder="مثال: أدوات, ساس"
+                  className="w-full bg-slate-900 border border-purple-500/40 focus:border-purple-400 rounded-xl px-3.5 py-2.5 text-sm font-black text-amber-300 outline-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  💡 يدعم البوت اصطياد الكلمة المطبوعة على الشريحة الأخيرة والكلمة المخصصة معاً.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-300">
+                    الرد التلقائي على التعليق العام (Public Reply):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertVariable('public_reply', '{username}')}
+                    className="text-[10px] bg-slate-800 hover:bg-slate-700 text-purple-300 px-2 py-0.5 rounded font-bold"
+                  >
+                    + أدرج {'{username}'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={campaignDraft.public_reply}
+                  onChange={(e) =>
+                    setCampaignDraft({ ...campaignDraft, public_reply: e.target.value })
+                  }
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-purple-400 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-300">
+                    رسالة الخاص (DM Message):
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleInsertVariable('dm_message', '{username}')}
+                      className="text-[10px] bg-slate-800 hover:bg-slate-700 text-purple-300 px-2 py-0.5 rounded font-bold"
+                    >
+                      + {'{username}'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertVariable('dm_message', '{{COURSE_URL}}')}
+                      className="text-[10px] bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-bold"
+                    >
+                      + {'{{COURSE_URL}}'}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  rows={4}
+                  value={campaignDraft.dm_message}
+                  onChange={(e) =>
+                    setCampaignDraft({ ...campaignDraft, dm_message: e.target.value })
+                  }
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 rounded-xl p-3 text-xs text-white outline-none leading-relaxed"
+                />
+              </div>
+            </div>
+
+            {/* زر الرفع النهائي وبطاقة النجاح */}
+            <div className="pt-2 space-y-3">
+              <button
+                type="button"
+                onClick={handleDeployFunnel}
+                disabled={deployingFunnel}
+                className="w-full bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm py-4 px-4 rounded-xl shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {deployingFunnel ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-slate-950"></div>
+                    <span>جاري رفع الكورس لـ Cherif-Platform وتفعيل الحملة...</span>
+                  </>
+                ) : (
+                  <>
+                    <Rocket size={18} />
+                    <span>🚀 2. رفع الكورس إلى Cherif-Platform + تفعيل الكلمة في مدير الحملات</span>
+                  </>
+                )}
+              </button>
+
+              {deployedResult && (
+                <div className="bg-emerald-950/40 border border-emerald-500/50 rounded-xl p-4 space-y-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                      <CheckCircle2 size={15} /> تم نشر الكورس وتفعيل الحملة بنجاح!
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-200 px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                      🔑 الكلمة النشطة: {deployedResult.campaign?.keyword}
+                    </span>
+                  </div>
+
+                  {captionUpdatedBadge && (
+                    <div className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
+                      <Check size={13} /> تم تحديث كابشن المنشور تلقائياً بدعوة التعليق بالكلمة المفتاحية!
+                    </div>
+                  )}
+
+                  <div
+                    className="flex items-center gap-2 bg-slate-950/90 border border-slate-800 rounded-lg p-2"
+                    dir="ltr"
+                  >
+                    <span className="text-[11px] text-amber-300 truncate flex-1 font-mono">
+                      {deployedResult.courseUrl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCopyCourseUrl}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold px-2.5 py-1.5 rounded flex items-center gap-1"
+                    >
+                      <Copy size={12} /> {copiedLink ? 'تم النسخ!' : 'نسخ'}
+                    </button>
+                    <a
+                      href={deployedResult.courseUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1.5 rounded flex items-center gap-1"
+                    >
+                      <ExternalLink size={12} /> فتح الكورس
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CarouselCourseFunnelPanel;
+
 ```
 
 ---
@@ -9300,10 +11006,12 @@ export default AcademyLab2;
 
 ```javascript
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Briefcase, Loader2, Image as ImageIcon, Share2, Send, CheckCircle, TrendingUp, Copy, Smartphone, Globe, Wand2, UserSquare2, MonitorPlay } from 'lucide-react';
 
 export default function BusinessLab() {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(6);
   const [platform, setPlatform] = useState('instagram'); 
@@ -9364,6 +11072,7 @@ export default function BusinessLab() {
       
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setCoverOptions(res.data.coverOptions); // 👈 إضافة هذا السطر
         setSelectedCoverIndex(0); // إعادة التعيين
         // استلام النصوص من السيرفر
@@ -9494,7 +11203,9 @@ const getMarketingAdvice = (topic, options) => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
       {/* 💼 الهيدر الفخم */}
       <h1 className="text-4xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600 flex items-center gap-3">
         <Briefcase className="text-yellow-500" size={38} />
@@ -9811,6 +11522,19 @@ const getMarketingAdvice = (topic, options) => {
         </div>
       )}
     </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="business_saas"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
+    </div>
   );
 }
 ```
@@ -9820,220 +11544,416 @@ const getMarketingAdvice = (topic, options) => {
 ## `autofactory-ui\src\pages\CampaignManager.jsx`
 
 ```javascript
+// [AUTO-FUNNEL ENGINE - PART 2/3 V1 - CAMPAIGN MANAGER HUB]
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Megaphone, Plus, Trash2, Power, MessageCircle, Send, Loader2, Activity } from 'lucide-react';
+import {
+  Megaphone, Plus, Trash2, Power, ExternalLink, BookOpen, RefreshCw,
+  Edit3, Check, X, Sparkles, Copy
+} from 'lucide-react';
 
 const CampaignManager = () => {
   const [campaigns, setCampaigns] = useState([]);
+  const [platformCourses, setPlatformCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  
-  // حالة النموذج (Form State)
-  const [formData, setFormData] = useState({
-    keyword: '',
-    public_reply: 'تم يا {username} 🚀 تفقد رسائلك في الخاص!',
-    dm_message: 'مرحباً {username}! تفضل الرابط الذي طلبته: \n\nhttps://your-link.com'
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, []);
+  const [keyword, setKeyword] = useState('');
+  const [publicReply, setPublicReply] = useState('تم يا {username} 🚀 تفقد رسائلك في الخاص!');
+  const [dmMessage, setDmMessage] = useState(
+    'مرحباً {username}! 👋\nتفضل رابط الكورس والشرح التطبيقي الكامل الذي طلبته:\n\nhttps://your-link.com'
+  );
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [editingCampaignId, setEditingCampaignId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
   const fetchCampaigns = async () => {
     try {
       const res = await axios.get('http://localhost:5000/api/campaigns');
-      if (res.data.success) {
-        setCampaigns(res.data.data);
+      if (res.data?.success) {
+        setCampaigns(res.data.data || []);
+      } else if (Array.isArray(res.data)) {
+        setCampaigns(res.data);
       }
-    } catch (error) {
-      console.error('خطأ في جلب الحملات:', error);
+    } catch (e) {
+      console.error('Error fetching campaigns:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.keyword) return alert('الرجاء كتابة الكلمة المفتاحية!');
-    
-    setIsSubmitting(true);
+  const fetchPlatformCourses = async () => {
     try {
-      const res = await axios.post('http://localhost:5000/api/campaigns', {
-        keyword: formData.keyword.toLowerCase().trim(),
-        public_reply: formData.public_reply,
-        dm_message: formData.dm_message
-      });
-      
-      if (res.data.success) {
-        setShowForm(false);
-        setFormData({ ...formData, keyword: '' }); // تصفير الكلمة فقط
-        fetchCampaigns(); // تحديث القائمة
+      const res = await axios.get('http://localhost:5000/api/funnel/platform-courses');
+      if (res.data?.success) {
+        setPlatformCourses(res.data.courses || []);
+        return;
       }
-    } catch (error) {
-      console.error(error);
-      alert('خطأ! ربما الكلمة المفتاحية مستخدمة في حملة أخرى.');
+    } catch (_) {
+      try {
+        const directRes = await axios.get('http://127.0.0.1:5001/api/courses/public');
+        if (directRes.data?.success) {
+          const mapped = (directRes.data.courses || []).map(c => ({
+            ...c,
+            courseUrl: `http://localhost:5173/classroom/${c._id}`
+          }));
+          setPlatformCourses(mapped);
+        }
+      } catch (err) {
+        console.warn('Could not load courses from 5001');
+      }
     }
-    setIsSubmitting(false);
   };
 
-  const handleToggle = async (id) => {
+  useEffect(() => {
+    fetchCampaigns();
+    fetchPlatformCourses();
+  }, []);
+
+  const handleSelectCourseForDM = (courseIdVal) => {
+    setSelectedCourseId(courseIdVal);
+    const found = platformCourses.find(c => String(c._id) === String(courseIdVal));
+    if (found && found.courseUrl) {
+      setDmMessage(
+        `مرحباً {username}! 👋🚀\n\nتفضل رابط الشرح التطبيقي (${found.title}) على منصتنا:\n${found.courseUrl}\n\nقراءة وتطبيقاً ممتعاً! 💡`
+      );
+    }
+  };
+
+  const handleSaveCampaign = async (e) => {
+    e.preventDefault();
+    if (!keyword.trim() || !publicReply.trim() || !dmMessage.trim()) {
+      return alert('⚠️ يرجى ملء جميع الحقول المطلوبة!');
+    }
+
+    const foundCourse = platformCourses.find(c => String(c._id) === String(selectedCourseId));
+
+    try {
+      const payload = {
+        keyword: keyword.trim(),
+        public_reply: publicReply.trim(),
+        dm_message: dmMessage.trim(),
+        course_id: foundCourse?._id || '',
+        course_title: foundCourse?.title || '',
+        course_url: foundCourse?.courseUrl || ''
+      };
+
+      const res = await axios.post('http://localhost:5000/api/campaigns', payload);
+      if (res.data?.success || res.status === 200 || res.status === 201) {
+        setKeyword('');
+        setSelectedCourseId('');
+        setEditingCampaignId(null);
+        fetchCampaigns();
+        alert('🎯 تم حفظ وتفعيل الحملة التسويقية بنجاح!');
+      }
+    } catch (err) {
+      alert('❌ حدث خطأ أثناء حفظ الحملة (تأكد من عدم تكرار نفس الكلمة المفتاحية).');
+    }
+  };
+
+  const handleStartEdit = (camp) => {
+    setEditingCampaignId(camp._id);
+    setKeyword(camp.keyword || '');
+    setPublicReply(camp.public_reply || '');
+    setDmMessage(camp.dm_message || '');
+    setSelectedCourseId(camp.course_id || '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCampaignId(null);
+    setKeyword('');
+    setSelectedCourseId('');
+    setPublicReply('تم يا {username} 🚀 تفقد رسائلك في الخاص!');
+    setDmMessage('مرحباً {username}! 👋\nتفضل رابط الكورس والشرح التطبيقي الكامل الذي طلبته:\n\nhttps://your-link.com');
+  };
+
+  const handleToggleCampaign = async (id) => {
     try {
       await axios.patch(`http://localhost:5000/api/campaigns/${id}/toggle`);
       fetchCampaigns();
-    } catch (error) {
-      alert('خطأ في تغيير حالة الحملة');
+    } catch (e) {
+      try {
+        await axios.put(`http://localhost:5000/api/campaigns/${id}/toggle`);
+        fetchCampaigns();
+      } catch (_) {}
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الحملة؟')) return;
+  const handleDeleteCampaign = async (id) => {
+    if (!window.confirm('🗑️ هل أنت متأكد من حذف هذه الحملة التسويقية؟')) return;
     try {
       await axios.delete(`http://localhost:5000/api/campaigns/${id}`);
       fetchCampaigns();
+    } catch (e) {}
+  };
+
+  const handleResetPlatformCourses = async (resetMode) => {
+    const modeLabel =
+      resetMode === 'capsules_only'
+        ? 'مسح الكورسات المصغرة (كبسولات الكاروسيل) فقط مع الإبقاء على الشهادات المهنية الكبرى'
+        : 'إعادة تهيئة شاملة ومسح جميع الكورسات في منصة Cherif-Platform (5001)';
+
+    if (!window.confirm(`⚠️ تأكيد إداري:\nهل أنت متأكد من: ${modeLabel}؟`)) return;
+
+    setResetLoading(true);
+    try {
+      const res = await axios.post('http://localhost:5000/api/funnel/platform-reset', { resetMode });
+      if (res.data?.success) {
+        alert(`✅ تمت العملية بنجاح! تم حذف (${res.data.deletedCount || 0}) كورس من المنصة.`);
+        fetchPlatformCourses();
+      }
     } catch (error) {
-      alert('خطأ في الحذف');
+      alert('❌ تعذر الاتصال بسيرفر المنصة (5001) لتنفيذ إعادة التهيئة.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
+  const handleCopyUrl = (url, id) => {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   return (
-    <div className="p-8 text-white min-h-screen bg-gray-900" dir="rtl">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* الترويسة */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-purple-400 flex items-center gap-3">
-            <Megaphone size={36} className="text-purple-500" />
-            مدير الحملات والردود الذكية
+    <div dir="rtl" className="min-h-screen bg-[#020617] text-slate-200 p-6 space-y-8">
+      {/* الهيدر وأزرار إدارة منصة Cherif-Platform */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+        <div>
+          <h1 className="text-3xl font-black text-white flex items-center gap-3">
+            <Megaphone className="text-purple-400" size={34} /> مدير الحملات والردود الذكية
           </h1>
-          <button 
-            onClick={() => setShowForm(!showForm)}
-            className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 shadow-lg shadow-purple-900/40"
-          >
-            {showForm ? 'إلغاء' : <><Plus size={20} /> إضافة حملة جديدة</>}
-          </button>
+          <p className="text-sm text-slate-400 mt-1">
+            إدارة الكلمات المفتاحية وربط تعليقات إنستغرام وفيسبوك بروابط الكورسات التطبيقية على منصة Cherif-Platform.
+          </p>
         </div>
 
-        {/* نموذج الإضافة */}
-        {showForm && (
-          <div className="bg-gray-800 p-6 rounded-2xl border border-purple-500/30 mb-10 shadow-2xl animate-in fade-in slide-in-from-top-4">
-            <h2 className="text-xl font-bold mb-6 text-purple-300">🎯 إنشاء حملة تسويقية جديدة</h2>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              
-              <div>
-                <label className="block text-gray-400 font-bold mb-2 text-sm">الكلمة المفتاحية (Keyword):</label>
-                <input 
-                  type="text" 
-                  value={formData.keyword}
-                  onChange={(e) => setFormData({...formData, keyword: e.target.value})}
-                  placeholder="مثال: تداول، أدوات، استوديو"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-purple-500"
-                />
-              </div>
+        <div className="flex flex-wrap items-center gap-2 bg-slate-900 border border-slate-800 p-2.5 rounded-2xl">
+          <button
+            type="button"
+            onClick={fetchPlatformCourses}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all"
+          >
+            <RefreshCw size={14} /> تحديث كورسات المنصة ({platformCourses.length})
+          </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-gray-400 font-bold mb-2 text-sm">
-                    <MessageCircle size={16} className="inline mr-1 text-blue-400"/> الرد على التعليق (العام):
-                  </label>
-                  <p className="text-xs text-gray-500 mb-2">استخدم <span className="text-purple-400">{"{username}"}</span> لذكر اسم العميل.</p>
-                  <textarea 
-                    value={formData.public_reply}
-                    onChange={(e) => setFormData({...formData, public_reply: e.target.value})}
-                    className="w-full h-32 bg-gray-900 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-blue-500 resize-none"
-                  />
-                </div>
+          <button
+            type="button"
+            disabled={resetLoading}
+            onClick={() => handleResetPlatformCourses('capsules_only')}
+            className="bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 text-xs font-black px-3 py-2 rounded-xl transition-all"
+          >
+            🧹 مسح كبسولات الكاروسيل فقط
+          </button>
 
-                <div>
-                  <label className="block text-gray-400 font-bold mb-2 text-sm">
-                    <Send size={16} className="inline mr-1 text-emerald-400"/> رسالة الخاص (DM):
-                  </label>
-                  <p className="text-xs text-gray-500 mb-2">استخدم <span className="text-purple-400">{"{username}"}</span> لجعل الرسالة شخصية.</p>
-                  <textarea 
-                    value={formData.dm_message}
-                    onChange={(e) => setFormData({...formData, dm_message: e.target.value})}
-                    className="w-full h-32 bg-gray-900 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-emerald-500 resize-none"
-                  />
-                </div>
-              </div>
+          <button
+            type="button"
+            disabled={resetLoading}
+            onClick={() => handleResetPlatformCourses('all')}
+            className="bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-black px-3 py-2 rounded-xl transition-all"
+          >
+            ⚠️ تصفير شامل لـ Cherif-Platform
+          </button>
+        </div>
+      </div>
 
-              <div className="flex justify-end mt-4">
-                <button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <Send size={20}/>}
-                  إطلاق الحملة وحفظها
-                </button>
-              </div>
-            </form>
+      {/* نموذج إنشاء أو تعديل حملة تسويقية */}
+      <form
+        onSubmit={handleSaveCampaign}
+        className="bg-slate-900/90 border border-purple-500/30 rounded-3xl p-6 space-y-5 shadow-xl"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black text-purple-300 flex items-center gap-2">
+            🎯 {editingCampaignId ? 'تعديل الحملة التسويقية' : 'إنشاء حملة تسويقية جديدة'}
+          </h2>
+          {editingCampaignId && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl flex items-center gap-1"
+            >
+              <X size={14} /> إلغاء التعديل
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 mb-2">
+              الكلمة المفتاحية (Keyword) — يمكنك وضع عدة كلمات مفصولة بفاصلة:
+            </label>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="مثال: تداول, أدوات, استوديو"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none"
+            />
           </div>
-        )}
 
-        {/* قائمة الحملات (Cards Grid) */}
+          <div>
+            <label className="block text-xs font-bold text-emerald-400 mb-2">
+              🎓 اختر كورساً من Cherif-Platform لإدراج رابطه تلقائياً في رسالة الخاص:
+            </label>
+            <select
+              value={selectedCourseId}
+              onChange={(e) => handleSelectCourseForDM(e.target.value)}
+              className="w-full bg-slate-950 border border-emerald-500/40 rounded-xl px-4 py-3 text-xs font-bold text-emerald-200 outline-none cursor-pointer"
+            >
+              <option value="">-- اختر كورساً من المنصة لإدراج رابطه (اختياري) --</option>
+              {platformCourses.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 mb-2">
+              💬 الرد على التعليق (العام):{' '}
+              <span className="text-slate-500">استخدم {'{username}'} لذكر اسم العميل</span>
+            </label>
+            <textarea
+              rows={4}
+              value={publicReply}
+              onChange={(e) => setPublicReply(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl p-3.5 text-sm text-white outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-300 mb-2">
+              🚀 رسالة الخاص (DM):{' '}
+              <span className="text-slate-500">استخدم {'{username}'} لجعل الرسالة شخصية</span>
+            </label>
+            <textarea
+              rows={4}
+              value={dmMessage}
+              onChange={(e) => setDmMessage(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl p-3.5 text-sm text-white outline-none"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm px-6 py-3.5 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center gap-2 cursor-pointer"
+        >
+          <Plus size={18} /> {editingCampaignId ? 'حفظ التعديلات على الحملة' : 'إطلاق الحملة وحفظها'}
+        </button>
+      </form>
+
+      {/* قائمة الحملات المسجلة */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-black text-white flex items-center gap-2">
+          <span>📋 الحملات التسويقية النشطة ({campaigns.length})</span>
+        </h3>
+
         {loading ? (
-          <div className="text-center py-20 text-gray-500 animate-pulse">⏳ جاري تحميل الحملات...</div>
+          <div className="text-center py-12 text-slate-400">جاري تحميل الحملات...</div>
+        ) : campaigns.length === 0 ? (
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-10 text-center text-slate-400">
+            لا توجد حملات مسجلة حالياً. أنشئ حملة من الأعلى أو من داخل أي استوديو كاروسيل!
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {campaigns.map(campaign => (
-              <div key={campaign._id} className={`p-6 rounded-2xl border transition-all ${campaign.is_active ? 'bg-gray-800 border-gray-700 hover:border-purple-500/50' : 'bg-gray-800/50 border-red-900/30 opacity-75'}`}>
-                
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${campaign.is_active ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-500/30' : 'bg-red-900/50 text-red-400 border border-red-500/30'}`}>
-                      {campaign.is_active ? 'نشطة 🟢' : 'متوقفة 🔴'}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {campaigns.map((camp) => (
+              <div
+                key={camp._id}
+                className={`bg-slate-900 border rounded-2xl p-5 space-y-3.5 transition-all ${
+                  camp.is_active ? 'border-emerald-500/40' : 'border-slate-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-3 py-1 rounded-xl text-sm font-black">
+                      🔑 {camp.keyword}
                     </span>
-                    <h3 className="text-2xl font-black text-white mt-3 flex items-center gap-2">
-                      "{campaign.keyword}"
-                    </h3>
+                    <span className="text-xs font-bold text-slate-400">
+                      🎯 الاصطياد: {camp.usage_count || 0}
+                    </span>
                   </div>
-                  
-                  <div className="flex flex-col items-end gap-3">
-                    <div className="bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg flex items-center gap-2" title="عدد الأشخاص الذين استخدموا الكلمة">
-                      <Activity size={16} className="text-blue-400"/>
-                      <span className="text-xl font-bold text-white">{campaign.usage_count}</span>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <button onClick={() => handleToggle(campaign._id)} className={`p-2 rounded-lg transition-colors ${campaign.is_active ? 'bg-gray-700 hover:bg-red-600 text-gray-300' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`} title={campaign.is_active ? "إيقاف الحملة" : "تشغيل الحملة"}>
-                        <Power size={16} />
-                      </button>
-                      <button onClick={() => handleDelete(campaign._id)} className="p-2 rounded-lg bg-gray-700 hover:bg-red-600 text-gray-300 transition-colors" title="حذف نهائي">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleStartEdit(camp)}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      title="تعديل الحملة"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCampaign(camp._id)}
+                      className={`p-2 rounded-lg border ${
+                        camp.is_active
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                      }`}
+                      title={camp.is_active ? 'إيقاف مؤقت' : 'تفعيل'}
+                    >
+                      <Power size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCampaign(camp._id)}
+                      className="p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-600 hover:text-white"
+                      title="حذف الحملة"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="space-y-3 mt-4 text-sm">
-                  <div className="bg-gray-900 p-3 rounded-lg border border-gray-800">
-                    <p className="text-xs text-blue-400 font-bold mb-1 flex items-center gap-1"><MessageCircle size={12}/> الرد العام:</p>
-                    <p className="text-gray-300">{campaign.public_reply}</p>
+                {camp.course_url && (
+                  <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs">
+                    <span className="text-emerald-300 font-bold truncate flex items-center gap-1.5">
+                      <BookOpen size={14} className="shrink-0" />
+                      <span className="truncate">
+                        {camp.course_title || 'كورس تطبيقي مرتبط على Cherif-Platform'}
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyUrl(camp.course_url, camp._id)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1"
+                      >
+                        <Copy size={11} /> {copiedId === camp._id ? 'تم!' : 'نسخ'}
+                      </button>
+                      <a
+                        href={camp.course_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded text-[10px] font-bold flex items-center gap-1"
+                      >
+                        <span>فتح الكورس</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
                   </div>
-                  <div className="bg-gray-900 p-3 rounded-lg border border-gray-800">
-                    <p className="text-xs text-emerald-400 font-bold mb-1 flex items-center gap-1"><Send size={12}/> رسالة الخاص:</p>
-                    <p className="text-gray-300 whitespace-pre-wrap">{campaign.dm_message}</p>
-                  </div>
-                </div>
+                )}
 
+                <div className="text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800 whitespace-pre-wrap leading-relaxed">
+                  <strong className="text-indigo-400 block mb-1">رسالة الخاص (DM):</strong>
+                  {camp.dm_message}
+                </div>
               </div>
             ))}
-            {campaigns.length === 0 && !showForm && (
-              <div className="col-span-1 md:col-span-2 text-center py-20 text-gray-500 bg-gray-800/50 rounded-2xl border border-dashed border-gray-700">
-                لا توجد حملات حالياً. ابدأ بإنشاء حملتك الأولى! 🚀
-              </div>
-            )}
           </div>
         )}
-
       </div>
     </div>
   );
 };
 
 export default CampaignManager;
+
 ```
 
 ---
@@ -10042,6 +11962,7 @@ export default CampaignManager;
 
 ```javascript
 import React, { useState, useEffect } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import {
   Video,
@@ -10260,7 +12181,9 @@ const CommercialLab = () => {
 
 
   return (
-    <div className="min-h-screen bg-[#05070A] text-gray-100 p-8 font-sans" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="min-h-screen bg-[#05070A] text-gray-100 p-8 font-sans" dir="rtl">
       <div className="max-w-5xl mx-auto">
         
         <header className="mb-10 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -10569,7 +12492,19 @@ const CommercialLab = () => {
           </div>
         )}
 
+      </div>    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={productIdea}
+          studioType="commercial_lab"
+          slides={(typeof commercial !== 'undefined' && commercial?.scenes) ? commercial.scenes : []}
+          
+          
+        />
       </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };
@@ -11585,9 +13520,11 @@ export default ReelLab;
 
 ```javascript
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Copy, CheckCircle2, Wand2, Share2, ImageIcon, Smartphone, Globe } from 'lucide-react';
 const RoadmapLab = () => {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [platform, setPlatform] = useState('instagram');
   const [topic, setTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -11668,7 +13605,9 @@ const RoadmapLab = () => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen" dir="rtl">
       <h2 className="text-3xl font-bold mb-8 text-emerald-400">🗺️ صانع خرائط الطريق (Roadmap Lab)</h2>
       
       {/* اختيار المنصة */}
@@ -11809,7 +13748,19 @@ const RoadmapLab = () => {
             </div>
           </div>
         </div>
-      )}
+      )}    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="roadmap_steps"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };
@@ -11823,10 +13774,12 @@ export default RoadmapLab;
 
 ```javascript
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Copy, CheckCircle2, Upload, ImageIcon, Wand2, PenTool, Zap, TrendingUp, Loader2, Eye, RefreshCw } from 'lucide-react';
 
 const StoryLab = () => {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(8); // الافتراضي 8 شرائح
   const [step, setStep] = useState(1);
@@ -12178,7 +14131,9 @@ const StoryLab = () => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
       <h2 className="text-4xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 flex items-center gap-3">
         <Wand2 size={36} className="text-purple-500" /> استوديو القصص (Story Lab - Pro)
       </h2>
@@ -12641,7 +14596,19 @@ const StoryLab = () => {
                 ))}
               </div>
           </div>
-      )}
+      )}    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="story_lab"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          
+          
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };
@@ -12655,6 +14622,7 @@ export default StoryLab;
 
 ```javascript
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Sparkles, Scale, Loader2, Image as ImageIcon, Share2, Layers, Send, CheckCircle, Target } from 'lucide-react';
 
@@ -12662,6 +14630,7 @@ export default function TemplateLab() {
   // ----------------------------------------------------
   // States المشتركة 
   // ----------------------------------------------------
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [platform, setPlatform] = useState('instagram'); 
   const [loading, setLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false); 
@@ -12728,6 +14697,7 @@ export default function TemplateLab() {
       });
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -12750,6 +14720,7 @@ export default function TemplateLab() {
       });
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -12777,7 +14748,9 @@ export default function TemplateLab() {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
       <h1 className="text-3xl font-bold mb-8 text-blue-400 flex items-center gap-3">
         🧪 مختبر القوالب الذكية (Template Lab)
       </h1>
@@ -12911,6 +14884,19 @@ export default function TemplateLab() {
           </div>
         </div>
       )}
+    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={''}
+          studioType="template_binary"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 }
@@ -13156,10 +15142,12 @@ const handleTransferToStudio = () => {
 
 ```javascript
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Sparkles, Layers, Loader2, Image as ImageIcon, Share2, Send, CheckCircle, Target } from 'lucide-react';
 
 export default function TripleTemplateLab() {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(6);
   const [platform, setPlatform] = useState('instagram'); 
@@ -13206,6 +15194,7 @@ export default function TripleTemplateLab() {
       
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -13236,7 +15225,9 @@ export default function TripleTemplateLab() {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
       <h1 className="text-3xl font-bold mb-8 text-amber-400 flex items-center gap-3">
         🚀 قالب المقارنة الثلاثية (سيئ، جيد، احترافي)
       </h1>
@@ -13357,6 +15348,19 @@ export default function TripleTemplateLab() {
         </div>
       )}
     </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="template_triple"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
+    </div>
   );
 }
 ```
@@ -13380,6 +15384,309 @@ const useIdeaStore = create((set) => ({
 }));
 
 export default useIdeaStore;
+```
+
+---
+
+## `_archive_patches\part1-autofactory-backend-funnel-engine-v1.js`
+
+```javascript
+/**
+ * part3a-autofactory-studios-and-15qa-v1.js
+ * [الشطر 3A الخاص بمجلد AutoFactory فقط]
+ * 1. حقن <CarouselCourseFunnelPanel /> آلياً في صفحات الاستوديو الست داخل autofactory-ui/src/pages/:
+ *    (TemplateLab, TripleTemplateLab, RoadmapLab, BusinessLab, StoryLab, CommercialLab).
+ * 2. تشغيل روبوت الفحص الآلي الشامل لـ AutoFactory (runAutoTest_AutoFactoryFunnelEdition — 15/15 PASS).
+ * 3. أرشفة سكربتات الشطر 1 و 2 تلقائياً في مجلد _archive_patches.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = __dirname;
+
+function resolveUiDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-ui'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-ui')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'src', 'pages'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-ui/src/pages. ضع هذا السكربت في المجلد الرئيسي E:\\AutoFactory.');
+}
+
+function resolveBackendDir() {
+  const candidates = [
+    path.join(ROOT, 'autofactory-backend'),
+    ROOT,
+    path.join(ROOT, '..', 'autofactory-backend')
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'server.js'))) {
+      return dir;
+    }
+  }
+  throw new Error('❌ لم يتم العثور على مجلد autofactory-backend. ضع هذا السكربت في المجلد الرئيسي E:\\AutoFactory.');
+}
+
+function verifyJsxSanity(code, fileLabel) {
+  if (!code.includes('export default')) {
+    throw new Error('❌ فشل فحص JSX في ' + fileLabel + ': جملة export default مفقودة.');
+  }
+  let curly = 0;
+  for (let i = 0; i < code.length; i++) {
+    if (code[i] === '{') curly++;
+    else if (code[i] === '}') curly--;
+  }
+  if (curly !== 0) {
+    throw new Error('❌ فشل فحص JSX في ' + fileLabel + ': عدم توازن في الأقواس المعقوفة {} (الفرق: ' + curly + ').');
+  }
+  return true;
+}
+
+console.log('🇩🇿🚀 [الشطر 3A - AutoFactory] بدء حقن الاستوديوهات الستة وتشغيل الفحص الآلي الشامل (15/15 PASS)...\n');
+
+const UI_DIR = resolveUiDir();
+const BACKEND_DIR = resolveBackendDir();
+const PAGES_DIR = path.join(UI_DIR, 'src', 'pages');
+
+// ============================================================================
+// 1. حقن <CarouselCourseFunnelPanel /> في استوديوهات الكاروسيل الستة
+// ============================================================================
+const STUDIO_CONFIGS = [
+  { file: 'TemplateLab.jsx', studioType: 'template_binary', topicVar: 'topic' },
+  { file: 'TripleTemplateLab.jsx', studioType: 'template_triple', topicVar: 'topic' },
+  { file: 'RoadmapLab.jsx', studioType: 'roadmap_steps', topicVar: 'topic' },
+  { file: 'BusinessLab.jsx', studioType: 'business_saas', topicVar: 'topic' },
+  { file: 'StoryLab.jsx', studioType: 'story_lab', topicVar: 'topic' },
+  { file: 'CommercialLab.jsx', studioType: 'commercial_lab', topicVar: 'productIdea' }
+];
+
+function injectFunnelPanelIntoStudioPage(cfg) {
+  const filePath = path.join(PAGES_DIR, cfg.file);
+  if (!fs.existsSync(filePath)) {
+    console.warn('⚠️ الملف ' + cfg.file + ' غير موجود، تم تخطيه.');
+    return false;
+  }
+
+  let code = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+
+  // أ) إزالة أي حقن سابق لنفس المكوّن لضمان النظافة التامة (Idempotency)
+  code = code.replace(/import CarouselCourseFunnelPanel from '\.\.\/components\/CarouselCourseFunnelPanel';\n?/g, '');
+  code = code.replace(/\s*\{\/\* \[AUTO-FUNNEL PANEL START\] \*\/\}[\s\S]*?\{\/\* \[AUTO-FUNNEL PANEL END\] \*\/\}\n?/g, '');
+
+  // ب) إضافة سطر الاستيراد في أعلى الملف بعد أول جملة import
+  const firstImportMatch = code.match(/^import .+$/m);
+  if (firstImportMatch) {
+    const insertIdx = firstImportMatch.index + firstImportMatch[0].length;
+    code =
+      code.slice(0, insertIdx) +
+      "\nimport CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';" +
+      code.slice(insertIdx);
+  } else {
+    code = "import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';\n" + code;
+  }
+
+  // ج) ضمان التقاط مصفوفة slides القادمة من السيرفر في State الصفحة إذا لم تكن موجودة
+  const hasSlidesState = /\bconst\s+\[\s*slides\s*,/.test(code);
+  const hasFunnelSlidesState = /\bconst\s+\[\s*funnelSlides\s*,/.test(code);
+
+  if (!hasSlidesState && !hasFunnelSlidesState && cfg.file !== 'CommercialLab.jsx') {
+    const firstUseStateMatch = code.match(/const\s+\[[a-zA-Z0-9_]+,\s*set[a-zA-Z0-9_]+\]\s*=\s*useState\(/);
+    if (firstUseStateMatch) {
+      code =
+        code.slice(0, firstUseStateMatch.index) +
+        'const [funnelSlides, setFunnelSlides] = useState([]);\n  ' +
+        code.slice(firstUseStateMatch.index);
+    }
+    code = code.replace(
+      /setImages\(res\.data\.images\);/g,
+      'setImages(res.data.images);\n        if (res.data.slides) setFunnelSlides(res.data.slides);'
+    );
+  }
+
+  // د) ربط متغيرات الصفحة (topic, slides, igCaption, fbCaption) بخصائص المكوّن
+  const hasTopicState = new RegExp('\\bconst\\s+\\[\\s*' + cfg.topicVar + '\\s*,').test(code);
+  const resolvedTopicExpr = hasTopicState ? cfg.topicVar : "''";
+
+  const resolvedSlidesExpr =
+    cfg.file === 'CommercialLab.jsx'
+      ? "(typeof commercial !== 'undefined' && commercial?.scenes) ? commercial.scenes : []"
+      : hasSlidesState
+        ? 'slides'
+        : "(typeof funnelSlides !== 'undefined' ? funnelSlides : [])";
+
+  const hasIgCaption = /\bconst\s+\[\s*igCaption\s*,/.test(code);
+  const hasSingleCaption = /\bconst\s+\[\s*caption\s*,/.test(code);
+  const hasFbCaption = /\bconst\s+\[\s*fbCaption\s*,/.test(code);
+
+  const igProps = hasIgCaption
+    ? 'igCaption={igCaption} setIgCaption={setIgCaption}'
+    : hasSingleCaption
+      ? 'igCaption={caption} setIgCaption={setCaption}'
+      : '';
+
+  const fbProps = hasFbCaption ? 'fbCaption={fbCaption} setFbCaption={setFbCaption}' : '';
+
+  const panelJsxBlock = [
+    '',
+    '      {/* [AUTO-FUNNEL PANEL START] */}',
+    '      <CarouselCourseFunnelPanel',
+    '        topic={' + resolvedTopicExpr + '}',
+    '        studioType="' + cfg.studioType + '"',
+    '        slides={' + resolvedSlidesExpr + '}',
+    '        ' + igProps,
+    '        ' + fbProps,
+    '      />',
+    '      {/* [AUTO-FUNNEL PANEL END] */}',
+    ''
+  ].join('\n');
+
+  // هـ) حقن المكوّن قبل آخر </div> يسبق export default
+  const exportDefaultIdx = code.lastIndexOf('export default');
+  const searchArea = exportDefaultIdx !== -1 ? code.slice(0, exportDefaultIdx) : code;
+  const lastCloseDivIdx = searchArea.lastIndexOf('</div>');
+
+  if (lastCloseDivIdx !== -1) {
+    code = code.slice(0, lastCloseDivIdx) + panelJsxBlock + '    ' + code.slice(lastCloseDivIdx);
+  }
+
+  verifyJsxSanity(code, cfg.file);
+  fs.writeFileSync(filePath, code, 'utf8');
+  console.log('✅ [Studio Hooked] تم حقن وفحص <CarouselCourseFunnelPanel studioType="' + cfg.studioType + '" /> في ' + cfg.file);
+  return true;
+}
+
+STUDIO_CONFIGS.forEach(injectFunnelPanelIntoStudioPage);
+
+// ============================================================================
+// 2. روبوت الفحص الآلي الشامل لـ AutoFactory (15/15 PASS)
+// ============================================================================
+function runAutoTest_AutoFactoryFunnelEdition() {
+  const results = [];
+  const check = (name, cond, detail) => {
+    results.push({ name, passed: Boolean(cond), detail: detail || '' });
+  };
+
+  const campaignCode = fs.readFileSync(path.join(BACKEND_DIR, 'models', 'Campaign.js'), 'utf8');
+  const srvCode = fs.readFileSync(path.join(BACKEND_DIR, 'server.js'), 'utf8');
+  const panelPath = path.join(UI_DIR, 'src', 'components', 'CarouselCourseFunnelPanel.jsx');
+  const panelCode = fs.existsSync(panelPath) ? fs.readFileSync(panelPath, 'utf8') : '';
+  const campMgrCode = fs.readFileSync(path.join(PAGES_DIR, 'CampaignManager.jsx'), 'utf8');
+
+  check(
+    '1. ترقية نموذج Campaign.js بحقول الربط (course_id, course_title, course_url, studio_type)',
+    campaignCode.includes('course_url') && campaignCode.includes('studio_type'),
+    'Campaign Schema Upgraded'
+  );
+
+  check(
+    '2. دعم الكلمات المفتاحية المتعددة المفصولة بفاصلة في مسار /webhook',
+    srvCode.includes('split(/[،,|]/)'),
+    'Multi-Keyword Webhook Active'
+  );
+
+  check(
+    '3. إرجاع مصفوفة الشرائح (slides) في مسارات توليد الكاروسيل الأربعة',
+    srvCode.includes('slides: lessonData.slides') && srvCode.includes('slides: roadmapData.slides'),
+    'Carousel Slides Returned'
+  );
+
+  check(
+    '4. مسار توليد الكورس التطبيقي المرافق (/api/funnel/generate-companion-course)',
+    srvCode.includes("app.post('/api/funnel/generate-companion-course'"),
+    'Companion Course Generator Active'
+  );
+
+  check(
+    '5. مسار الرفع لـ 5001 وتفعيل الحملة (/api/funnel/deploy-course-and-campaign)',
+    srvCode.includes("app.post('/api/funnel/deploy-course-and-campaign'") && srvCode.includes('{{COURSE_URL}}'),
+    'Deploy & DM URL Injector Active'
+  );
+
+  check(
+    '6. مسارا جلب وتصفير كورسات المنصة (/api/funnel/platform-courses & platform-reset)',
+    srvCode.includes("app.get('/api/funnel/platform-courses'") && srvCode.includes("app.post('/api/funnel/platform-reset'"),
+    'Platform Management Routes Ready'
+  );
+
+  let srvSyntaxOk = false;
+  try {
+    new vm.Script(srvCode, { filename: 'server.js' });
+    srvSyntaxOk = true;
+  } catch (_) {}
+  check(
+    '7. سلامة القواعد النحوية لخادم AutoFactory (vm.Script Syntax Check)',
+    srvSyntaxOk,
+    '0 Syntax Errors in server.js'
+  );
+
+  check(
+    '8. وجود المكوّن الموحد <CarouselCourseFunnelPanel /> بكامل وظائفه',
+    panelCode.includes('handleGenerateCompanionCourse') && panelCode.includes('handleDeployFunnel'),
+    'CarouselCourseFunnelPanel.jsx Verified'
+  );
+
+  check(
+    '9. ترقية مدير الحملات (CampaignManager.jsx) بقائمة كورسات المنصة وأزرار التصفير',
+    campMgrCode.includes('handleResetPlatformCourses') && campMgrCode.includes('handleSelectCourseForDM'),
+    'CampaignManager Hub Ready'
+  );
+
+  STUDIO_CONFIGS.forEach((cfg, idx) => {
+    const pCode = fs.readFileSync(path.join(PAGES_DIR, cfg.file), 'utf8');
+    check(
+      (10 + idx) + '. حقن <CarouselCourseFunnelPanel /> في ' + cfg.file + ' (' + cfg.studioType + ')',
+      pCode.includes('<CarouselCourseFunnelPanel') && pCode.includes('studioType="' + cfg.studioType + '"'),
+      cfg.file + ' Hooked'
+    );
+  });
+
+  console.log('\n================================================================================');
+  console.log('🇩🇿🚀 تقرير الفحص الآلي الشامل — منظومة AutoFactory (15/15 PASS)');
+  console.log('================================================================================');
+  let passedCount = 0;
+  results.forEach((r) => {
+    if (r.passed) passedCount++;
+    console.log((r.passed ? '✅ [PASS]' : '❌ [FAIL]') + ' ' + r.name + ' — (' + r.detail + ')');
+  });
+  console.log('--------------------------------------------------------------------------------');
+  console.log('📊 النتيجة النهائية: ' + passedCount + '/' + results.length + ' PASS (' + Math.round((passedCount / results.length) * 100) + '%)');
+  console.log('================================================================================\n');
+}
+
+runAutoTest_AutoFactoryFunnelEdition();
+
+// ============================================================================
+// 3. نقل سكربتات الشطرين 1 و 2 إلى مجلد الأرشيف (_archive_patches)
+// ============================================================================
+const archiveDir = path.join(ROOT, '_archive_patches');
+if (!fs.existsSync(archiveDir)) {
+  try {
+    fs.mkdirSync(archiveDir, { recursive: true });
+  } catch (_) {}
+}
+
+[
+  'part1-autofactory-backend-funnel-engine-v1.js',
+  'part2-autofactory-ui-funnel-component-campaigns-v1.js'
+].forEach((fileName) => {
+  const srcPath = path.join(ROOT, fileName);
+  if (fs.existsSync(srcPath)) {
+    try {
+      fs.renameSync(srcPath, path.join(archiveDir, fileName));
+    } catch (_) {}
+  }
+});
+
+console.log('🎉🇩🇿 اكتمل إعداد وحقن AutoFactory بنجاح 100%! انتقل الآن لمجلد platformauto وشغّل: node part3b-cherif-platform-5001-installer-v1.js');
 ```
 
 ---

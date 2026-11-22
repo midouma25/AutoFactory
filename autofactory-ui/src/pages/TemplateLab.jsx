@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Sparkles, Scale, Loader2, Image as ImageIcon, Share2, Layers, Send, CheckCircle, Target } from 'lucide-react';
 
@@ -6,6 +7,7 @@ export default function TemplateLab() {
   // ----------------------------------------------------
   // States المشتركة 
   // ----------------------------------------------------
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [platform, setPlatform] = useState('instagram'); 
   const [loading, setLoading] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false); 
@@ -72,6 +74,7 @@ export default function TemplateLab() {
       });
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -94,6 +97,7 @@ export default function TemplateLab() {
       });
       if (res.data.success) {
         setImages(res.data.images);
+        if (res.data.slides) setFunnelSlides(res.data.slides);
         setIgCaption(res.data.igCaption || '');
         setFbCaption(res.data.fbCaption || '');
         setShowReview(true);
@@ -121,7 +125,9 @@ export default function TemplateLab() {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-slate-900" dir="rtl">
       <h1 className="text-3xl font-bold mb-8 text-blue-400 flex items-center gap-3">
         🧪 مختبر القوالب الذكية (Template Lab)
       </h1>
@@ -255,6 +261,19 @@ export default function TemplateLab() {
           </div>
         </div>
       )}
+    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={''}
+          studioType="template_binary"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 }

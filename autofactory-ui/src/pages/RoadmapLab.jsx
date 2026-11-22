@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Copy, CheckCircle2, Wand2, Share2, ImageIcon, Smartphone, Globe } from 'lucide-react';
 const RoadmapLab = () => {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [platform, setPlatform] = useState('instagram');
   const [topic, setTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -82,7 +84,9 @@ const RoadmapLab = () => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen" dir="rtl">
       <h2 className="text-3xl font-bold mb-8 text-emerald-400">🗺️ صانع خرائط الطريق (Roadmap Lab)</h2>
       
       {/* اختيار المنصة */}
@@ -223,7 +227,19 @@ const RoadmapLab = () => {
             </div>
           </div>
         </div>
-      )}
+      )}    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="roadmap_steps"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          igCaption={igCaption} setIgCaption={setIgCaption}
+          fbCaption={fbCaption} setFbCaption={setFbCaption}
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };

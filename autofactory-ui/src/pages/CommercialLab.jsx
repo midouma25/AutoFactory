@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import {
   Video,
@@ -217,7 +218,9 @@ const CommercialLab = () => {
 
 
   return (
-    <div className="min-h-screen bg-[#05070A] text-gray-100 p-8 font-sans" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="min-h-screen bg-[#05070A] text-gray-100 p-8 font-sans" dir="rtl">
       <div className="max-w-5xl mx-auto">
         
         <header className="mb-10 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -526,7 +529,19 @@ const CommercialLab = () => {
           </div>
         )}
 
+      </div>    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={productIdea}
+          studioType="commercial_lab"
+          slides={(typeof commercial !== 'undefined' && commercial?.scenes) ? commercial.scenes : []}
+          
+          
+        />
       </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };

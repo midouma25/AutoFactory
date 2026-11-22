@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import CarouselCourseFunnelPanel from '../components/CarouselCourseFunnelPanel';
 import axios from 'axios';
 import { Copy, CheckCircle2, Upload, ImageIcon, Wand2, PenTool, Zap, TrendingUp, Loader2, Eye, RefreshCw } from 'lucide-react';
 
 const StoryLab = () => {
+  const [funnelSlides, setFunnelSlides] = useState([]);
   const [topic, setTopic] = useState('');
   const [slideCount, setSlideCount] = useState(8); // الافتراضي 8 شرائح
   const [step, setStep] = useState(1);
@@ -354,7 +356,9 @@ const StoryLab = () => {
   };
 
   return (
-    <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
+    <div className="w-full space-y-8 auto-funnel-root-wrapper">
+      {/* [AUTO-FUNNEL ROOT WRAPPER START] */}
+      <div className="p-8 text-white min-h-screen bg-[#05070A]" dir="rtl">
       <h2 className="text-4xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 flex items-center gap-3">
         <Wand2 size={36} className="text-purple-500" /> استوديو القصص (Story Lab - Pro)
       </h2>
@@ -817,7 +821,19 @@ const StoryLab = () => {
                 ))}
               </div>
           </div>
-      )}
+      )}    </div>
+      {/* [AUTO-FUNNEL PANEL START] */}
+      <div className="w-full max-w-6xl mx-auto clear-both pt-6">
+        <CarouselCourseFunnelPanel
+          topic={topic}
+          studioType="story_lab"
+          slides={(typeof funnelSlides !== 'undefined' ? funnelSlides : [])}
+          
+          
+        />
+      </div>
+      {/* [AUTO-FUNNEL PANEL END] */}
+      {/* [AUTO-FUNNEL ROOT WRAPPER END] */}
     </div>
   );
 };
